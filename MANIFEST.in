@@ -1,0 +1,6 @@
+include requirements.txt
+include LICENSE.txt
+include README.md
+
+recursive-include proto-public-api *.proto
+recursive-include hex_device/generated *

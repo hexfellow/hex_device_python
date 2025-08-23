@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0", "protobuf", "websockets"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hex_device"
+version = "0.0.1"
+dependencies = [
+  "numpy>=1.17.4",
+  "protobuf>=5.29.4,<6.0.0",
+  "websockets>=13.1",
+]
+requires-python = ">=3.8.10"
+authors = [
+  { name="jecjune", email="jecjune@qq.com" },
+]
+maintainers = [
+  { name="jecjune", email="jecjune@qq.com" },
+]
+description = "This is a simple package."
+readme = "README.md"
+license = { file = "LICENSE" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "License :: OSI Approved :: Apache-2.0 license",
+]
+
+[project.urls]
+Homepage = "https://github.com/hexfellow/hex_device_python_lib.git"

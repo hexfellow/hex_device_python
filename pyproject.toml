@@ -12,10 +12,10 @@ dependencies = [
 ]
 requires-python = ">=3.8.10"
 authors = [
-  { name="jecjune", email="jecjune@qq.com" },
+  { name="jecjune", email="zejun.chen@hexfellow.com" },
 ]
 maintainers = [
-  { name="jecjune", email="jecjune@qq.com" },
+  { name="jecjune", email="zejun.chen@hexfellow.com" },
 ]
 description = "This is a simple package."
 readme = "README.md"

@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 ################################################################
 # Copyright 2025 Jecjune. All rights reserved.
-# Author: Jecjune jecjune@qq.com
+# Author: Jecjune zejun.chen@hexfellow.com
 # Date  : 2025-8-1
 ################################################################
 
@@ -46,4 +46,4 @@ __all__ = [
 # Version information
 __version__ = "1.0.0"
 __author__ = "Jecjune"
-__email__ = "jecjune@qq.com"
+__email__ = "zejun.chen@hexfellow.com"

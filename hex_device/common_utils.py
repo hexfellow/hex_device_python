@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 ################################################################
 # Copyright 2025 Jecjune. All rights reserved.
-# Author: Jecjune jecjune@qq.com
+# Author: Jecjune zejun.chen@hexfellow.com
 # Date  : 2025-8-1
 ################################################################
 import re

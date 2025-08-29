@@ -11,6 +11,7 @@ import asyncio
 
 from .error_type import InvalidWSURLException
 
+
 def is_valid_ws_url(url: str) -> str:
     ws_url_pattern = re.compile(r'^(ws|wss)://([a-zA-Z0-9.-]+)(?::(\d+))?$')
 
@@ -40,14 +41,18 @@ async def delay(start_time, ms):
     now = time.perf_counter()
     await asyncio.sleep(end_time - now)
 
+
 def log_warn(message):
     print(f"\033[33m{message}\033[0m")
+
 
 def log_err(message):
     print(f"\033[31m{message}\033[0m")
 
+
 def log_info(message):
     print(f"\033[32m{message}\033[0m")
+
 
 def log_common(message):
     print(f"{message}")

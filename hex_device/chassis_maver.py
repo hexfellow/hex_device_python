@@ -33,14 +33,17 @@ class ChassisMaver(DeviceBase, MotorBase):
     - RtCustomPcwVehicle: 自定义PCW车辆
     - RtPcwVehicle: PCW车辆
     """
-    
+
     # 支持的机器人类型列表
     SUPPORTED_ROBOT_TYPES = [
         public_api_types_pb2.RobotType.RtCustomPcwVehicle,
         public_api_types_pb2.RobotType.RtPcwVehicle
     ]
 
-    def __init__(self, motor_count: int = 8, name: str = "ChassisMaver", control_hz: int = 500, 
+    def __init__(self,
+                 motor_count: int = 8,
+                 name: str = "ChassisMaver",
+                 control_hz: int = 500,
                  send_message_callback=None):
         """
         初始化底盘Maver
@@ -83,7 +86,7 @@ class ChassisMaver(DeviceBase, MotorBase):
         self._last_command_time = time.time()
         self._command_timeout = 0.1  # 100ms超时
         self.__last_warning_time = time.time()  # 添加警告时间属性
-        
+
         # 机器人类型 - 将在匹配时设置
         self.robot_type = None
 
@@ -111,7 +114,6 @@ class ChassisMaver(DeviceBase, MotorBase):
             bool: 是否支持
         """
         return robot_type in cls.SUPPORTED_ROBOT_TYPES
-
 
     async def _init(self) -> bool:
         """
@@ -267,7 +269,8 @@ class ChassisMaver(DeviceBase, MotorBase):
                     continue
 
                 # check error
-                if self.get_parking_stop_detail() != public_api_types_pb2.ParkingStopDetail():
+                if self.get_parking_stop_detail(
+                ) != public_api_types_pb2.ParkingStopDetail():
                     if start_time - self.__last_warning_time > 1.0:
                         log_err(
                             f"emergency stop: {self.get_parking_stop_detail()}"
@@ -282,14 +285,17 @@ class ChassisMaver(DeviceBase, MotorBase):
                 # send control message
                 if self._simple_control_mode == True:
                     if self._target_zero_resistance:
-                        msg = self._construct_zero_resistance_message(True, True)
+                        msg = self._construct_zero_resistance_message(
+                            True, True)
                         await self._send_message(msg)
 
                     else:
-                        msg = self._construct_zero_resistance_message(False, True)
+                        msg = self._construct_zero_resistance_message(
+                            False, True)
                         await self._send_message(msg)
 
-                        if time.time() - self._last_command_time > self._command_timeout:
+                        if time.time(
+                        ) - self._last_command_time > self._command_timeout:
                             msg = self._construct_simple_control_message(
                                 (0.0, 0.0, 0.0))
                         else:
@@ -299,12 +305,15 @@ class ChassisMaver(DeviceBase, MotorBase):
 
                 elif self._simple_control_mode == False:
                     if self._target_zero_resistance:
-                        msg = self._construct_zero_resistance_message(True, False)
+                        msg = self._construct_zero_resistance_message(
+                            True, False)
                     else:
-                        msg = self._construct_zero_resistance_message(False, False)
+                        msg = self._construct_zero_resistance_message(
+                            False, False)
                     await self._send_message(msg)
 
-                    if time.time() - self._last_command_time > self._command_timeout:
+                    if time.time(
+                    ) - self._last_command_time > self._command_timeout:
                         self.motor_command(CommandType.BRAKE, [])
                         msg = self._construct_wheel_control_message()
                     else:
@@ -326,11 +335,9 @@ class ChassisMaver(DeviceBase, MotorBase):
             # Convert (x, y, yaw) to 2D transformation matrix
             cos_yaw = np.cos(yaw)
             sin_yaw = np.sin(yaw)
-            self.__vehicle_origin_position = np.array([
-                [cos_yaw, -sin_yaw, x],
-                [sin_yaw,  cos_yaw, y],
-                [0.0,      0.0,     1.0]
-            ])
+            self.__vehicle_origin_position = np.array([[cos_yaw, -sin_yaw, x],
+                                                       [sin_yaw, cos_yaw, y],
+                                                       [0.0, 0.0, 1.0]])
 
     # 底盘特有方法
     def get_base_state(self) -> int:
@@ -359,26 +366,24 @@ class ChassisMaver(DeviceBase, MotorBase):
         """
         with self._data_lock:
             self.__has_new = False
-            
+
             # Convert current position to transformation matrix
             x, y, yaw = self._vehicle_position
             cos_yaw = np.cos(yaw)
             sin_yaw = np.sin(yaw)
-            current_matrix = np.array([
-                [cos_yaw, -sin_yaw, x],
-                [sin_yaw,  cos_yaw, y],
-                [0.0,      0.0,     1.0]
-            ])
-            
+            current_matrix = np.array([[cos_yaw, -sin_yaw, x],
+                                       [sin_yaw, cos_yaw, y], [0.0, 0.0, 1.0]])
+
             # Calculate relative transformation: current * inverse(origin)
             origin_inv = np.linalg.inv(self.__vehicle_origin_position)
             relative_matrix = origin_inv @ current_matrix
-            
+
             # Extract position and orientation from relative matrix
             relative_x = relative_matrix[0, 2]
             relative_y = relative_matrix[1, 2]
-            relative_yaw = np.arctan2(relative_matrix[1, 0], relative_matrix[0, 0])
-            
+            relative_yaw = np.arctan2(relative_matrix[1, 0],
+                                      relative_matrix[0, 0])
+
             return (relative_x, relative_y, relative_yaw)
 
     def get_parking_stop_detail(self):
@@ -395,7 +400,7 @@ class ChassisMaver(DeviceBase, MotorBase):
         '''
         with self._command_lock:
             self._target_zero_resistance = False
-    
+
     def disable(self):
         '''
         set zero resistance
@@ -412,14 +417,16 @@ class ChassisMaver(DeviceBase, MotorBase):
             values: 指令值列表
         """
         if self._simple_control_mode == True:
-            raise NotImplementedError("motor_command not implemented for _simple_control_mode: True")
+            raise NotImplementedError(
+                "motor_command not implemented for _simple_control_mode: True")
         elif self._simple_control_mode == None:
             self._simple_control_mode = False
 
         super().motor_command(command_type, values)
         self._last_command_time = time.time()
 
-    def set_vehicle_speed(self, speed_x: float, speed_y: float, speed_z: float):
+    def set_vehicle_speed(self, speed_x: float, speed_y: float,
+                          speed_z: float):
         """
         设置XYZ速度
         
@@ -429,7 +436,9 @@ class ChassisMaver(DeviceBase, MotorBase):
             speed_z: Z方向角速度 (rad/s)
         """
         if self._simple_control_mode == False:
-            raise NotImplementedError("set_vehicle_speed not implemented for _simple_control_mode: False")
+            raise NotImplementedError(
+                "set_vehicle_speed not implemented for _simple_control_mode: False"
+            )
         elif self._simple_control_mode == None:
             self._simple_control_mode = True
 
@@ -544,13 +553,21 @@ class ChassisMaver(DeviceBase, MotorBase):
 
         # 添加底盘特有信息
         chassis_summary = {
-            'base_state': public_api_types_pb2.BaseState.Name(self._base_state),
-            'api_control_initialized': self._api_control_initialized,
-            'battery_info': self.get_battery_info(),
-            'vehicle_speed': self._vehicle_speed,
-            'vehicle_position': self._vehicle_position,
-            'parking_stop_detail': self._parking_stop_detail,
-            'warning': public_api_types_pb2.WarningCategory.Name(self._warning) if self._warning else None,
+            'base_state':
+            public_api_types_pb2.BaseState.Name(self._base_state),
+            'api_control_initialized':
+            self._api_control_initialized,
+            'battery_info':
+            self.get_battery_info(),
+            'vehicle_speed':
+            self._vehicle_speed,
+            'vehicle_position':
+            self._vehicle_position,
+            'parking_stop_detail':
+            self._parking_stop_detail,
+            'warning':
+            public_api_types_pb2.WarningCategory.Name(self._warning)
+            if self._warning else None,
         }
 
         summary.update(chassis_summary)

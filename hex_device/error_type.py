@@ -7,14 +7,18 @@
 ################################################################
 from enum import Enum
 
+
 class WsError(Exception):
     pass
+
 
 class ProtocolError(WsError):
     pass
 
+
 class ConnectionClosedError(WsError):
     pass
+
 
 class InvalidWSURLException(Exception):
     """Custom exception, used to indicate invalid WebSocket URL"""

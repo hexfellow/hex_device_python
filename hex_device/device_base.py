@@ -11,12 +11,13 @@ from typing import Optional, List, Dict, Any
 import threading
 import time
 
+
 class DeviceBase(ABC):
     """
     设备基类
     定义所有设备的通用接口和基本功能
     """
-    
+
     def __init__(self, name: str = "", send_message_callback=None):
         """
         初始化设备基类
@@ -30,13 +31,13 @@ class DeviceBase(ABC):
 
         # 时间戳
         self._last_update_time = time.time()
-        
+
         # 线程锁
         self._data_lock = threading.Lock()
-        
+
         # 数据更新标志
         self._has_new_data = False
-        
+
     # 通用函数
     def _set_send_message_callback(self, callback):
         """
@@ -57,7 +58,8 @@ class DeviceBase(ABC):
         if self._send_message_callback:
             await self._send_message_callback(msg)
         else:
-            raise AttributeError("send_message: send_message_callback is not set")
+            raise AttributeError(
+                "send_message: send_message_callback is not set")
 
     def set_has_new_data(self):
         with self._data_lock:
@@ -67,12 +69,12 @@ class DeviceBase(ABC):
         """检查是否有新数据"""
         with self._data_lock:
             return self._has_new_data
-    
+
     def clear_new_data_flag(self):
         """清除新数据标志"""
         with self._data_lock:
             self._has_new_data = False
-    
+
     def get_status_summary(self) -> Dict[str, Any]:
         """获取设备状态摘要"""
         return {
@@ -80,7 +82,7 @@ class DeviceBase(ABC):
             'has_new_data': self.has_new_data(),
             'last_update_time': self._last_update_time,
         }
-    
+
     # 抽象方法 - 子类必须实现
     @abstractmethod
     async def _init(self) -> bool:
@@ -91,7 +93,7 @@ class DeviceBase(ABC):
             bool: 是否成功初始化
         """
         pass
-    
+
     @abstractmethod
     def _update(self, api_up_data) -> bool:
         """
@@ -117,18 +119,17 @@ class DeviceBase(ABC):
             bool: 是否成功执行
         """
         pass
-    
+
     def _update_timestamp(self):
         """更新时间戳"""
         with self._data_lock:
             self._last_update_time = time.time()
             self._has_new_data = True
-    
+
     def __str__(self) -> str:
         """字符串表示"""
         return f"{self.name}, {self.has_new_data}, {self._last_update_time}"
-    
+
     def __repr__(self) -> str:
         """详细字符串表示"""
         return f"DeviceBase(name='{self.name}', has_new_data={self.has_new_data}, last_update_time={self._last_update_time})"
-    

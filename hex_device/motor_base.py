@@ -36,7 +36,7 @@ class MotorCommand:
     4. 力矩指令 - 浮点数组类型
     """
     command_type: CommandType
-    brake_command: Optional[bool] = None
+    brake_command: Optional[List[bool]] = None
     speed_command: Optional[List[float]] = None
     position_command: Optional[List[float]] = None
     torque_command: Optional[List[float]] = None
@@ -105,9 +105,9 @@ class MotorCommand:
             return cls(command_type=CommandType.POSITION,
                        position_command=positions)
 
-        # trans
-        trans_positions = (np.array(positions) +
-                           np.pi) / (2 * np.pi) * pulse_per_rotation
+        #trans to encoder position
+        trans_positions = np.array(positions) / (
+            2 * np.pi) * pulse_per_rotation + 65535.0 / 2.0
         return cls(command_type=CommandType.POSITION,
                    position_command=trans_positions.tolist())
 
@@ -162,11 +162,8 @@ class MotorBase(ABC):
         self._voltage = np.zeros(motor_count)  # 电压 (V)
 
         # 目标指令
+        self._current_targets = [None] * motor_count  # 当前设备正在运行的指令
         self._target_command = None  # 当前目标指令
-
-        # 限制参数 (所有电机共享)
-        self._max_velocity = 100.0  # 最大速度 (rad/s)
-        self._max_torque = 10.0  # 最大扭矩 (Nm)
 
         # 时间戳
         self._last_update_time = None
@@ -286,6 +283,11 @@ class MotorBase(ABC):
         with self._data_lock:
             return self._positions[motor_index]
 
+    def get_motor_positions(self) -> List[float]:
+        """获取所有电机位置 (rad)"""
+        with self._data_lock:
+            return self._positions.tolist()
+
     def get_motor_velocity(self, motor_index: int) -> float:
         """获取指定电机速度 (rad/s)"""
         if not 0 <= motor_index < self.motor_count:
@@ -295,6 +297,11 @@ class MotorBase(ABC):
         with self._data_lock:
             return self._velocities[motor_index]
 
+    def get_motor_velocities(self) -> List[float]:
+        """获取所有电机速度 (rad/s)"""
+        with self._data_lock:
+            return self._velocities.tolist()
+
     def get_motor_torque(self, motor_index: int) -> float:
         """获取指定电机扭矩 (Nm)"""
         if not 0 <= motor_index < self.motor_count:
@@ -303,6 +310,11 @@ class MotorBase(ABC):
             )
         with self._data_lock:
             return self._torques[motor_index]
+
+    def get_motor_torques(self) -> List[float]:
+        """获取所有电机扭矩 (Nm)"""
+        with self._data_lock:
+            return self._torques.tolist()
 
     def get_motor_driver_temperature(self, motor_index: int) -> float:
         """获取指定电机驱动器温度 (°C)"""
@@ -349,15 +361,6 @@ class MotorBase(ABC):
         with self._data_lock:
             return self._wheel_radius[motor_index]
 
-    def get_limits(self) -> Tuple[float, float]:
-        """获取限制参数"""
-        return self._max_velocity, self._max_torque
-
-    def set_limits(self, max_velocity: float, max_torque: float):
-        """设置限制参数"""
-        self._max_velocity = max_velocity
-        self._max_torque = max_torque
-
     def motor_command(self, command_type: CommandType, values: List[float]):
         """
         设置电机指令
@@ -371,7 +374,10 @@ class MotorBase(ABC):
                 - TORQUE: 力矩值列表 (Nm)
         """
         if command_type == CommandType.BRAKE:
-            # 刹车指令，values参数被忽略
+            if len(values) != self.motor_count:
+                raise ValueError(
+                    f"Expected {self.motor_count} brake values, got {len(values)}"
+                )
             command = MotorCommand.create_brake_command(True)
         elif command_type == CommandType.SPEED:
             if len(values) != self.motor_count:
@@ -398,21 +404,23 @@ class MotorBase(ABC):
         with self._command_lock:
             self._target_command = command
 
-    def update_data(self,
-                    positions: List[float],
-                    velocities: List[float],
-                    torques: List[float],
-                    driver_temperature: List[float],
-                    motor_temperature: List[float],
-                    voltage: List[float],
-                    pulse_per_rotation: Optional[List[float]] = None,
-                    wheel_radius: Optional[List[float]] = None,
-                    error_codes: Optional[List[Optional[int]]] = None):
+    def update_motor_data(self,
+                          positions: List[float],
+                          velocities: List[float],
+                          torques: List[float],
+                          driver_temperature: List[float],
+                          motor_temperature: List[float],
+                          voltage: List[float],
+                          pulse_per_rotation: Optional[List[float]] = None,
+                          wheel_radius: Optional[List[float]] = None,
+                          error_codes: Optional[List[Optional[int]]] = None,
+                          current_targets: Optional[List[
+                              public_api_types_pb2.SingleMotorTarget]] = None):
         """
         更新所有电机数据
         
         Args:
-            positions: 位置列表 (rad)
+            positions: 位置列表 (encoder position)
             velocities: 速度列表 (rad/s)
             torques: 扭矩列表 (Nm)
             driver_temperature: 驱动器温度列表 (°C)
@@ -455,6 +463,12 @@ class MotorBase(ABC):
                 f"Expected {self.motor_count} wheel_radius values, got {len(wheel_radius)}"
             )
 
+        if current_targets is not None and len(
+                current_targets) != self.motor_count:
+            raise ValueError(
+                f"Expected {self.motor_count} current_targets, got {len(current_targets)}"
+            )
+
         with self._data_lock:
             self._velocities = np.array(velocities)
             self._torques = np.array(torques)
@@ -465,9 +479,9 @@ class MotorBase(ABC):
             if pulse_per_rotation is not None:
                 self._pulse_per_rotation = np.array(pulse_per_rotation)
 
-            # trans
-            self._positions = np.array(
-                positions) / self._pulse_per_rotation * 2 * np.pi - np.pi
+            #trans to rad
+            self._positions = (np.array(positions) - 65535.0 /
+                               2.0) / self._pulse_per_rotation * 2 * np.pi
 
             if wheel_radius is not None:
                 self._wheel_radius = np.array(wheel_radius)
@@ -486,61 +500,8 @@ class MotorBase(ABC):
                     elif self._states[i] == "error":
                         self._states[i] = "normal"
 
-            self._last_update_time = time.time()
-            self._has_new_data = True
-
-    def update_motor_data(self,
-                          motor_index: int,
-                          position: float,
-                          velocity: float,
-                          torque: float,
-                          driver_temperature: float,
-                          motor_temperature: float,
-                          voltage: float,
-                          pulse_per_rotation: Optional[float] = None,
-                          wheel_radius: Optional[float] = None,
-                          error_code: Optional[int] = None):
-        """
-        更新单个电机数据
-        
-        Args:
-            motor_index: 电机索引
-            position: 位置 (rad)
-            velocity: 速度 (rad/s)
-            torque: 扭矩 (Nm)
-            driver_temperature: 驱动器温度 (°C)
-            motor_temperature: 电机温度 (°C)
-            voltage: 电压 (V)
-            pulse_per_rotation: 每转脉冲数，None表示不更新
-            wheel_radius: 轮子半径 (m)，None表示不更新
-            error_code: 错误代码，None表示无错误
-        """
-        if not 0 <= motor_index < self.motor_count:
-            raise IndexError(
-                f"Motor index {motor_index} out of range [0, {self.motor_count})"
-            )
-
-        with self._data_lock:
-            self._positions[motor_index] = position
-            self._velocities[motor_index] = velocity
-            self._torques[motor_index] = torque
-            self._driver_temperature[motor_index] = driver_temperature
-            self._motor_temperature[motor_index] = motor_temperature
-            self._voltage[motor_index] = voltage
-
-            if pulse_per_rotation is not None:
-                self._pulse_per_rotation[motor_index] = pulse_per_rotation
-
-            if wheel_radius is not None:
-                self._wheel_radius[motor_index] = wheel_radius
-
-            self._error_codes[motor_index] = error_code
-
-            # Update state based on error code
-            if error_code is not None:
-                self._states[motor_index] = "error"
-            elif self._states[motor_index] == "error":
-                self._states[motor_index] = "normal"
+            if current_targets is not None:
+                self._current_targets = current_targets.copy()
 
             self._last_update_time = time.time()
             self._has_new_data = True
@@ -550,7 +511,7 @@ class MotorBase(ABC):
         with self._data_lock:
             self._has_new_data = False
 
-    def get_status_summary(self) -> Dict[str, Any]:
+    def get_motor_summary(self) -> Dict[str, Any]:
         """获取状态摘要"""
         with self._data_lock:
             summary = {
@@ -566,7 +527,6 @@ class MotorBase(ABC):
                 'voltage': self._voltage.tolist(),
                 'pulse_per_rotation': self._pulse_per_rotation.tolist(),
                 'wheel_radius': self._wheel_radius.tolist(),
-                'limits': self.get_limits(),
                 'last_update_time': self._last_update_time,
             }
 
@@ -630,13 +590,16 @@ class MotorBase(ABC):
 
             return status
 
-    def _construct_target_msg(self) -> public_api_types_pb2.MotorTargets:
+    def _construct_target_motor_msg(
+            self,
+            command: MotorCommand = None) -> public_api_types_pb2.MotorTargets:
         """构造下行消息"""
-        with self._command_lock:
-            if self._target_command is None:
-                raise ValueError(
-                    "Construct down msg failed, No target command")
-            command = self._target_command
+        if command is None:
+            with self._command_lock:
+                if self._target_command is None:
+                    raise ValueError(
+                        "Construct down msg failed, No target command")
+                command = self._target_command
 
         motor_targets = public_api_types_pb2.MotorTargets()
         single_motor_target = public_api_types_pb2.SingleMotorTarget()
@@ -650,18 +613,60 @@ class MotorBase(ABC):
                 single_motor_target.speed = target
                 motor_targets.targets.append(deepcopy(single_motor_target))
         elif command.command_type == CommandType.POSITION:
-            raise NotImplementedError("Position command is not implemented")
             for target in command.position_command:
-                single_motor_target.position = int(target)  # 转换为整数
+                single_motor_target.position = int(target)
                 motor_targets.targets.append(deepcopy(single_motor_target))
         elif command.command_type == CommandType.TORQUE:
-            raise NotImplementedError("Torque command is not implemented")
             for target in command.torque_command:
                 single_motor_target.torque = target
                 motor_targets.targets.append(deepcopy(single_motor_target))
         else:
             raise ValueError("construct_down_message: command_type error")
         return motor_targets
+
+    def _construct_custom_motor_msg(
+            self, command_type: CommandType,
+            values: List[float]) -> public_api_types_pb2.MotorTargets:
+        """
+        设置电机指令
+        
+        Args:
+            command_type: 指令类型 (BRAKE, SPEED, POSITION, TORQUE)
+            values: 指令值列表
+                - BRAKE: 忽略values参数
+                - SPEED: 速度值列表 (rad/s)
+                - POSITION: 位置值列表 (rad)
+                - TORQUE: 力矩值列表 (Nm)
+        """
+        if command_type == CommandType.BRAKE:
+            if len(values) != self.motor_count:
+                raise ValueError(
+                    f"Expected {self.motor_count} brake values, got {len(values)}"
+                )
+            command = MotorCommand.create_brake_command(values)
+        elif command_type == CommandType.SPEED:
+            if len(values) != self.motor_count:
+                raise ValueError(
+                    f"Expected {self.motor_count} speed values, got {len(values)}"
+                )
+            command = MotorCommand.create_speed_command(values)
+        elif command_type == CommandType.POSITION:
+            if len(values) != self.motor_count:
+                raise ValueError(
+                    f"Expected {self.motor_count} position values, got {len(values)}"
+                )
+            command = MotorCommand.create_position_command(
+                values, self._pulse_per_rotation)
+        elif command_type == CommandType.TORQUE:
+            if len(values) != self.motor_count:
+                raise ValueError(
+                    f"Expected {self.motor_count} torque values, got {len(values)}"
+                )
+            command = MotorCommand.create_torque_command(values)
+        else:
+            raise ValueError(f"Unknown command type: {command_type}")
+
+        return self._construct_target_motor_msg(command)
 
     def __str__(self) -> str:
         """字符串表示"""

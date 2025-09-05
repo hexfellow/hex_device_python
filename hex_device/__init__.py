@@ -5,7 +5,6 @@
 # Author: Jecjune zejun.chen@hexfellow.com
 # Date  : 2025-8-1
 ################################################################
-
 """
 HexDevice Python Library
 
@@ -17,6 +16,15 @@ from .device_base import DeviceBase
 from .motor_base import MotorBase, MotorError, MotorCommand, CommandType
 from .chassis_maver import ChassisMaver
 
+# 机械臂配置系统
+from .arm_config import (ArmConfig, ArmConfigManager, DofType, JointParam,
+                         JointParams, load_default_arm_config, get_arm_config,
+                         add_arm_config, arm_config_manager,
+                         set_arm_initial_positions, set_arm_initial_velocities,
+                         clear_arm_position_history,
+                         clear_arm_velocity_history, clear_arm_motion_history,
+                         get_arm_last_positions, get_arm_last_velocities)
+
 # Import error types
 from .error_type import WsError, ProtocolError
 
@@ -27,16 +35,34 @@ from .hex_device_api import HexDeviceApi
 __all__ = [
     # 核心类
     'DeviceBase',
-    'MotorBase', 
+    'MotorBase',
     'MotorError',
     'MotorCommand',
     'CommandType',
     'VehicleDevice',
     'ChassisMaver',
-    
+
+    # 机械臂配置系统
+    'ArmConfig',
+    'ArmConfigManager',
+    'DofType',
+    'JointParam',
+    'JointParams',
+    'load_default_arm_config',
+    'get_arm_config',
+    'add_arm_config',
+    'arm_config_manager',
+    'set_arm_initial_positions',
+    'set_arm_initial_velocities',
+    'clear_arm_position_history',
+    'clear_arm_velocity_history',
+    'clear_arm_motion_history',
+    'get_arm_last_positions',
+    'get_arm_last_velocities',
+
     # 工具类
     'HexDeviceApi',
-    
+
     # 版本信息
     '__version__',
     '__author__',

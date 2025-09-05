@@ -9,9 +9,8 @@
 from typing import Optional, List, Dict, Any, Tuple
 import numpy as np
 from copy import deepcopy
-from .common_utils import delay, log_common, log_info, log_warn
+from .common_utils import delay, log_common, log_info, log_warn, log_err
 from .device_base import DeviceBase
-from .common_utils import log_err
 from .generated import public_api_down_pb2, public_api_up_pb2, public_api_types_pb2
 from .motor_base import MotorBase, MotorError, MotorCommand, CommandType
 from .generated.public_api_types_pb2 import (
@@ -83,9 +82,9 @@ class ChassisMaver(DeviceBase, MotorBase):
         self._vehicle_position = (0.0, 0.0, 0.0)  # (x, y, yaw) m, m, rad
 
         # 控制相关
-        self._last_command_time = time.time()
+        self._last_command_time = None
         self._command_timeout = 0.1  # 100ms超时
-        self.__last_warning_time = time.time()  # 添加警告时间属性
+        self.__last_warning_time = time.perf_counter()  # 添加警告时间属性
 
         # 机器人类型 - 将在匹配时设置
         self.robot_type = None
@@ -103,7 +102,7 @@ class ChassisMaver(DeviceBase, MotorBase):
             raise ValueError(f"不支持的机器人类型: {robot_type}")
 
     @classmethod
-    def supports_robot_type(cls, robot_type):
+    def _supports_robot_type(cls, robot_type):
         """
         检查是否支持指定的机器人类型
         
@@ -234,15 +233,15 @@ class ChassisMaver(DeviceBase, MotorBase):
             error_codes.append(error_code)
 
         # 更新电机数据
-        self.update_data(positions=positions,
-                         velocities=velocities,
-                         torques=torques,
-                         driver_temperature=driver_temperature,
-                         motor_temperature=motor_temperature,
-                         voltage=voltage,
-                         pulse_per_rotation=pulse_per_rotation,
-                         wheel_radius=wheel_radius,
-                         error_codes=error_codes)
+        self.update_motor_data(positions=positions,
+                               velocities=velocities,
+                               torques=torques,
+                               driver_temperature=driver_temperature,
+                               motor_temperature=motor_temperature,
+                               voltage=voltage,
+                               pulse_per_rotation=pulse_per_rotation,
+                               wheel_radius=wheel_radius,
+                               error_codes=error_codes)
 
     async def _periodic(self):
         """
@@ -275,12 +274,14 @@ class ChassisMaver(DeviceBase, MotorBase):
                         log_err(
                             f"emergency stop: {self.get_parking_stop_detail()}"
                         )
-                    self.__last_warning_time = start_time
+                        self.__last_warning_time = start_time
 
                 # 检查电机状态
-                for i in range(self.motor_count):
-                    if self.get_motor_state(i) == "error":
-                        log_err(f"警告: 电机{i}出现错误")
+                if start_time - self.__last_warning_time > 1.0:
+                    for i in range(self.motor_count):
+                        if self.get_motor_state(i) == "error":
+                            log_err(f"警告: 电机{i}出现错误")
+                    self.__last_warning_time = start_time
 
                 # send control message
                 if self._simple_control_mode == True:
@@ -294,8 +295,7 @@ class ChassisMaver(DeviceBase, MotorBase):
                             False, True)
                         await self._send_message(msg)
 
-                        if time.time(
-                        ) - self._last_command_time > self._command_timeout:
+                        if start_time - self._last_command_time > self._command_timeout:
                             msg = self._construct_simple_control_message(
                                 (0.0, 0.0, 0.0))
                         else:
@@ -312,9 +312,10 @@ class ChassisMaver(DeviceBase, MotorBase):
                             False, False)
                     await self._send_message(msg)
 
-                    if time.time(
-                    ) - self._last_command_time > self._command_timeout:
-                        self.motor_command(CommandType.BRAKE, [])
+                    if start_time - self._last_command_time > self._command_timeout:
+                        self.motor_command(
+                            CommandType.BRAKE,
+                            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
                         msg = self._construct_wheel_control_message()
                     else:
                         msg = self._construct_wheel_control_message()
@@ -423,7 +424,7 @@ class ChassisMaver(DeviceBase, MotorBase):
             self._simple_control_mode = False
 
         super().motor_command(command_type, values)
-        self._last_command_time = time.time()
+        self._last_command_time = time.perf_counter()
 
     def set_vehicle_speed(self, speed_x: float, speed_y: float,
                           speed_z: float):
@@ -444,7 +445,7 @@ class ChassisMaver(DeviceBase, MotorBase):
 
         with self._command_lock:
             self._target_velocity = (speed_x, speed_y, speed_z)
-            self._last_command_time = time.time()
+            self._last_command_time = time.perf_counter()
 
     # msg constructer
     # construct control message
@@ -454,7 +455,7 @@ class ChassisMaver(DeviceBase, MotorBase):
         """
         msg = public_api_down_pb2.APIDown()
         base_command = public_api_types_pb2.BaseCommand()
-        motor_targets = self._construct_target_msg()
+        motor_targets = self._construct_target_motor_msg()
         base_command.motor_targets.CopyFrom(motor_targets)
         msg.base_command.CopyFrom(base_command)
         return msg
@@ -549,7 +550,7 @@ class ChassisMaver(DeviceBase, MotorBase):
 
     def get_status_summary(self) -> Dict[str, Any]:
         """获取底盘状态摘要"""
-        summary = super().get_status_summary()
+        summary = super().get_device_summary()
 
         # 添加底盘特有信息
         chassis_summary = {

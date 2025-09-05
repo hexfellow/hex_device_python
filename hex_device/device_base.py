@@ -75,7 +75,7 @@ class DeviceBase(ABC):
         with self._data_lock:
             self._has_new_data = False
 
-    def get_status_summary(self) -> Dict[str, Any]:
+    def get_device_summary(self) -> Dict[str, Any]:
         """获取设备状态摘要"""
         return {
             'name': self.name,
@@ -117,6 +117,36 @@ class DeviceBase(ABC):
         
         Returns:
             bool: 是否成功执行
+        """
+        pass
+
+    @abstractmethod
+    def _set_robot_type(self, robot_type):
+        """
+        设置机器人类型
+        
+        子类必须实现此方法，用于设置设备支持的机器人类型。
+        每个子类应该定义自己的SUPPORTED_ROBOT_TYPES列表。
+        
+        Args:
+            robot_type: 机器人类型
+        """
+        pass
+
+    @classmethod
+    @abstractmethod
+    def _supports_robot_type(cls, robot_type):
+        """
+        检查是否支持指定的机器人类型
+        
+        子类必须实现此方法，用于检查指定的机器人类型是否被支持。
+        每个子类应该定义自己的SUPPORTED_ROBOT_TYPES列表。
+        
+        Args:
+            robot_type: 机器人类型
+            
+        Returns:
+            bool: 是否支持
         """
         pass
 

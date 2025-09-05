@@ -29,42 +29,118 @@ class DeviceFactory:
     """
 
     def __init__(self):
-        self._device_classes = []
+        self._device_classes: List[Type[DeviceBase]] = []
 
     def register_device_class(self, device_class):
         """
         注册设备类
         
         Args:
-            device_class: 设备类，必须支持supports_robot_type类方法
+            device_class: 设备类，必须支持_supports_robot_type类方法
         """
-        if hasattr(device_class, 'supports_robot_type'):
+        if hasattr(device_class, '_supports_robot_type'):
             self._device_classes.append(device_class)
         else:
             raise ValueError(
-                f"设备类 {device_class.__name__} 必须支持 supports_robot_type 类方法")
+                f"设备类 {device_class.__name__} 必须支持 _supports_robot_type 类方法")
 
-    def create_device_for_robot_type(self,
-                                     robot_type,
-                                     send_message_callback=None,
-                                     **kwargs):
+    def create_device_for_robot_type(
+        self,
+        robot_type,
+        send_message_callback=None,
+        api_up=None,
+    ):
         """
         根据robot_type创建设备实例
         
         Args:
             robot_type: 机器人类型
             send_message_callback: 发送消息回调函数
+            api_up: API上行数据，用于提取设备构造参数
             **kwargs: 其他参数
             
         Returns:
             设备实例或None
         """
         for device_class in self._device_classes:
-            if device_class.supports_robot_type(robot_type):
-                device = device_class(
-                    send_message_callback=send_message_callback, **kwargs)
-                device.set_robot_type(robot_type)
+            if device_class._supports_robot_type(robot_type):
+                # 从api_up中提取构造参数
+                constructor_params = self._extract_constructor_params(
+                    device_class, robot_type, api_up)
+
+                # 合并参数
+                all_params = {
+                    'send_message_callback': send_message_callback,
+                    **constructor_params,
+                }
+
+                device = device_class(**all_params)
+                device._set_robot_type(robot_type)
                 return device
+
+        return None
+
+    def _extract_constructor_params(self, device_class, robot_type, api_up):
+        """
+        从api_up中提取设备构造参数
+        
+        Args:
+            device_class: 设备类
+            robot_type: 机器人类型
+            api_up: API上行数据
+            
+        Returns:
+            dict: 构造参数字典
+        """
+        params = {}
+
+        if api_up is None:
+            return params
+
+        # 根据设备类名提取不同的参数
+        class_name = device_class.__name__
+
+        if class_name == 'ArmArcher':
+            params['robot_type'] = robot_type
+
+            # 从api_up中获取motor_count
+            motor_count = self._get_motor_count_from_api_up(api_up)
+            if motor_count is not None:
+                params['motor_count'] = motor_count
+
+        elif class_name == 'ChassisMaver':
+            # 从api_up中获取motor_count
+            motor_count = self._get_motor_count_from_api_up(api_up)
+            if motor_count is not None:
+                params['motor_count'] = motor_count
+
+        ## TODO:后续如何增加不同的设备，需要根据新类需要的参数增加新的额外参数提取方法。
+        ## 前面已经使用了try进行错误捕获，这里如果参数捕获有问题，直接raise即可。
+
+        return params
+
+    def _get_motor_count_from_api_up(self, api_up):
+        """
+        从api_up中获取电机数量
+        
+        Args:
+            api_up: API上行数据
+            
+        Returns:
+            int: 电机数量或None
+        """
+        if api_up is None:
+            return None
+
+        # 检查arm_status
+        if hasattr(api_up, 'arm_status') and api_up.arm_status:
+            if hasattr(api_up.arm_status, 'motor_status'):
+                return len(api_up.arm_status.motor_status)
+
+        # 检查base_status
+        if hasattr(api_up, 'base_status') and api_up.base_status:
+            if hasattr(api_up.base_status, 'motor_status'):
+                return len(api_up.base_status.motor_status)
 
         return None
 
@@ -112,7 +188,7 @@ class HexDeviceApi:
         # 自动注册可用的设备类
         self._register_available_device_classes()
 
-        self.__shutdown_event = None  # 在初始化时就创建
+        self.__shutdown_event = None  # the handle event for shutdown api
         self.__loop = None  ## async loop thread
         self.__loop_thread = threading.Thread(target=self.__loop_start,
                                               daemon=True)
@@ -120,21 +196,20 @@ class HexDeviceApi:
         # init api
         self.__loop_thread.start()
 
-    def register_device(self, device):
+    def register_device(self, device: DeviceBase):
         """
         注册设备并设置发送消息回调
         
         Args:
             device: 设备对象，需要支持set_send_message_callback方法
         """
-        # 设置发送消息回调
+        # set send message callback
         if hasattr(device, '_set_send_message_callback'):
             device._set_send_message_callback(self._send_down_message)
 
-        # 添加到设备列表
         self.device_list.append(device)
 
-        # 启动设备的周期性任务
+        # start _periodic task for each device
         self.start_device_periodic_task(device)
 
     def _register_available_device_classes(self):
@@ -148,13 +223,15 @@ class HexDeviceApi:
         except ImportError as e:
             log_warn(f"无法导入 ChassisMaver: {e}")
 
-        # 可以在这里添加更多设备类的注册
-        # try:
-        #     from .other_device import OtherDevice
-        #     self.register_device_class(OtherDevice)
-        #     log_info("已注册 OtherDevice 设备类")
-        # except ImportError as e:
-        #     log_warn(f"无法导入 OtherDevice: {e}")
+        try:
+            from .arm_archer import ArmArcher
+            self.register_device_class(ArmArcher)
+            log_info("已注册 ArmArcher 设备类")
+        except ImportError as e:
+            log_warn(f"无法导入 ArmArcher: {e}")
+
+        # TODO: 添加更多设备类的注册
+        # lift、rotate lift...
 
     def register_device_class(self, device_class):
         """
@@ -182,7 +259,7 @@ class HexDeviceApi:
         return None
 
     def create_and_register_device(self, robot_type,
-                                   **kwargs) -> Optional[DeviceBase]:
+                                   api_up) -> Optional[DeviceBase]:
         """
         根据robot_type创建并注册设备
         
@@ -196,12 +273,10 @@ class HexDeviceApi:
         device = self._device_factory.create_device_for_robot_type(
             robot_type,
             send_message_callback=self._send_down_message,
-            **kwargs)
+            api_up=api_up)
 
         if device:
             self.device_list.append(device)
-
-            # 启动设备的周期性任务
             self.start_device_periodic_task(device)
 
         return device
@@ -214,13 +289,13 @@ class HexDeviceApi:
             device: 设备实例
         """
         if device in self._device_tasks:
-            log_warn(f"设备 {device.name} 的周期性任务已经存在")
+            log_warn(f"Periodic task for {device.name} already exists")
             return
 
         # 创建异步任务
         task = asyncio.create_task(self._device_periodic_runner(device))
         self._device_tasks[device] = task
-        log_info(f"启动设备 {device.name} 的周期性任务")
+        log_common(f"Begin periodic task for {device.name}")
 
     async def _device_periodic_runner(self, device: DeviceBase):
         """
@@ -501,8 +576,10 @@ class HexDeviceApi:
                     device._update(api_up)
                 else:
                     log_info(f"create new device: {robot_type_name}")
+
                     try:
-                        device = self.create_and_register_device(robot_type)
+                        device = self.create_and_register_device(
+                            robot_type, api_up)
                     except Exception as e:
                         log_err(f"create_and_register_device error: {e}")
                         continue

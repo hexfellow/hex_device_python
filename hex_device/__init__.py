@@ -13,7 +13,7 @@ A Python library for controlling HexDevice robots and devices.
 
 # 核心类
 from .device_base import DeviceBase
-from .motor_base import MotorBase, MotorError, MotorCommand, CommandType
+from .motor_base import MotorBase, MotorError, MotorCommand, CommandType, MitMotorCommand
 from .chassis_maver import ChassisMaver
 
 # 机械臂配置系统
@@ -39,6 +39,7 @@ __all__ = [
     'MotorError',
     'MotorCommand',
     'CommandType',
+    'MitMotorCommand',
     'VehicleDevice',
     'ChassisMaver',
 

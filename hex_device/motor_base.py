@@ -8,7 +8,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, Tuple, List, Dict, Any
+from typing import Optional, Tuple, List, Dict, Any, Union
 from .generated import public_api_down_pb2, public_api_up_pb2, public_api_types_pb2
 from enum import Enum
 import threading
@@ -23,40 +23,60 @@ class CommandType(Enum):
     SPEED = "speed"
     POSITION = "position"
     TORQUE = "torque"
+    MIT = "mit"
 
+
+@dataclass
+class MitMotorCommand:
+    """MIT电机指令结构体
+    
+    包含MIT电机控制所需的所有参数：
+    - torque: 力矩 (Nm)
+    - speed: 速度 (rad/s) 
+    - position: 位置 (rad)
+    - kp: 比例增益
+    - kd: 微分增益
+    """
+    torque: float
+    speed: float
+    position: float
+    kp: float
+    kd: float
 
 @dataclass
 class MotorCommand:
     """电机指令结构体
 
-    可以选择输入四种指令：
+    可以选择输入五种指令：
     1. brake指令 - bool类型
     2. 速度指令 - 浮点数组类型
     3. 位置指令 - 浮点数组类型
     4. 力矩指令 - 浮点数组类型
+    5. MIT指令 - MitMotorCommand列表类型
     """
     command_type: CommandType
     brake_command: Optional[List[bool]] = None
     speed_command: Optional[List[float]] = None
     position_command: Optional[List[float]] = None
     torque_command: Optional[List[float]] = None
+    mit_command: Optional[List[MitMotorCommand]] = None
 
     def __post_init__(self):
         """验证指令数据的有效性"""
         if self.command_type == CommandType.BRAKE:
             if self.brake_command is None:
                 raise ValueError("brake指令类型需要提供brake_command参数")
-            if self.speed_command is not None or self.position_command is not None or self.torque_command is not None:
+            if self.speed_command is not None or self.position_command is not None or self.torque_command is not None or self.mit_command is not None:
                 raise ValueError(
-                    "brake指令类型不应包含speed_command、position_command或torque_command"
+                    "brake指令类型不应包含speed_command、position_command、torque_command或mit_command"
                 )
 
         elif self.command_type == CommandType.SPEED:
             if self.speed_command is None:
                 raise ValueError("speed指令类型需要提供speed_command参数")
-            if self.brake_command is not None or self.position_command is not None or self.torque_command is not None:
+            if self.brake_command is not None or self.position_command is not None or self.torque_command is not None or self.mit_command is not None:
                 raise ValueError(
-                    "speed指令类型不应包含brake_command、position_command或torque_command"
+                    "speed指令类型不应包含brake_command、position_command、torque_command或mit_command"
                 )
             if not isinstance(self.speed_command, list) or not all(
                     isinstance(x, (int, float)) for x in self.speed_command):
@@ -65,9 +85,9 @@ class MotorCommand:
         elif self.command_type == CommandType.POSITION:
             if self.position_command is None:
                 raise ValueError("position指令类型需要提供position_command参数")
-            if self.brake_command is not None or self.speed_command is not None or self.torque_command is not None:
+            if self.brake_command is not None or self.speed_command is not None or self.torque_command is not None or self.mit_command is not None:
                 raise ValueError(
-                    "position指令类型不应包含brake_command、speed_command或torque_command"
+                    "position指令类型不应包含brake_command、speed_command、torque_command或mit_command"
                 )
             if not isinstance(self.position_command, list) or not all(
                     isinstance(x, (int, float))
@@ -77,33 +97,55 @@ class MotorCommand:
         elif self.command_type == CommandType.TORQUE:
             if self.torque_command is None:
                 raise ValueError("torque指令类型需要提供torque_command参数")
-            if self.brake_command is not None or self.speed_command is not None or self.position_command is not None:
+            if self.brake_command is not None or self.speed_command is not None or self.position_command is not None or self.mit_command is not None:
                 raise ValueError(
-                    "torque指令类型不应包含brake_command、speed_command或position_command"
+                    "torque指令类型不应包含brake_command、speed_command、position_command或mit_command"
                 )
             if not isinstance(self.torque_command, list) or not all(
                     isinstance(x, (int, float)) for x in self.torque_command):
                 raise ValueError("torque_command必须是浮点数组")
 
+        elif self.command_type == CommandType.MIT:
+            if self.mit_command is None:
+                raise ValueError("mit指令类型需要提供mit_command参数")
+            if self.brake_command is not None or self.speed_command is not None or self.position_command is not None or self.torque_command is not None:
+                raise ValueError(
+                    "mit指令类型不应包含brake_command、speed_command、position_command或torque_command"
+                )
+            if not isinstance(self.mit_command, list) or not all(
+                    isinstance(x, MitMotorCommand) for x in self.mit_command):
+                raise ValueError("mit_command必须是MitMotorCommand对象列表")
+
     @classmethod
-    def create_brake_command(cls, brake: bool) -> 'MotorCommand':
-        """创建brake指令"""
-        return cls(command_type=CommandType.BRAKE, brake_command=brake)
+    def create_brake_command(cls, brake: List[bool]) -> 'MotorCommand':
+        """创建brake指令
+        Args:
+            brake: 刹车指令,无论是True还是False,都表示刹车
+        """
+        return cls(command_type=CommandType.BRAKE, brake_command=deepcopy(brake))
 
     @classmethod
     def create_speed_command(cls, speeds: List[float]) -> 'MotorCommand':
-        """创建速度指令"""
-        return cls(command_type=CommandType.SPEED, speed_command=speeds)
+        """创建速度指令
+        Args:
+            speeds: 速度值列表 (rad/s)
+        """
+        return cls(command_type=CommandType.SPEED, speed_command=deepcopy(speeds))
 
     @classmethod
     def create_position_command(
             cls,
             positions: List[float],
             pulse_per_rotation: np.ndarray = None) -> 'MotorCommand':
-        """创建位置指令"""
+        """
+        创建位置指令
+        Args:
+            positions: 位置值列表 (rad)
+            pulse_per_rotation: 每转脉冲数
+        """
         if pulse_per_rotation is None:
             return cls(command_type=CommandType.POSITION,
-                       position_command=positions)
+                       position_command=deepcopy(positions))
 
         #trans to encoder position
         trans_positions = np.array(positions) / (
@@ -114,7 +156,32 @@ class MotorCommand:
     @classmethod
     def create_torque_command(cls, torques: List[float]) -> 'MotorCommand':
         """创建力矩指令"""
-        return cls(command_type=CommandType.TORQUE, torque_command=torques)
+        return cls(command_type=CommandType.TORQUE, torque_command=deepcopy(torques))
+
+    @classmethod
+    def create_mit_command(cls, mit_commands: List[MitMotorCommand], pulse_per_rotation: np.ndarray = None) -> 'MotorCommand':
+        """创建MIT指令"""
+        if pulse_per_rotation is None:
+            # 使用deepcopy创建副本，避免引用遗留问题
+            return cls(command_type=CommandType.MIT, mit_command=deepcopy(mit_commands))
+
+        #trans to encoder position
+        positions = np.array([cmd.position for cmd in mit_commands])
+        trans_positions = positions / (2 * np.pi) * pulse_per_rotation + 65535.0 / 2.0
+        
+        # 创建新的MIT命令对象（避免引用遗留问题）
+        converted_commands = []
+        for i, cmd in enumerate(mit_commands):
+            new_cmd = MitMotorCommand(
+                torque=cmd.torque,
+                speed=cmd.speed,
+                position=trans_positions[i],  # 使用转换后的位置
+                kp=cmd.kp,
+                kd=cmd.kd
+            )
+            converted_commands.append(new_cmd)
+        
+        return cls(command_type=CommandType.MIT, mit_command=converted_commands)
 
 
 class MotorError(Enum):
@@ -163,7 +230,7 @@ class MotorBase(ABC):
 
         # 目标指令
         self._current_targets = [None] * motor_count  # 当前设备正在运行的指令
-        self._target_command = None  # 当前目标指令
+        self._target_command = None  # 当前目标指令，这里的指令都已经完成转换，与proto注释中的量级一致
 
         # 时间戳
         self._last_update_time = None
@@ -272,6 +339,7 @@ class MotorBase(ABC):
                 f"Motor index {motor_index} out of range [0, {self.motor_count})"
             )
         with self._data_lock:
+            self._has_new_data = False
             return self._states[motor_index]
 
     def get_motor_position(self, motor_index: int) -> float:
@@ -281,11 +349,13 @@ class MotorBase(ABC):
                 f"Motor index {motor_index} out of range [0, {self.motor_count})"
             )
         with self._data_lock:
+            self._has_new_data = False
             return self._positions[motor_index]
 
     def get_motor_positions(self) -> List[float]:
         """获取所有电机位置 (rad)"""
         with self._data_lock:
+            self._has_new_data = False
             return self._positions.tolist()
 
     def get_motor_velocity(self, motor_index: int) -> float:
@@ -295,11 +365,13 @@ class MotorBase(ABC):
                 f"Motor index {motor_index} out of range [0, {self.motor_count})"
             )
         with self._data_lock:
+            self._has_new_data = False
             return self._velocities[motor_index]
 
     def get_motor_velocities(self) -> List[float]:
         """获取所有电机速度 (rad/s)"""
         with self._data_lock:
+            self._has_new_data = False
             return self._velocities.tolist()
 
     def get_motor_torque(self, motor_index: int) -> float:
@@ -309,11 +381,13 @@ class MotorBase(ABC):
                 f"Motor index {motor_index} out of range [0, {self.motor_count})"
             )
         with self._data_lock:
+            self._has_new_data = False
             return self._torques[motor_index]
 
     def get_motor_torques(self) -> List[float]:
         """获取所有电机扭矩 (Nm)"""
         with self._data_lock:
+            self._has_new_data = False
             return self._torques.tolist()
 
     def get_motor_driver_temperature(self, motor_index: int) -> float:
@@ -323,6 +397,7 @@ class MotorBase(ABC):
                 f"Motor index {motor_index} out of range [0, {self.motor_count})"
             )
         with self._data_lock:
+            self._has_new_data = False
             return self._driver_temperature[motor_index]
 
     def get_motor_temperature(self, motor_index: int) -> float:
@@ -332,6 +407,7 @@ class MotorBase(ABC):
                 f"Motor index {motor_index} out of range [0, {self.motor_count})"
             )
         with self._data_lock:
+            self._has_new_data = False
             return self._motor_temperature[motor_index]
 
     def get_motor_voltage(self, motor_index: int) -> float:
@@ -341,6 +417,7 @@ class MotorBase(ABC):
                 f"Motor index {motor_index} out of range [0, {self.motor_count})"
             )
         with self._data_lock:
+            self._has_new_data = False
             return self._voltage[motor_index]
 
     def get_motor_pulse_per_rotation(self, motor_index: int) -> float:
@@ -361,31 +438,38 @@ class MotorBase(ABC):
         with self._data_lock:
             return self._wheel_radius[motor_index]
 
-    def motor_command(self, command_type: CommandType, values: List[float]):
+    def motor_command(self, command_type: CommandType, values: Union[List[bool], List[float], List[MitMotorCommand]]):
         """
         设置电机指令
         
         Args:
-            command_type: 指令类型 (BRAKE, SPEED, POSITION, TORQUE)
+            command_type: 指令类型 (BRAKE, SPEED, POSITION, TORQUE, MIT)
             values: 指令值列表
-                - BRAKE: 忽略values参数
-                - SPEED: 速度值列表 (rad/s)
-                - POSITION: 位置值列表 (rad)
-                - TORQUE: 力矩值列表 (Nm)
+                - BRAKE: values 参数仅用于确定电机数量 (List[bool])
+                - SPEED: 速度值列表 (rad/s) (List[float])
+                - POSITION: 位置值列表 (rad) (List[float])
+                - TORQUE: 力矩值列表 (Nm) (List[float])
+                - MIT: MIT命令列表 (List[MitMotorCommand])
         """
         if command_type == CommandType.BRAKE:
+            if not isinstance(values, list) or not all(isinstance(x, bool) for x in values):
+                raise ValueError("BRAKE命令类型需要提供布尔数列表")
             if len(values) != self.motor_count:
                 raise ValueError(
                     f"Expected {self.motor_count} brake values, got {len(values)}"
                 )
-            command = MotorCommand.create_brake_command(True)
+            command = MotorCommand.create_brake_command(values)
         elif command_type == CommandType.SPEED:
+            if not isinstance(values, list) or not all(isinstance(x, float) for x in values):
+                raise ValueError("SPEED命令类型需要提供浮点数列表")
             if len(values) != self.motor_count:
                 raise ValueError(
                     f"Expected {self.motor_count} speed values, got {len(values)}"
                 )
             command = MotorCommand.create_speed_command(values)
         elif command_type == CommandType.POSITION:
+            if not isinstance(values, list) or not all(isinstance(x, float) for x in values):
+                raise ValueError("POSITION命令类型需要提供浮点数列表")
             if len(values) != self.motor_count:
                 raise ValueError(
                     f"Expected {self.motor_count} position values, got {len(values)}"
@@ -393,14 +477,41 @@ class MotorBase(ABC):
             command = MotorCommand.create_position_command(
                 values, self._pulse_per_rotation)
         elif command_type == CommandType.TORQUE:
+            if not isinstance(values, list) or not all(isinstance(x, float) for x in values):
+                raise ValueError("TORQUE命令类型需要提供浮点数列表")
             if len(values) != self.motor_count:
                 raise ValueError(
                     f"Expected {self.motor_count} torque values, got {len(values)}"
                 )
             command = MotorCommand.create_torque_command(values)
+        elif command_type == CommandType.MIT:
+            if not isinstance(values, list) or not all(isinstance(x, MitMotorCommand) for x in values):
+                raise ValueError("MIT命令类型需要提供MitMotorCommand对象列表")
+            if len(values) != self.motor_count:
+                raise ValueError(
+                    f"Expected {self.motor_count} MIT commands, got {len(values)}"
+                )
+            command = MotorCommand.create_mit_command(values, self._pulse_per_rotation)
         else:
             raise ValueError(f"Unknown command type: {command_type}")
 
+        with self._command_lock:
+            self._target_command = command
+
+    def mit_motor_command(self, mit_commands: List[MitMotorCommand]):
+        """
+        设置MIT电机指令
+        
+        Args:
+            mit_commands: MIT电机指令列表，每个元素包含torque, speed, position, kp, kd
+        """
+        if len(mit_commands) != self.motor_count:
+            raise ValueError(
+                f"Expected {self.motor_count} MIT commands, got {len(mit_commands)}"
+            )
+        
+        command = MotorCommand.create_mit_command(mit_commands)
+        
         with self._command_lock:
             self._target_command = command
 
@@ -534,10 +645,10 @@ class MotorBase(ABC):
             if self._target_command:
                 summary['target_command'] = {
                     'command_type': self._target_command.command_type.value,
-                    'brake_command': self._target_command.brake_command,
-                    'speed_command': self._target_command.speed_command,
-                    'position_command': self._target_command.position_command,
-                    'torque_command': self._target_command.torque_command
+                    'brake_command': deepcopy(self._target_command.brake_command),
+                    'speed_command': deepcopy(self._target_command.speed_command),
+                    'position_command': deepcopy(self._target_command.position_command),
+                    'torque_command': deepcopy(self._target_command.torque_command)
                 }
             else:
                 summary['target_command'] = None
@@ -620,13 +731,24 @@ class MotorBase(ABC):
             for target in command.torque_command:
                 single_motor_target.torque = target
                 motor_targets.targets.append(deepcopy(single_motor_target))
+        elif command.command_type == CommandType.MIT:
+            for mit_cmd in command.mit_command:
+                mit_target = public_api_types_pb2.MitMotorTarget()
+                mit_target.torque = mit_cmd.torque
+                mit_target.speed = mit_cmd.speed
+                mit_target.position = mit_cmd.position
+                mit_target.kp = mit_cmd.kp
+                mit_target.kd = mit_cmd.kd
+                
+                single_motor_target.mit_target.CopyFrom(mit_target)
+                motor_targets.targets.append(deepcopy(single_motor_target))
         else:
             raise ValueError("construct_down_message: command_type error")
         return motor_targets
 
     def _construct_custom_motor_msg(
             self, command_type: CommandType,
-            values: List[float]) -> public_api_types_pb2.MotorTargets:
+            values) -> public_api_types_pb2.MotorTargets:
         """
         设置电机指令
         
@@ -663,6 +785,12 @@ class MotorBase(ABC):
                     f"Expected {self.motor_count} torque values, got {len(values)}"
                 )
             command = MotorCommand.create_torque_command(values)
+        elif command_type == CommandType.MIT:
+            if len(values) != self.motor_count:
+                raise ValueError(
+                    f"Expected {self.motor_count} mit values, got {len(values)}"
+                )
+            command = MotorCommand.create_mit_command(values, self._pulse_per_rotation)
         else:
             raise ValueError(f"Unknown command type: {command_type}")
 

@@ -8,10 +8,10 @@
 
 import pprint
 import time
-from typing import Optional, List
+from typing import Optional, Tuple, List, Dict, Any, Union
 from .common_utils import delay, log_common, log_info, log_warn, log_err
 from .device_base import DeviceBase
-from .motor_base import MotorBase, MotorError, MotorCommand, CommandType
+from .motor_base import MitMotorCommand, MotorBase, MotorError, MotorCommand, CommandType
 from .generated import public_api_down_pb2, public_api_up_pb2, public_api_types_pb2
 from .generated.public_api_types_pb2 import (ArmStatus)
 from .arm_config import get_arm_config, ArmConfig, arm_config_manager
@@ -77,6 +77,7 @@ class ArmArcher(DeviceBase, MotorBase):
         self._parking_stop_detail = public_api_types_pb2.ParkingStopDetail()
 
         # 控制相关
+        self._command_timeout_check = True
         self._last_command_time = None
         self._command_timeout = 0.3  # 300ms
         self.__last_warning_time = time.perf_counter()  # last log warning time
@@ -197,7 +198,7 @@ class ArmArcher(DeviceBase, MotorBase):
 
             error_code = None
             if motor_status.error:
-                error_code = motor_status.error[0].value
+                error_code = motor_status.error[0]
             error_codes.append(error_code)
 
         self.update_motor_data(positions=positions,
@@ -257,17 +258,23 @@ class ArmArcher(DeviceBase, MotorBase):
                     msg = self._construct_calibrate_message()
                     await self._send_message(msg)
                 else:
-                    # command timeout
+                    # no command
                     if self._last_command_time is None:
                         msg = self._construct_init_message()
                         await self._send_message(msg)
-                    elif (start_time -
+                    # command timeout
+                    elif self._command_timeout_check and (start_time -
                           self._last_command_time) > self._command_timeout:
-                        msg = self._construct_custom_motor_msg(
-                            CommandType.BRAKE, [0.0] * self.motor_count)
-                        await self._send_message(msg)
+                        try:
+                            motor_msg = self._construct_custom_motor_msg(
+                                CommandType.BRAKE, [True] * self.motor_count)
+                            msg = self._construct_custom_joint_command_msg(motor_msg)
+                            await self._send_message(msg)
+                        except Exception as e:
+                            log_err(f"ArmArcher构造关节命令消息失败: {e}")
+                            continue
+                    # normal command
                     else:
-                        # normal command
                         try:
                             msg = self._construct_joint_command_msg()
                             await self._send_message(msg)
@@ -280,9 +287,21 @@ class ArmArcher(DeviceBase, MotorBase):
                 continue
 
     # 机械臂特有方法
-    def motor_command(self, command_type: CommandType, values: List[float]):
+    def command_timeout_check(self, check_or_not: bool = True):
+        """
+        设定是否检查命令超时
+        """
+        self._command_timeout_check = check_or_not
+
+    def motor_command(self, command_type: CommandType, values: Union[List[bool], List[float], List[MitMotorCommand]]):
         """
         设置电机指令
+        Note:
+            1. Only when CommandType is POSITION or SPEED, will validate the values.
+            2. When CommandType is BRAKE, the values can be any, but the length must be the same as the motor count.
+        Args:
+            command_type: 指令类型
+            values: 指令值列表
         """
         period = float(1.0 / self._control_hz)
         if command_type == CommandType.POSITION:
@@ -300,6 +319,16 @@ class ArmArcher(DeviceBase, MotorBase):
         arm_command = public_api_types_pb2.ArmCommand()
         motor_targets = self._construct_target_motor_msg()
         arm_command.motor_targets.CopyFrom(motor_targets)
+        msg.arm_command.CopyFrom(arm_command)
+        return msg
+
+    def _construct_custom_joint_command_msg(self, motor_msg: public_api_types_pb2.MotorTargets) -> public_api_down_pb2.APIDown:
+        """
+        @brief: For constructing a custom joint command message.
+        """
+        msg = public_api_down_pb2.APIDown()
+        arm_command = public_api_types_pb2.ArmCommand()
+        arm_command.motor_targets.CopyFrom(motor_msg)
         msg.arm_command.CopyFrom(arm_command)
         return msg
 
@@ -363,7 +392,6 @@ class ArmArcher(DeviceBase, MotorBase):
         """
         last_positions = arm_config_manager.get_last_positions(self._arm_series)
         
-        # 如果没有上一次位置记录，使用当前电机位置作为初始位置
         if last_positions is None:
             current_positions = self.get_motor_positions()
             if len(current_positions) == len(positions):
@@ -410,7 +438,7 @@ class ArmArcher(DeviceBase, MotorBase):
 
     def reload_arm_config_from_dict(self, config_data: dict) -> bool:
         """
-        从字典数据重载当前机械臂的配置参数
+        从字典数据重载当前机械臂的配置参数.参数用于给速度以及位置指令提供限幅指标.
         
         Args:
             config_data: 配置数据字典
@@ -422,12 +450,12 @@ class ArmArcher(DeviceBase, MotorBase):
             success = arm_config_manager.reload_from_dict(
                 self._arm_series, config_data)
             if success:
-                print(f"机械臂配置从字典重载成功: {config_data.get('name', 'unknown')}")
+                print(f"ArmArcher: reload arm config success: {config_data.get('name', 'unknown')}")
             else:
-                print(f"机械臂配置从字典重载失败: {config_data.get('name', 'unknown')}")
+                print(f"ArmArcher: reload arm config from dict failed: {config_data.get('name', 'unknown')}")
             return success
         except Exception as e:
-            print(f"机械臂配置从字典重载异常: {e}")
+            print(f"ArmArcher: reload arm config from dict exception: {e}")
             return False
 
     def set_initial_positions(self, positions: List[float]):

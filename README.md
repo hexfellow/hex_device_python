@@ -1,14 +1,22 @@
-# Hex Vehicle Python Library
+# Hex Device Python Library
 
-A Python library for controlling hex vehicles through a WebSocket-based API.
+<p align="center">
+	<a href="https://github.com/hexfellow/hex_device_python/stargazers"><img src="https://img.shields.io/github/stars/hexfellow/hex_device_python?colorA=363a4f&colorB=b7bdf8&style=for-the-badge"></a>
+	<a href="https://github.com/hexfellow/hex_device_python/issues"><img src="https://img.shields.io/github/issues/hexfellow/hex_device_python?colorA=363a4f&colorB=f5a97f&style=for-the-badge"></a>
+	<a href="https://github.com/hexfellow/hex_device_python/contributors"><img src="https://img.shields.io/github/contributors/hexfellow/hex_device_python?colorA=363a4f&colorB=a6da95&style=for-the-badge"></a>
+</p>
 
-## Overview
+## <a name="overview"></a> **Overview**
 
-This library provides a simple interface for communicating with and controlling hex vehicles. It uses Protocol Buffers for message serialization and WebSocket for real-time communication.
+This library provides a simple interface for communicating with and controlling hex device. It uses Protocol Buffers for message serialization and WebSocket for real-time communication.The supported hardware list is as follows:
+- [✅] **[hex_vehicle](#hex_vehicle)**
+- [✅] **[hex_arm](#hex_arm)**
+- [ ] **[hex_lift](#hex_lift)**
+
 
 ## Clone
 ```
-git clone --recurse-submodules https://github.com/hexfellow/hex_device_python_lib.git
+git clone --recurse-submodules https://github.com/hexfellow/hex_device_python.git
 ```
 
 ## Prerequisites
@@ -18,7 +26,15 @@ git clone --recurse-submodules https://github.com/hexfellow/hex_device_python_li
 
 ## Quickstart
 
-### Option 1: Direct Usage (No Installation)
+### Option 1: Package Installation
+
+To install the library in your Python environment:
+
+```
+python3 -m pip install .
+```
+
+### Option 2: Direct Usage (No Installation)
 
 If you prefer to run the library without installing it in your Python environment:
 
@@ -29,7 +45,8 @@ If you prefer to run the library without installing it in your Python environmen
    ```
    
    **Note:** This library requires newer protoc. If compilation fails, please try to install protoc-27.1 using the binary installation method below.
-   **Installing protoc-27.1:**
+
+   **Installing protoc-27.1 through binary:**
    ```bash
    # For Linux x86_64
    wget https://github.com/protocolbuffers/protobuf/releases/download/v27.1/protoc-27.1-linux-x86_64.zip
@@ -45,87 +62,86 @@ If you prefer to run the library without installing it in your Python environmen
    protoc --version  # Should show libprotoc 27.1
    ```
 
-2. **Add the library path to your script:**
-   ```python
-   import sys
-   sys.path.insert(1, '<your project path>/hex_device_python_lib')
-   sys.path.insert(1, '<your project path>/hex_device_python_lib/hex_device/generated')
-   ```
+2. **Install dependencies:**
+```bash
+python3 -m pip install -r requirements.txt
+```
 
-3. **Install dependencies**
-   ```bash
-   pip install websockets
-   pip install pygame
-   ```
-
-4. **Run your test script:**
-   ```bash
-   python3 tests/<your_script>.py
-   ```
-
-### Option 2: Package Installation
-
-To install the library in your Python environment:
-
-1. **Build the package:**
-   ```bash
-   python3 -m pip install .
-   ```
-
-2. **Run your test script:**
-   ```bash
-   python3 tests/<your_script>.py
-   ```
+3. **Add the library path to your script:**
+Add the library path to your script:
+```python
+import sys
+sys.path.insert(1, '<your project path>/hex_device_python')
+sys.path.insert(1, '<your project path>/hex_device_python/hex_device/generated')
+```
 
 ## Usage
 
-All vehicle control interfaces are provided through the `VehicleAPI` class:
+> **The detailed function interfaces can be found in our [wiki](https://github.com/hexfellow/hex_device_python/wiki).**
 
+### <a name="hex_vehicle"></a> For vehicle <small><sup>[overview ▲](#overview)</sup></small>
 ```python
-from hex_device import PublicAPI as VehicleAPI
+api = HexDeviceApi(ws_url="ws://<device ip>:8439", control_hz=250)
+try:
+    while True:
+        if api.is_api_exit():
+            print("Public API has exited.")
+            break
+        else:
+            for device in api.device_list:
+                # for ChassisMaver
+                if isinstance(device, ChassisMaver):
+                    print(device.get_device_summary())
+                    print(
+                        f"vehicle position: {device.get_vehicle_position()}"
+                    )
+                    device.set_vehicle_speed(0.0, 0.0, 0.0)
+        time.sleep(0.004)
+except KeyboardInterrupt:
+    print("Received Ctrl-C.")
+    api.close()
+finally:
+    pass
 
-# Initialize the API
-api = VehicleAPI(ws_url="ws://your_vehicle_ip:8439", control_hz=200, control_mode="speed")
-
-# Get vehicle interface
-vehicle = api.vehicle
-
-# Control the vehicle
-vehicle.set_target_vehicle_speed(x_speed, y_speed, rotation_speed)
+print("Resources have been cleaned up.")
+exit(0)
 ```
 
-## Architecture
+### <a name="hex_arm"></a> For Arm <small><sup>[overview ▲](#overview)</sup></small>
+```python
+api = HexDeviceApi(ws_url="ws://<device ip>:8439", control_hz=250)
+try:
+    while True:
+        if api.is_api_exit():
+            print("Public API has exited.")
+            break
+        else:
+            for device in api.device_list:
+                # for ArmArcher
+                if isinstance(device, ArmArcher):
+                    print(device.get_device_summary())
+                    print(f"motor position: {device.get_motor_positions()}")
+                    device.motor_command(
+                        CommandType.SPEED,
+                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        time.sleep(0.004)
+except KeyboardInterrupt:
+    print("Received Ctrl-C.")
+    api.close()
+finally:
+    pass
 
-The library consists of three main modules:
+print("Resources have been cleaned up.")
+exit(0)
+```
 
-### 1. public_api
-- **Network Manager**: Handles Protocol Buffer message construction and WebSocket communication
-- Manages data transmission to and from the vehicle
+### <a name="hex_lift"></a> For lift <small><sup>[overview ▲](#overview)</sup></small>
+waiting...
 
-### 2. vehicle  
-- **Vehicle Data Manager**: Continuously updates vehicle data in a loop
-- Provides interfaces for:
-  - Obtaining chassis status
-  - Controlling vehicle movement
-  - Reading motor data (velocity, torque, position)
+<p align="center">
+	Copyright &copy; 2025-present <a href="https://github.com/hexfellow" target="_blank">Hexfellow Org</a>
+</p>
 
-### 3. utils
-- **General Tools**: Parameter management and common utility functions
-- Provides helper functions for various operations
-
-## Examples
-
-Please refer to the `tests/` directory for example usage:
-- `main.py` - Basic vehicle control example
-- `main_pygame.py` - Joystick control example using pygame.
-- `vehicle_calc.py` - A simple kinematics solution.
-
-Additional application projects can be found here:
-[tidybot2](https://github.com/hexfellow/tidybot2/blob/main/base_controller_pygame.py)
-
-## Requirements
-
-- numpy>=1.17.4
-- protobuf>=5.29.4,<6.0.0
-- websockets
-- pygame (for joystick control examples)
+<p align="center">
+	<a href="https://github.com/hexfellow/robot_hardware_interface/blob/main/LICENSE"><img src="https://img.shields.io/static/v1.svg?style=for-the-badge&label=License&message=Apache&logoColor=d9e0ee&colorA=363a4f&colorB=b7bdf8"/></a>
+</p>

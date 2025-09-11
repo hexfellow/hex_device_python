@@ -13,26 +13,26 @@ import numpy as np
 
 
 class DofType(Enum):
-    """自由度类型"""
+    """Degree of freedom type"""
     SIX_AXIS = "six_axis"
     SEVEN_AXIS = "seven_axis"
 
 
 @dataclass
 class SixAxisData:
-    """六轴数据"""
+    """Six-axis data"""
     motor_cnt: int = 6
 
 
 @dataclass
 class SevenAxisData:
-    """七轴数据"""
+    """Seven-axis data"""
     motor_cnt: int = 7
 
 
 @dataclass
 class JointParam:
-    """关节参数"""
+    """Joint parameters"""
     joint_name: str
     joint_limit: List[
         float]  # [min_pos, max_pos, min_vel, max_vel, min_acc, max_acc]
@@ -40,13 +40,13 @@ class JointParam:
 
 @dataclass
 class JointParams:
-    """关节参数集合"""
+    """Collection of joint parameters"""
     joints: List[JointParam]
 
 
 @dataclass
 class ArmConfig:
-    """机械臂配置"""
+    """Robotic arm configuration"""
     name: str
     dof_num: DofType
     arm_series: int
@@ -55,17 +55,17 @@ class ArmConfig:
 
 
 class ArmConfigManager:
-    """机械臂配置管理器"""
+    """Robotic arm configuration manager"""
 
     def __init__(self):
         self._configs: Dict[int, ArmConfig] = {}
-        self._last_positions: Dict[int, List[float]] = {}  # 记录每个机械臂系列的上一次位置
-        self._last_velocities: Dict[int, List[float]] = {}  # 记录每个机械臂系列的上一次速度
+        self._last_positions: Dict[int, List[float]] = {}  # Record last position
+        self._last_velocities: Dict[int, List[float]] = {}  # Record last velocity
         self._load_default_configs()
 
     def _load_default_configs(self):
-        """加载默认配置"""
-        # 0x00 - saber750d_6dof (1轴)
+        """Load default configurations"""
+        # 0x00 - saber750d_6dof (1-axis)
         self._configs[0x00] = ArmConfig(
             name="saber750d_6dof",
             dof_num=DofType.SIX_AXIS,
@@ -76,7 +76,7 @@ class ArmConfigManager:
                            joint_limit=[-3.15, 3.15, -4.5, 4.5, -0.0, 0.0])
             ]))
 
-        # 0x09 - saber750d_6dof (6轴)
+        # 0x09 - saber750d_6dof (6-axis)
         self._configs[0x09] = ArmConfig(
             name="saber750d_6dof",
             dof_num=DofType.SIX_AXIS,
@@ -99,7 +99,7 @@ class ArmConfigManager:
                            joint_limit=[-2.967, 2.967, -4.5, 4.5, -0.0, 0.0])
             ]))
 
-        # 0x0A - saber750d_7dof (7轴)
+        # 0x0A - saber750d_7dof (7-axis)
         self._configs[0x0A] = ArmConfig(
             name="saber750d_7dof",
             dof_num=DofType.SEVEN_AXIS,
@@ -125,7 +125,7 @@ class ArmConfigManager:
                            joint_limit=[-2.967, 2.967, -4.5, 4.5, -0.0, 0.0])
             ]))
 
-        # 0x0B - saber750h_6dof (6轴)
+        # 0x0B - saber750h_6dof (6-axis)
         self._configs[0x0B] = ArmConfig(
             name="saber750h_6dof",
             dof_num=DofType.SIX_AXIS,
@@ -147,7 +147,7 @@ class ArmConfigManager:
                            joint_limit=[-2.967, 2.967, -4.5, 4.5, -0.0, 0.0])
             ]))
 
-        # 0x0C - saber750h_7dof (7轴)
+        # 0x0C - saber750h_7dof (7-axis)
         self._configs[0x0C] = ArmConfig(
             name="saber750h_7dof",
             dof_num=DofType.SEVEN_AXIS,
@@ -172,7 +172,7 @@ class ArmConfigManager:
                            joint_limit=[-2.967, 2.967, -4.5, 4.5, -0.0, 0.0])
             ]))
 
-        # 0x0E - saber_d6x (6轴)
+        # 0x0E - saber_d6x (6-axis)
         self._configs[0x0E] = ArmConfig(
             name="saber_d6x",
             dof_num=DofType.SIX_AXIS,
@@ -194,7 +194,7 @@ class ArmConfigManager:
                            joint_limit=[-1.57, 1.57, -4.5, 4.5, -0.0, 0.0])
             ]))
 
-        # 0x10 - archer_d6y (6轴)
+        # 0x10 - archer_d6y (6-axis)
         self._configs[0x10] = ArmConfig(
             name="archer_d6y",
             dof_num=DofType.SIX_AXIS,
@@ -217,38 +217,36 @@ class ArmConfigManager:
             ]))
 
     def get_config(self, arm_series: int) -> Optional[ArmConfig]:
-        """获取指定系列的机械臂配置"""
+        """Get robotic arm configuration for specified series"""
         return self._configs.get(arm_series)
 
     def get_all_configs(self) -> Dict[int, ArmConfig]:
-        """获取所有配置"""
+        """Get all configurations"""
         return self._configs.copy()
 
     def add_config(self, arm_series: int, config: ArmConfig):
-        """添加新的机械臂配置"""
+        """Add new robotic arm configuration"""
         self._configs[arm_series] = config
 
     def remove_config(self, arm_series: int):
-        """移除指定系列的配置"""
+        """Remove configuration for specified series"""
         if arm_series in self._configs:
             del self._configs[arm_series]
 
     def _validate_config(self, config: ArmConfig) -> bool:
         """
-        验证配置的有效性
+        Validate configuration validity
         
         Args:
-            config: 要验证的配置
+            config: Configuration to validate
             
         Returns:
-            bool: 配置是否有效
+            bool: Whether configuration is valid
         """
         try:
-            # 检查基本参数
             if not config.name or not config.robot_config.joints:
                 return False
 
-            # 检查参数限制合法性
             for joint in config.robot_config.joints:
                 if len(joint.joint_limit) != 6:
                     return False
@@ -261,11 +259,10 @@ class ArmConfigManager:
                 if min_vel >= max_vel:
                     return False
 
-                # 检查加速度限制的合理性（允许相等，因为可能是0）
+                # Check acceleration limit reasonableness (equality allowed, as it may be 0)
                 if min_acc > max_acc:
                     return False
 
-            # 检查电机模型数量与关节数量是否匹配
             if len(config.motor_model) != len(config.robot_config.joints):
                 return False
 
@@ -276,37 +273,35 @@ class ArmConfigManager:
 
     def reload_from_dict(self, arm_series: int, config_data: dict) -> bool:
         """
-        从字典数据重载机械臂配置
+        Reload robotic arm configuration from dictionary data
         
         Args:
-            arm_series: 机械臂系列标识
-            config_data: 配置数据字典
+            arm_series: Robotic arm series identifier
+            config_data: Configuration data dictionary
             
         Returns:
-            bool: 重载是否成功
+            bool: Whether reload was successful
         """
         try:
-            # 从字典创建配置对象
             new_config = self._create_config_from_dict(arm_series, config_data)
 
             existing_config = self.get_config(arm_series)
             if existing_config is None:
-                # 如果不存在，直接添加新配置
+                # If it doesn't exist, directly add new configuration
                 self.add_config(arm_series, new_config)
                 return True
 
-            # 验证新配置的关节数量是否与现有配置匹配
+            # Validate whether new configuration joint count matches existing configuration
             existing_joint_count = len(existing_config.robot_config.joints)
             new_joint_count = len(new_config.robot_config.joints)
 
             if existing_joint_count != new_joint_count:
-                raise ValueError(f"关节数量不匹配: 现有配置有 {existing_joint_count} 个关节，"
-                                 f"新配置有 {new_joint_count} 个关节")
+                raise ValueError(f"Joint count mismatch: existing configuration has {existing_joint_count} joints, "
+                                 f"new configuration has {new_joint_count} joints")
 
-            # 验证新配置的基本参数
             if new_config.arm_series != arm_series:
                 raise ValueError(
-                    f"机械臂系列不匹配: 期望 {arm_series}，实际 {new_config.arm_series}")
+                    f"Robotic arm series mismatch: expected {arm_series}, actual {new_config.arm_series}")
 
             old_config = existing_config
 
@@ -314,50 +309,47 @@ class ArmConfigManager:
                 self._configs[arm_series] = new_config
 
                 if not self._validate_config(new_config):
-                    # 如果验证失败，回滚到旧配置
+                    # If validation fails, rollback to old configuration
                     self._configs[arm_series] = old_config
                     return False
 
                 return True
 
             except Exception as e:
-                # 发生异常时回滚到旧配置
+                # Rollback to old configuration when exception occurs
                 self._configs[arm_series] = old_config
                 raise e
 
         except Exception as e:
-            print(f"从字典重载配置失败: {e}")
+            print(f"Failed to reload configuration from dictionary: {e}")
             return False
 
     def _create_config_from_dict(self, arm_series: int,
                                  config_data: dict) -> ArmConfig:
         """
-        从字典数据创建配置对象
+        Create configuration object from dictionary data
         
         Args:
-            arm_series: 机械臂系列标识
-            config_data: 配置数据字典
+            arm_series: Robotic arm series identifier
+            config_data: Configuration data dictionary
             
         Returns:
-            ArmConfig: 创建的配置对象
+            ArmConfig: Created configuration object
         """
-        # 解析自由度类型
         dof_type_str = config_data.get('dof_num', 'six_axis')
         if dof_type_str == 'six_axis':
             dof_num = DofType.SIX_AXIS
         elif dof_type_str == 'seven_axis':
             dof_num = DofType.SEVEN_AXIS
         else:
-            raise ValueError(f"不支持的自由度类型: {dof_type_str}")
+            raise ValueError(f"Unsupported degree of freedom type: {dof_type_str}")
 
-        # 创建关节参数
         joints = []
         for joint_data in config_data.get('joints', []):
             joint = JointParam(joint_name=joint_data['joint_name'],
                                joint_limit=joint_data['joint_limit'])
             joints.append(joint)
 
-        # 创建配置对象
         config = ArmConfig(name=config_data.get(
             'name', f'arm_series_{arm_series:02X}'),
                            dof_num=dof_num,
@@ -369,7 +361,7 @@ class ArmConfigManager:
         return config
 
     def get_motor_count(self, arm_series: int) -> Optional[int]:
-        """获取指定系列的电机数量"""
+        """Get motor count for specified series"""
         config = self.get_config(arm_series)
         if config:
             if config.dof_num == DofType.SIX_AXIS:
@@ -379,7 +371,7 @@ class ArmConfigManager:
         return None
 
     def get_joint_limits(self, arm_series: int) -> Optional[List[List[float]]]:
-        """获取指定系列的关节限制"""
+        """Get joint limits for specified series"""
         config = self.get_config(arm_series)
         if config:
             return [joint.joint_limit for joint in config.robot_config.joints]
@@ -390,19 +382,19 @@ class ArmConfigManager:
                                  positions: List[float],
                                  dt: float = 0.001) -> List[float]:
         """
-        验证关节位置是否在限制范围内，并返回修正后的位置列表
+        Validate whether joint positions are within limit range and return corrected position list
         
         Args:
-            arm_series: 机械臂系列
-            positions: 目标位置列表 (rad)
-            dt: 时间步长 (s)，用于速度限制计算
+            arm_series: Robotic arm series
+            positions: Target position list (rad)
+            dt: Time step (s), used for velocity limit calculation
             
         Returns:
-            List[float]: 修正后的位置列表
+            List[float]: Corrected position list
         """
         config = self.get_config(arm_series)
         if not config or len(positions) != len(config.robot_config.joints):
-            return positions.copy()  # 如果配置无效，返回原位置
+            return positions.copy()  # If configuration is invalid, return original positions
 
         validated_positions = []
         last_positions = self._last_positions.get(arm_series, None)
@@ -413,7 +405,7 @@ class ArmConfigManager:
             min_pos, max_pos = joint.joint_limit[0], joint.joint_limit[1]
             min_vel, max_vel = joint.joint_limit[2], joint.joint_limit[3]
 
-            # 首先处理位置限制
+            # First handle position limits
             if position < min_pos:
                 validated_position = min_pos
             elif position > max_pos:
@@ -421,26 +413,25 @@ class ArmConfigManager:
             else:
                 validated_position = position
 
-            # 如果有上一次位置记录，进行速度限制检查
+            # If there is last position record, perform velocity limit check
             if last_positions is not None and i < len(last_positions):
                 last_position = last_positions[i]
 
-                # 计算当前速度 (rad/s)
+                # Calculate current velocity (rad/s)
                 current_velocity = (position - last_position) / dt
 
-                # 检查速度是否超出限制
+                # Check if velocity exceeds limits
                 if current_velocity < min_vel or current_velocity > max_vel:
-                    # 速度超出限制，根据速度限制插值计算合理位置
+                    # Velocity exceeds limits
                     if current_velocity > max_vel:
-                        # 速度过大，限制在最大速度
                         max_displacement = max_vel * dt
                         validated_position = last_position + max_displacement
                     elif current_velocity < min_vel:
-                        # 速度过小，限制在最小速度
+                        # Velocity too small, limit to minimum velocity
                         min_displacement = min_vel * dt
                         validated_position = last_position + min_displacement
 
-                    # 再次检查位置限制
+                    # Check position limits again
                     if validated_position < min_pos:
                         validated_position = min_pos
                     elif validated_position > max_pos:
@@ -448,7 +439,7 @@ class ArmConfigManager:
 
             validated_positions.append(validated_position)
 
-        # 更新记录的上一次位置
+        # Update recorded last position
         self._last_positions[arm_series] = validated_positions.copy()
 
         return validated_positions
@@ -458,19 +449,19 @@ class ArmConfigManager:
                                   velocities: List[float],
                                   dt: float = 0.001) -> List[float]:
         """
-        验证关节速度是否在限制范围内，并返回修正后的速度列表
+        Validate whether joint velocities are within limit range and return corrected velocity list
         
         Args:
-            arm_series: 机械臂系列
-            velocities: 目标速度列表 (rad/s)
-            dt: 时间步长 (s)，用于加速度限制计算
+            arm_series: Robotic arm series
+            velocities: Target velocity list (rad/s)
+            dt: Time step (s), used for acceleration limit calculation
             
         Returns:
-            List[float]: 修正后的速度列表
+            List[float]: Corrected velocity list
         """
         config = self.get_config(arm_series)
         if not config or len(velocities) != len(config.robot_config.joints):
-            return velocities.copy()  # 如果配置无效，返回原速度
+            return velocities.copy()  # If configuration is invalid, return original velocities
 
         validated_velocities = []
         last_velocities = self._last_velocities.get(arm_series, None)
@@ -481,7 +472,7 @@ class ArmConfigManager:
             min_vel, max_vel = joint.joint_limit[2], joint.joint_limit[3]
             min_acc, max_acc = joint.joint_limit[4], joint.joint_limit[5]
 
-            # 首先处理速度限制
+            # First handle velocity limits
             if velocity < min_vel:
                 validated_velocity = min_vel
             elif velocity > max_vel:
@@ -489,39 +480,34 @@ class ArmConfigManager:
             else:
                 validated_velocity = velocity
 
-            # 如果有上一次速度记录，进行加速度限制检查
+            # If there is last velocity record, perform acceleration limit check
             if last_velocities is not None and i < len(last_velocities):
                 last_velocity = last_velocities[i]
 
-                # 计算当前加速度 (rad/s²)
+                # Calculate current acceleration (rad/s²)
                 current_acceleration = (validated_velocity -
                                         last_velocity) / dt
 
-                # 检查加速度是否超出限制
+                # Check if acceleration exceeds limits
                 if current_acceleration < min_acc or current_acceleration > max_acc:
-                    # 加速度超出限制，根据加速度限制计算合理速度
                     if current_acceleration > max_acc:
-                        # 加速度过大，限制在最大加速度
                         max_velocity_change = max_acc * dt
                         validated_velocity = last_velocity + max_velocity_change
-                        # 限制速度不超过最大速度
                         validated_velocity = min(validated_velocity, max_vel)
                     elif current_acceleration < min_acc:
-                        # 加速度过小，限制在最小加速度
                         min_velocity_change = min_acc * dt
                         validated_velocity = last_velocity + min_velocity_change
-                        # 限制速度不小于最小速度
                         validated_velocity = max(validated_velocity, min_vel)
 
             validated_velocities.append(validated_velocity)
 
-        # 更新记录的上一次速度
+        # Update recorded last velocity
         self._last_velocities[arm_series] = validated_velocities.copy()
 
         return validated_velocities
 
     def get_joint_names(self, arm_series: int) -> Optional[List[str]]:
-        """获取指定系列的关节名称"""
+        """Get joint names for specified series"""
         config = self.get_config(arm_series)
         if config:
             return [joint.joint_name for joint in config.robot_config.joints]
@@ -529,11 +515,11 @@ class ArmConfigManager:
 
     def set_initial_positions(self, arm_series: int, positions: List[float]):
         """
-        设置机械臂的初始位置，用于速度限制计算
+        Set initial positions of robotic arm, used for velocity limit calculation
         
         Args:
-            arm_series: 机械臂系列
-            positions: 初始位置列表 (rad)
+            arm_series: Robotic arm series
+            positions: Initial position list (rad)
         """
         config = self.get_config(arm_series)
         if config and len(positions) == len(config.robot_config.joints):
@@ -541,11 +527,11 @@ class ArmConfigManager:
 
     def set_initial_velocities(self, arm_series: int, velocities: List[float]):
         """
-        设置机械臂的初始速度，用于加速度限制计算
+        Set initial velocities of robotic arm, used for acceleration limit calculation
         
         Args:
-            arm_series: 机械臂系列
-            velocities: 初始速度列表 (rad/s)
+            arm_series: Robotic arm series
+            velocities: Initial velocity list (rad/s)
         """
         config = self.get_config(arm_series)
         if config and len(velocities) == len(config.robot_config.joints):
@@ -553,118 +539,117 @@ class ArmConfigManager:
 
     def clear_position_history(self, arm_series: int):
         """
-        清除指定机械臂系列的位置历史记录
+        Clear position history records for specified robotic arm series
         
         Args:
-            arm_series: 机械臂系列
+            arm_series: Robotic arm series
         """
         if arm_series in self._last_positions:
             del self._last_positions[arm_series]
 
     def clear_velocity_history(self, arm_series: int):
         """
-        清除指定机械臂系列的速度历史记录
+        Clear velocity history records for specified robotic arm series
         
         Args:
-            arm_series: 机械臂系列
+            arm_series: Robotic arm series
         """
         if arm_series in self._last_velocities:
             del self._last_velocities[arm_series]
 
     def clear_motion_history(self, arm_series: int):
         """
-        清除指定机械臂系列的所有运动历史记录（位置和速度）
+        Clear all motion history records for specified robotic arm series (position and velocity)
         
         Args:
-            arm_series: 机械臂系列
+            arm_series: Robotic arm series
         """
         self.clear_position_history(arm_series)
         self.clear_velocity_history(arm_series)
 
     def get_last_positions(self, arm_series: int) -> Optional[List[float]]:
         """
-        获取指定机械臂系列的上一次位置记录
+        Get last position record for specified robotic arm series
         
         Args:
-            arm_series: 机械臂系列
+            arm_series: Robotic arm series
             
         Returns:
-            List[float]: 上一次位置列表，如果没有记录则返回None
+            List[float]: Last position list, returns None if no record exists
         """
         return self._last_positions.get(arm_series, None)
 
     def set_last_positions(self, arm_series: int, positions: List[float]):
         """
-        设置指定机械臂系列的上一次位置记录
+        Set last position record for specified robotic arm series
         
         Args:
-            arm_series: 机械臂系列
-            positions: 位置列表
+            arm_series: Robotic arm series
+            positions: Position list
         """
         self._last_positions[arm_series] = positions.copy()
 
     def get_last_velocities(self, arm_series: int) -> Optional[List[float]]:
         """
-        获取指定机械臂系列的上一次速度记录
+        Get last velocity record for specified robotic arm series
         
         Args:
-            arm_series: 机械臂系列
+            arm_series: Robotic arm series
             
         Returns:
-            List[float]: 上一次速度列表，如果没有记录则返回None
+            List[float]: Last velocity list, returns None if no record exists
         """
         return self._last_velocities.get(arm_series, None)
 
 
-# 全局配置管理器实例
+# Global configuration manager instance
 arm_config_manager = ArmConfigManager()
 
-# 便捷函数
 def set_arm_initial_positions(arm_series: int, positions: List[float]):
-    """设置机械臂的初始位置，用于速度限制计算"""
+    """Set initial positions of robotic arm, used for velocity limit calculation"""
     return arm_config_manager.set_initial_positions(arm_series, positions)
 
 
 def set_arm_initial_velocities(arm_series: int, velocities: List[float]):
-    """设置机械臂的初始速度，用于加速度限制计算"""
+    """Set initial velocities of robotic arm, used for acceleration limit calculation"""
     return arm_config_manager.set_initial_velocities(arm_series, velocities)
 
 
 def clear_arm_position_history(arm_series: int):
-    """清除指定机械臂系列的位置历史记录"""
+    """Clear position history records for specified robotic arm series"""
     return arm_config_manager.clear_position_history(arm_series)
 
 
 def clear_arm_velocity_history(arm_series: int):
-    """清除指定机械臂系列的速度历史记录"""
+    """Clear velocity history records for specified robotic arm series"""
     return arm_config_manager.clear_velocity_history(arm_series)
 
 
 def clear_arm_motion_history(arm_series: int):
-    """清除指定机械臂系列的所有运动历史记录（位置和速度）"""
+    """Clear all motion history records for specified robotic arm series (position and velocity)"""
     return arm_config_manager.clear_motion_history(arm_series)
 
 
 def get_arm_last_positions(arm_series: int) -> Optional[List[float]]:
-    """获取指定机械臂系列的上一次位置记录"""
+    """Get last position record for specified robotic arm series"""
     return arm_config_manager.get_last_positions(arm_series)
 
 
 def get_arm_last_velocities(arm_series: int) -> Optional[List[float]]:
-    """获取指定机械臂系列的上一次速度记录"""
+    """Get last velocity record for specified robotic arm series"""
     return arm_config_manager.get_last_velocities(arm_series)
 
 
 def load_default_arm_config() -> Dict[int, ArmConfig]:
-    """加载默认机械臂配置（类似于 Rust 的 load_default_arm_config 函数）"""
+    """Load default robotic arm configuration (similar to Rust's load_default_arm_config function)"""
     return arm_config_manager.get_all_configs()
 
 
 def get_arm_config(arm_series: int) -> Optional[ArmConfig]:
-    """获取指定系列的机械臂配置"""
+    """Get robotic arm configuration for specified series"""
     return arm_config_manager.get_config(arm_series)
 
 
 def add_arm_config(arm_series: int, config: ArmConfig):
-    """添加新的机械臂配置"""
+    """Add new robotic arm configuration"""
     arm_config_manager.add_config(arm_series, config)

@@ -19,13 +19,13 @@ SPEED = 0.5
 HEX_DEVICE_URL = "ws://192.168.1.100:8439"
 
 class TrajectoryPlanner:
-    """轨迹规划器，支持平滑的加减速规划"""
+    """Trajectory planner that supports smooth acceleration and deceleration planning"""
     
     def __init__(self, waypoints, segment_duration=3.0):
         """
-        初始化轨迹规划器
-        waypoints: 路径点列表
-        segment_duration: 每段轨迹的持续时间（秒）
+        Initialize trajectory planner
+        waypoints: List of waypoints
+        segment_duration: Duration of each trajectory segment (seconds)
         """
         self.waypoints = waypoints
         self.segment_duration = segment_duration
@@ -35,7 +35,7 @@ class TrajectoryPlanner:
         self.start_time = None
         
     def start_trajectory(self):
-        """开始轨迹执行"""
+        """Start trajectory execution"""
         if not self.waypoints:
             return False
             
@@ -45,48 +45,43 @@ class TrajectoryPlanner:
         return True
         
     def get_current_target(self):
-        """获取当前时刻的目标位置"""
+        """Get the target position at the current moment"""
         if not self.trajectory_started or not self.waypoints:
             return None
             
         current_time = time.time()
         elapsed_time = current_time - self.start_time
         
-        # 计算当前应该在哪个轨迹段
         total_segments = len(self.waypoints)
         segment_index = int(elapsed_time / self.segment_duration) % total_segments
         
-        # 计算在当前段内的时间进度
         segment_elapsed = elapsed_time % self.segment_duration
         normalized_time = segment_elapsed / self.segment_duration
         
-        # 获取当前段的起点和终点
         start_waypoint = self.waypoints[segment_index]
         end_waypoint = self.waypoints[(segment_index + 1) % total_segments]
         
-        # 使用S曲线插值计算当前位置
+        # Use S-curve interpolation to calculate current position
         s = self._smooth_step(normalized_time)
         
-        # 计算插值位置
         start_pos = np.array(start_waypoint)
         end_pos = np.array(end_waypoint)
         target_position = start_pos + s * (end_pos - start_pos)
         
-        # 更新当前路径点索引（用于状态显示）
         self.current_waypoint_index = segment_index
         
         return target_position
         
     def _smooth_step(self, t):
-        """S曲线插值函数，提供平滑的加减速"""
-        # 限制t在[0,1]范围内
+        """S-curve interpolation function that provides smooth acceleration and deceleration"""
+        # Limit t to [0,1] range
         t = max(0.0, min(1.0, t))
         
-        # 使用5次多项式实现更平滑的插值：6t⁵ - 15t⁴ + 10t³
+        # Use 5th degree polynomial for smoother interpolation: 6t⁵ - 15t⁴ + 10t³
         return 6 * t**5 - 15 * t**4 + 10 * t**3
         
     def get_current_segment_info(self):
-        """获取当前段的信息"""
+        """Get information about the current segment"""
         if not self.trajectory_started:
             return None
             
@@ -170,25 +165,25 @@ def main():
                             if not trajectory_initialized:
                                 if trajectory_planner.start_trajectory():
                                     trajectory_initialized = True
-                                    print("轨迹规划器已初始化，开始路径点规划")
+                                    print("Trajectory planner initialized, starting waypoint planning")
                             
                             if trajectory_initialized:
                                 target_positions = trajectory_planner.get_current_target()
                                 
                                 if target_positions is not None:
-                                    # 发送位置命令
+                                    # Send position command
                                     device.motor_command(CommandType.POSITION, target_positions.tolist())
                                     
                                     segment_info = trajectory_planner.get_current_segment_info()
-                                    if int(segment_info['total_elapsed'] * 10) % 5 == 0:  # 每0.5秒打印一次
-                                        print(f"路径段: {segment_info['segment_index']} -> {(segment_info['segment_index'] + 1) % len(arm_position)}")
-                                        print(f"段进度: {segment_info['segment_progress']:.2f}")
-                                        print(f"目标位置: {[f'{x:.3f}' for x in target_positions]}")
+                                    if int(segment_info['total_elapsed'] * 10) % 5 == 0:  # Print every 0.5 seconds
+                                        print(f"Path segment: {segment_info['segment_index']} -> {(segment_info['segment_index'] + 1) % len(arm_position)}")
+                                        print(f"Segment progress: {segment_info['segment_progress']:.2f}")
+                                        print(f"Target position: {[f'{x:.3f}' for x in target_positions]}")
                                         
-                                        # 检查是否完成了一个完整的循环
+                                        # Check if a complete loop has been completed
                                         if segment_info['segment_index'] == 0 and segment_info['segment_progress'] < 0.1:
                                             loop_counter += 1
-                                            print(f"--- 完成轨迹循环 {loop_counter} ---")
+                                            print(f"--- Completed trajectory loop {loop_counter} ---")
 
             time.sleep(0.001)
 

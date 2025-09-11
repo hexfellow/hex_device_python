@@ -20,23 +20,21 @@ from copy import deepcopy
 
 class ArmArcher(DeviceBase, MotorBase):
     """
-    ArmArcher类
+    ArmArcher class
 
-    继承自DeviceBase和MotorBase，主要实现对ArmArcher的控制
+    Inherits from DeviceBase and MotorBase, mainly implements control of ArmArcher
 
-    支持的机器人类型:
-    - RtArmSaberD6X: 自定义PCW车辆
-    - RtArmSaberD7X: PCW车辆
+    Supported robot types:
+    - RtArmSaberD6X: Custom PCW vehicle
+    - RtArmSaberD7X: PCW vehicle
     """
 
-    # 支持的机器人类型列表
     SUPPORTED_ROBOT_TYPES = [
         public_api_types_pb2.RobotType.RtArmArcherD6Y,
         public_api_types_pb2.RobotType.RtArmSaberD6X,
         public_api_types_pb2.RobotType.RtArmSaberD7X,
     ]
 
-    # 机械臂系列到机器人类型的映射
     ARM_SERIES_TO_ROBOT_TYPE = {
         9: public_api_types_pb2.RobotType.RtArmSaber750d3Lr3DmDriver,
         10: public_api_types_pb2.RobotType.RtArmSaber750d4Lr3DmDriver,
@@ -54,14 +52,14 @@ class ArmArcher(DeviceBase, MotorBase):
                  control_hz: int = 500,
                  send_message_callback=None):
         """
-        初始化底盘Maver
+        Initialize chassis Maver
         
         Args:
-            motor_count: 电机数量
-            robot_type: 机械臂系列
-            name: 设备名称
-            control_hz: 控制频率
-            send_message_callback: 发送消息的回调函数，用于发送下行消息
+            motor_count: Number of motors
+            robot_type: Robotic arm series
+            name: Device name
+            control_hz: Control frequency
+            send_message_callback: Callback function for sending messages, used to send downstream messages
         """
         DeviceBase.__init__(self, name, send_message_callback)
         MotorBase.__init__(self, motor_count, name)
@@ -76,7 +74,7 @@ class ArmArcher(DeviceBase, MotorBase):
         self._calibrated = False
         self._parking_stop_detail = public_api_types_pb2.ParkingStopDetail()
 
-        # 控制相关
+        # Control related
         self._command_timeout_check = True
         self._last_command_time = None
         self._command_timeout = 0.3  # 300ms
@@ -84,10 +82,10 @@ class ArmArcher(DeviceBase, MotorBase):
 
     def _set_robot_type(self, robot_type):
         """
-        设置机器人类型
+        Set robot type
         
         Args:
-            robot_type: 机器人类型
+            robot_type: Robot type
         """
         if robot_type in self.SUPPORTED_ROBOT_TYPES:
             self.robot_type = robot_type
@@ -97,22 +95,22 @@ class ArmArcher(DeviceBase, MotorBase):
     @classmethod
     def _supports_robot_type(cls, robot_type):
         """
-        检查是否支持指定的机器人类型
+        Check if the specified robot type is supported
         
         Args:
-            robot_type: 机器人类型
+            robot_type: Robot type
             
         Returns:
-            bool: 是否支持
+            bool: Whether it is supported
         """
         return robot_type in cls.SUPPORTED_ROBOT_TYPES
 
     async def _init(self) -> bool:
         """
-        初始化机械臂
+        Initialize robotic arm
         
         Returns:
-            bool: 是否成功初始化
+            bool: Whether initialization was successful
         """
         try:
             msg = self._construct_init_message()
@@ -121,18 +119,18 @@ class ArmArcher(DeviceBase, MotorBase):
             await self._send_message(msg)
             return True
         except Exception as e:
-            log_err(f"ArmArcher初始化失败: {e}")
+            log_err(f"ArmArcher initialization failed: {e}")
             return False
 
     def _update(self, api_up_data) -> bool:
         """
-        更新机械臂数据
+        Update robotic arm data
         
         Args:
-            api_up_data: 从API接收的上行数据 (APIUp)
+            api_up_data: Upstream data received from API (APIUp)
             
         Returns:
-            bool: 是否成功更新
+            bool: Whether update was successful
         """
         try:
             if not api_up_data.HasField('arm_status'):
@@ -140,7 +138,7 @@ class ArmArcher(DeviceBase, MotorBase):
 
             arm_status = api_up_data.arm_status
 
-            # 更新机械臂状态
+            # Update robotic arm status
             self._arm_state = arm_status.state
             self._api_control_initialized = arm_status.api_control_initialized
             self._calibrated = arm_status.calibrated
@@ -150,12 +148,12 @@ class ArmArcher(DeviceBase, MotorBase):
             else:
                 self._parking_stop_detail = public_api_types_pb2.ParkingStopDetail()
 
-            # 更新电机数据
+            # Update motor data
             self._update_motor_data_from_arm_status(arm_status)
             self.set_has_new_data()
             return True
         except Exception as e:
-            log_err(f"ArmArcher更新数据失败: {e}")
+            log_err(f"ArmArcher data update failed: {e}")
             return False
 
     def _update_motor_data_from_arm_status(self, arm_status: ArmStatus):
@@ -163,10 +161,10 @@ class ArmArcher(DeviceBase, MotorBase):
 
         if len(motor_status_list) != self.motor_count:
             log_warn(
-                f"警告: 电机数量不匹配，期望{self.motor_count}，实际{len(motor_status_list)}")
+                f"Warning: Motor count mismatch, expected {self.motor_count}, actual {len(motor_status_list)}")
             return
 
-        # 解析电机数据
+        # Parse motor data
         positions = []  # encoder position
         velocities = []  # rad/s
         torques = []  # Nm
@@ -214,12 +212,12 @@ class ArmArcher(DeviceBase, MotorBase):
 
     async def _periodic(self):
         """
-        周期性执行函数
+        Periodic execution function
         
-        执行机械臂的周期性任务，包括：
-        - 状态检查
-        - 命令超时检查
-        - 安全监控
+        Execute periodic tasks for the robotic arm, including:
+        - Status check
+        - Command timeout check
+        - Safety monitoring
         """
         cycle_time = 1000.0 / self._control_hz
         start_time = time.perf_counter()
@@ -247,9 +245,9 @@ class ArmArcher(DeviceBase, MotorBase):
                 # check motor error
                 for i in range(self.motor_count):
                     if self.get_motor_state(i) == "error":
-                        log_err(f"警告: 电机{i}出现错误")
+                        log_err(f"Warning: Motor {i} error occurred")
 
-                # perpare sending message
+                # prepare sending message
                 if self._api_control_initialized == False:
                     msg = self._construct_init_message()
                     await self._send_message(msg)
@@ -271,7 +269,7 @@ class ArmArcher(DeviceBase, MotorBase):
                             msg = self._construct_custom_joint_command_msg(motor_msg)
                             await self._send_message(msg)
                         except Exception as e:
-                            log_err(f"ArmArcher构造关节命令消息失败: {e}")
+                            log_err(f"ArmArcher failed to construct joint command message: {e}")
                             continue
                     # normal command
                     else:
@@ -279,29 +277,29 @@ class ArmArcher(DeviceBase, MotorBase):
                             msg = self._construct_joint_command_msg()
                             await self._send_message(msg)
                         except Exception as e:
-                            log_err(f"ArmArcher构造关节命令消息失败: {e}")
+                            log_err(f"ArmArcher failed to construct joint command message: {e}")
                             continue
 
             except Exception as e:
-                log_err(f"ArmArcher周期性任务异常: {e}")
+                log_err(f"ArmArcher periodic task exception: {e}")
                 continue
 
-    # 机械臂特有方法
+    # Robotic arm specific methods
     def command_timeout_check(self, check_or_not: bool = True):
         """
-        设定是否检查命令超时
+        Set whether to check command timeout
         """
         self._command_timeout_check = check_or_not
 
     def motor_command(self, command_type: CommandType, values: Union[List[bool], List[float], List[MitMotorCommand]]):
         """
-        设置电机指令
+        Set motor command
         Note:
             1. Only when CommandType is POSITION or SPEED, will validate the values.
             2. When CommandType is BRAKE, the values can be any, but the length must be the same as the motor count.
         Args:
-            command_type: 指令类型
-            values: 指令值列表
+            command_type: Command type
+            values: List of command values
         """
         period = float(1.0 / self._control_hz)
         if command_type == CommandType.POSITION:
@@ -334,10 +332,10 @@ class ArmArcher(DeviceBase, MotorBase):
 
     def get_parking_stop_detail(
             self) -> public_api_types_pb2.ParkingStopDetail:
-        """获取停车停止详情"""
+        """Get parking stop details"""
         return deepcopy(self._parking_stop_detail)
 
-    # msg constructer
+    # msg constructor
     def _construct_init_message(self) -> public_api_down_pb2.APIDown:
         """
         @brief: For constructing a init message.
@@ -368,27 +366,27 @@ class ArmArcher(DeviceBase, MotorBase):
         msg.arm_command.CopyFrom(arm_command)
         return msg
 
-    # 配置相关方法
+    # Configuration related methods
     def get_arm_config(self) -> Optional[ArmConfig]:
-        """获取当前机械臂的配置"""
+        """Get current robotic arm configuration"""
         return deepcopy(get_arm_config(self._arm_series))
 
     def get_joint_limits(self) -> Optional[List[List[float]]]:
-        """获取关节限制"""
+        """Get joint limits"""
         return deepcopy(arm_config_manager.get_joint_limits(self._arm_series))
 
     def validate_joint_positions(self,
                                  positions: List[float],
                                  dt: float = 0.002) -> List[float]:
         """
-        验证关节位置是否在限制范围内，并返回修正后的位置列表
+        Validate whether joint positions are within limit range and return corrected position list
         
         Args:
-            positions: 目标位置列表 (rad)
-            dt: 时间步长 (s)，用于速度限制计算
+            positions: Target position list (rad)
+            dt: Time step (s), used for velocity limit calculation
             
         Returns:
-            List[float]: 修正后的位置列表
+            List[float]: Corrected position list
         """
         last_positions = arm_config_manager.get_last_positions(self._arm_series)
         
@@ -407,44 +405,44 @@ class ArmArcher(DeviceBase, MotorBase):
                                   velocities: List[float],
                                   dt: float = 0.002) -> List[float]:
         """
-        验证关节速度是否在限制范围内，并返回修正后的速度列表
+        Validate whether joint velocities are within limit range and return corrected velocity list
         """
         return arm_config_manager.validate_joint_velocities(
             self._arm_series, velocities, dt)
 
     def get_joint_names(self) -> Optional[List[str]]:
-        """获取关节名称"""
+        """Get joint names"""
         return deepcopy(arm_config_manager.get_joint_names(self._arm_series))
 
     def get_expected_motor_count(self) -> Optional[int]:
-        """获取期望的电机数量"""
+        """Get expected motor count"""
         return deepcopy(arm_config_manager.get_motor_count(self._arm_series))
 
     def check_motor_count_match(self) -> bool:
-        """检查电机数量是否匹配配置"""
+        """Check if motor count matches configuration"""
         expected_count = self.get_expected_motor_count()
         if expected_count is None:
             return False
         return self.motor_count == expected_count
 
     def get_arm_series(self) -> int:
-        """获取机械臂系列"""
+        """Get robotic arm series"""
         return deepcopy(self._arm_series)
 
     def get_arm_name(self) -> Optional[str]:
-        """获取机械臂名称"""
+        """Get robotic arm name"""
         config = self.get_arm_config()
         return deepcopy(config.name) if config else None
 
     def reload_arm_config_from_dict(self, config_data: dict) -> bool:
         """
-        从字典数据重载当前机械臂的配置参数.参数用于给速度以及位置指令提供限幅指标.
+        Reload current robotic arm configuration parameters from dictionary data. Parameters are used to provide limiting indicators for velocity and position commands.
         
         Args:
-            config_data: 配置数据字典
+            config_data: Configuration data dictionary
             
         Returns:
-            bool: 重载是否成功
+            bool: Whether reload was successful
         """
         try:
             success = arm_config_manager.reload_from_dict(
@@ -460,48 +458,48 @@ class ArmArcher(DeviceBase, MotorBase):
 
     def set_initial_positions(self, positions: List[float]):
         """
-        设置机械臂的初始位置，用于速度限制计算
+        Set initial positions of robotic arm, used for velocity limit calculation
         
         Args:
-            positions: 初始位置列表 (rad)
+            positions: Initial position list (rad)
         """
         arm_config_manager.set_initial_positions(self._arm_series, positions)
 
     def set_initial_velocities(self, velocities: List[float]):
         """
-        设置机械臂的初始速度，用于加速度限制计算
+        Set initial velocities of robotic arm, used for acceleration limit calculation
         
         Args:
-            velocities: 初始速度列表 (rad/s)
+            velocities: Initial velocity list (rad/s)
         """
         arm_config_manager.set_initial_velocities(self._arm_series, velocities)
 
     def get_last_positions(self) -> Optional[List[float]]:
         """
-        获取上一次位置记录
+        Get last position record
         
         Returns:
-            List[float]: 上一次位置列表，如果没有记录则返回None
+            List[float]: Last position list, returns None if no record exists
         """
         return arm_config_manager.get_last_positions(self._arm_series)
 
     def get_last_velocities(self) -> Optional[List[float]]:
         """
-        获取上一次速度记录
+        Get last velocity record
         
         Returns:
-            List[float]: 上一次速度列表，如果没有记录则返回None
+            List[float]: Last velocity list, returns None if no record exists
         """
         return arm_config_manager.get_last_velocities(self._arm_series)
 
     def clear_position_history(self):
-        """清除位置历史记录"""
+        """Clear position history records"""
         arm_config_manager.clear_position_history(self._arm_series)
 
     def clear_velocity_history(self):
-        """清除速度历史记录"""
+        """Clear velocity history records"""
         arm_config_manager.clear_velocity_history(self._arm_series)
 
     def clear_motion_history(self):
-        """清除所有运动历史记录（位置和速度）"""
+        """Clear all motion history records (position and velocity)"""
         arm_config_manager.clear_motion_history(self._arm_series)

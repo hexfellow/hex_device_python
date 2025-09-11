@@ -10,7 +10,7 @@ from .device_base import DeviceBase
 
 class DeviceFactory:
     """
-    设备工厂类，负责根据robot_type创建和管理设备实例
+    Device factory class, responsible for creating and managing device instances based on robot_type
     """
 
     def __init__(self):
@@ -18,16 +18,16 @@ class DeviceFactory:
 
     def register_device_class(self, device_class):
         """
-        注册设备类
+        Register device class
         
         Args:
-            device_class: 设备类，必须支持_supports_robot_type类方法
+            device_class: Device class, must support _supports_robot_type class method
         """
         if hasattr(device_class, '_supports_robot_type'):
             self._device_classes.append(device_class)
         else:
             raise ValueError(
-                f"设备类 {device_class.__name__} 必须支持 _supports_robot_type 类方法")
+                f"Device class {device_class.__name__} must support _supports_robot_type class method")
 
     def create_device_for_robot_type(
         self,
@@ -36,24 +36,23 @@ class DeviceFactory:
         api_up=None,
     ):
         """
-        根据robot_type创建设备实例
+        Create device instance based on robot_type
         
         Args:
-            robot_type: 机器人类型
-            send_message_callback: 发送消息回调函数
-            api_up: API上行数据，用于提取设备构造参数
-            **kwargs: 其他参数
+            robot_type: Robot type
+            send_message_callback: Send message callback function
+            api_up: API upstream data, used to extract device constructor parameters
+            **kwargs: Other parameters
             
         Returns:
-            设备实例或None
+            Device instance or None
         """
         for device_class in self._device_classes:
             if device_class._supports_robot_type(robot_type):
-                # 从api_up中提取构造参数
+                # Extract constructor parameters from api_up
                 constructor_params = self._extract_constructor_params(
                     device_class, robot_type, api_up)
 
-                # 合并参数
                 all_params = {
                     'send_message_callback': send_message_callback,
                     **constructor_params,
@@ -67,62 +66,61 @@ class DeviceFactory:
 
     def _extract_constructor_params(self, device_class, robot_type, api_up):
         """
-        从api_up中提取设备构造参数
+        Extract device constructor parameters from api_up
         
         Args:
-            device_class: 设备类
-            robot_type: 机器人类型
-            api_up: API上行数据
+            device_class: Device class
+            robot_type: Robot type
+            api_up: API upstream data
             
         Returns:
-            dict: 构造参数字典
+            dict: Constructor parameters dictionary
         """
         params = {}
 
         if api_up is None:
             return params
 
-        # 根据设备类名提取不同的参数
+        # Extract different parameters based on device class name
         class_name = device_class.__name__
 
         if class_name == 'ArmArcher':
             params['robot_type'] = robot_type
-
-            # 从api_up中获取motor_count
+            # Get motor_count from api_up
             motor_count = self._get_motor_count_from_api_up(api_up)
             if motor_count is not None:
                 params['motor_count'] = motor_count
 
         elif class_name == 'ChassisMaver':
-            # 从api_up中获取motor_count
+            # Get motor_count from api_up
             motor_count = self._get_motor_count_from_api_up(api_up)
             if motor_count is not None:
                 params['motor_count'] = motor_count
 
-        ## TODO:后续如何增加不同的设备，需要根据新类需要的参数增加新的额外参数提取方法。
-        ## 前面已经使用了try进行错误捕获，这里如果参数捕获有问题，直接raise即可。
+        ## TODO: For adding different devices in the future, need to add new additional parameter extraction methods based on the parameters required by new classes.
+        ## Error capture using try has been used earlier, if there are problems with parameter capture here, just raise directly.
 
         return params
 
     def _get_motor_count_from_api_up(self, api_up):
         """
-        从api_up中获取电机数量
+        Get motor count from api_up
         
         Args:
-            api_up: API上行数据
+            api_up: API upstream data
             
         Returns:
-            int: 电机数量或None
+            int: Motor count or None
         """
         if api_up is None:
             return None
 
-        # 检查arm_status
+        # Check arm_status
         if hasattr(api_up, 'arm_status') and api_up.arm_status:
             if hasattr(api_up.arm_status, 'motor_status'):
                 return len(api_up.arm_status.motor_status)
 
-        # 检查base_status
+        # Check base_status
         if hasattr(api_up, 'base_status') and api_up.base_status:
             if hasattr(api_up.base_status, 'motor_status'):
                 return len(api_up.base_status.motor_status)
@@ -131,10 +129,10 @@ class DeviceFactory:
 
     def get_supported_robot_types(self):
         """
-        获取所有支持的机器人类型
+        Get all supported robot types
         
         Returns:
-            List: 支持的机器人类型列表
+            List: List of supported robot types
         """
         supported_types = []
         for device_class in self._device_classes:

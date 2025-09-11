@@ -42,19 +42,18 @@ class HexDeviceApi:
         self.__raw_data = []  ## raw data buffer
         self.__control_hz = control_hz
 
-        # 设备工厂
         self._device_factory = DeviceFactory()
-        # 注册可用的设备类
+        # Register available device classes
         self._register_available_device_classes()
 
-        # 内部设备管理（用于任务管理和内部操作）
-        self._internal_device_list = []  # 内部设备列表，不可被用户修改
-        self._device_id_counter = 0  # 设备ID计数器
-        self._device_id_map = {}  # 设备ID到设备的映射
-        self._device_to_id_map = {}  # 设备到ID的反向映射
+        # Internal device management (for task management and internal operations)
+        self._internal_device_list = []  # Internal device list
+        self._device_id_counter = 0  # Device ID counter
+        self._device_id_map = {}  # Device ID to device mapping
+        self._device_to_id_map = {}  # Device to ID reverse mapping
         
-        # 设备任务管理
-        self._device_tasks = {}  # 存储设备ID及其对应的异步任务
+        # Device task management
+        self._device_tasks = {}  # Store device IDs and their corresponding async tasks
 
         self.__shutdown_event = None  # the handle event for shutdown api
         self.__loop = None  ## async loop thread
@@ -66,9 +65,9 @@ class HexDeviceApi:
     @property
     def device_list(self):
         """
-        用户设备列表接口（只读）
+        User device list interface (read-only)
         
-        返回内部设备列表的只读视图，用户无法通过此列表修改内部设备管理
+        Returns a read-only view of the internal device list, users cannot modify internal device management through this list
         """
         class ReadOnlyDeviceList:
             def __init__(self, internal_list):
@@ -98,7 +97,7 @@ class HexDeviceApi:
             def count(self, item):
                 return self._internal_list.count(item)
             
-            # 禁用修改方法
+            # Disable modification methods
             def append(self, *args, **kwargs):
                 raise AttributeError("Cannot modify read-only device list")
             
@@ -121,43 +120,43 @@ class HexDeviceApi:
 
     def _register_available_device_classes(self):
         """
-        自动注册可用的设备类
+        Automatically register available device classes
         """
         try:
             from .chassis_maver import ChassisMaver
             self._register_device_class(ChassisMaver)
-            log_info("已注册 ChassisMaver 设备类")
+            log_info("Registered ChassisMaver device class")
         except ImportError as e:
-            log_warn(f"无法导入 ChassisMaver: {e}")
+            log_warn(f"Unable to import ChassisMaver: {e}")
 
         try:
             from .arm_archer import ArmArcher
             self._register_device_class(ArmArcher)
-            log_info("已注册 ArmArcher 设备类")
+            log_info("Registered ArmArcher device class")
         except ImportError as e:
-            log_warn(f"无法导入 ArmArcher: {e}")
+            log_warn(f"Unable to import ArmArcher: {e}")
 
-        # TODO: 添加更多设备类的注册
+        # TODO: Add registration for more device classes
         # lift、rotate lift...
 
     def _register_device_class(self, device_class):
         """
-        注册设备类到工厂
+        Register device class to factory
         
         Args:
-            device_class: 设备类
+            device_class: Device class
         """
         self._device_factory.register_device_class(device_class)
 
     def find_device_by_robot_type(self, robot_type) -> Optional[DeviceBase]:
         """
-        根据robot_type查找设备
+        Find device by robot_type
         
         Args:
-            robot_type: 机器人类型
+            robot_type: Robot type
             
         Returns:
-            匹配的设备或None
+            Matching device or None
         """
         for device in self._internal_device_list:
             if hasattr(device,
@@ -168,14 +167,14 @@ class HexDeviceApi:
     def _create_and_register_device(self, robot_type,
                                    api_up) -> Optional[DeviceBase]:
         """
-        根据robot_type创建并注册设备
+        Create and register device based on robot_type
         
         Args:
-            robot_type: 机器人类型
-            **kwargs: 设备构造参数
+            robot_type: Robot type
+            **kwargs: Device constructor parameters
             
         Returns:
-            创建的设备实例或None
+            Created device instance or None
         """
         device = self._device_factory.create_device_for_robot_type(
             robot_type,
@@ -183,14 +182,14 @@ class HexDeviceApi:
             api_up=api_up)
 
         if device:
-            # 为设备分配唯一ID
+            # Assign unique ID to device
             device_id = self._device_id_counter
             self._device_id_counter += 1
             
-            # 添加到内部设备列表
+            # Add to internal device list
             self._internal_device_list.append(device)
             self._device_id_map[device_id] = device
-            self._device_to_id_map[device] = device_id  # 反向映射
+            self._device_to_id_map[device] = device_id  # Reverse mapping
             
             self._start_device_periodic_task(device_id)
 
@@ -198,10 +197,10 @@ class HexDeviceApi:
 
     def _start_device_periodic_task(self, device_id: int):
         """
-        启动设备的周期性任务
+        Start device periodic task
         
         Args:
-            device_id: 设备ID
+            device_id: Device ID
         """
         if device_id in self._device_tasks:
             device = self._device_id_map.get(device_id)
@@ -214,17 +213,17 @@ class HexDeviceApi:
             log_err(f"Device with ID {device_id} not found")
             return
 
-        # 创建异步任务
+        # Create async task
         task = asyncio.create_task(self._device_periodic_runner(device_id))
         self._device_tasks[device_id] = task
         log_common(f"Begin periodic task for {device.name}")
 
     async def _device_periodic_runner(self, device_id: int):
         """
-        设备周期性任务运行器
+        Device periodic task runner
         
         Args:
-            device_id: 设备ID
+            device_id: Device ID
         """
         device: DeviceBase = self._device_id_map.get(device_id)
         if not device:
@@ -234,23 +233,23 @@ class HexDeviceApi:
         try:
             await device._periodic()
         except asyncio.CancelledError:
-            log_info(f"设备 {device.name} 的周期性任务被取消")
+            log_info(f"Periodic task for device {device.name} was cancelled")
         except Exception as e:
-            log_err(f"设备 {device.name} 的周期性任务出错: {e}")
+            log_err(f"Periodic task for device {device.name} encountered error: {e}")
         finally:
-            # 清理任务引用
+            # Clean up task reference
             if device_id in self._device_tasks:
                 del self._device_tasks[device_id]
 
     def _check_and_cleanup_orphaned_tasks(self):
         """
-        检查并清理被遗弃的任务
+        Check and clean up orphaned tasks
         
-        当设备实例被替换或删除时，可能存在仍在运行的任务。
-        此方法会检查并清理这些被遗弃的任务。
+        When device instances are replaced or deleted, there may be tasks still running.
+        This method will check and clean up these orphaned tasks.
         
         Returns:
-            int: 清理的任务数量
+            int: Number of cleaned up tasks
         """
         orphaned_count = 0
         tasks_to_remove = []
@@ -258,26 +257,26 @@ class HexDeviceApi:
         for device_id, task in self._device_tasks.items():
             device = self._device_id_map.get(device_id)
             if device and device not in self._internal_device_list:
-                log_warn(f"发现被遗弃的任务: 设备ID {device_id} ({device.name})")
+                log_warn(f"Found orphaned task: device ID {device_id} ({device.name})")
                 task.cancel()
                 tasks_to_remove.append(device_id)
                 orphaned_count += 1
         
-        # 清理被遗弃的任务
+        # Clean up orphaned tasks
         for device_id in tasks_to_remove:
             del self._device_tasks[device_id]
         
         if orphaned_count > 0:
-            log_info(f"已清理 {orphaned_count} 个被遗弃的任务")
+            log_info(f"Cleaned up {orphaned_count} orphaned tasks")
         
         return orphaned_count
 
     def _get_orphaned_tasks_info(self):
         """
-        获取被遗弃任务的信息
+        Get information about orphaned tasks
         
         Returns:
-            Dict: 被遗弃任务的信息
+            Dict: Information about orphaned tasks
         """
         orphaned_tasks = {}
         for device_id, task in self._device_tasks.items():
@@ -294,7 +293,7 @@ class HexDeviceApi:
 
     async def _stop_all_device_tasks(self):
         """
-        停止所有设备的周期性任务
+        Stop all device periodic tasks
         """
         tasks_to_cancel = list(self._device_tasks.values())
         for task in tasks_to_cancel:
@@ -304,17 +303,17 @@ class HexDeviceApi:
             try:
                 await asyncio.gather(*tasks_to_cancel, return_exceptions=True)
             except Exception as e:
-                log_err(f"停止设备任务时出错: {e}")
+                log_err(f"Error stopping device tasks: {e}")
 
         self._device_tasks.clear()
-        log_info("所有设备周期性任务已停止")
+        log_info("All device periodic tasks have been stopped")
 
     def get_device_task_status(self) -> Dict[str, Any]:
         """
-        获取设备任务状态
+        Get device task status
         
         Returns:
-            Dict: 设备任务状态信息
+            Dict: Device task status information
         """
         status = {
             'total_devices': len(self._internal_device_list),
@@ -449,7 +448,7 @@ class HexDeviceApi:
     ## sync function
     def __loop_start(self):
         """
-        @brief: 开启async线程，通过该函数隔离async线程
+        @brief: Start async thread, isolate async thread through this function
         @return:
             None
         """
@@ -464,7 +463,7 @@ class HexDeviceApi:
 
     def is_api_exit(self) -> bool:
         """
-        @brief: 检查API是否退出
+        @brief: Check if API is exiting
         @return:
             bool: True if API is exiting, False otherwise
         """
@@ -475,7 +474,7 @@ class HexDeviceApi:
     ## async function
     async def __async_close(self):
         """
-        @brief: 关闭async线程
+        @brief: Close async thread
         @return:
             None
         """
@@ -492,7 +491,7 @@ class HexDeviceApi:
         self.__shutdown_event = asyncio.Event()
         log_common("HexDevice Api started.")
 
-        # 建立 WebSocket 连接
+        # Establish WebSocket connection
         await self.__connect_ws()
         log_common("WebSocket connected.")
 
@@ -500,14 +499,14 @@ class HexDeviceApi:
         self.__tasks = [task1]
         await self.__shutdown_event.wait()
 
-        # 停止所有设备任务
+        # Stop all device tasks
         await self._stop_all_device_tasks()
 
-        # 停止主任务
+        # Stop main tasks
         for task in self.__tasks:
             task.cancel()
 
-        # 等待所有任务完成，处理取消异常
+        # Wait for all tasks to complete, handle cancellation exceptions
         try:
             await asyncio.gather(*self.__tasks, return_exceptions=True)
         except Exception as e:
@@ -517,7 +516,7 @@ class HexDeviceApi:
 
     async def __periodic_data_parser(self):
         """
-        @brief: 周期性解析数据
+        @brief: Periodic data parsing
         @return:
             None
         """
@@ -534,7 +533,7 @@ class HexDeviceApi:
                 log_err(f"__periodic_data_parser error: {e}")
                 continue
 
-            # 定期检查被遗弃的任务
+            # Periodically check for orphaned tasks
             check_counter += 1
             if check_counter >= ORPHANED_TASK_CHECK_INTERVAL:
                 check_counter = 0
@@ -542,12 +541,12 @@ class HexDeviceApi:
                 if orphaned_count > 0:
                     log_warn(f"found {orphaned_count} orphaned tasks")
 
-            # 获取 robot_type 的类型信息
+            # Get robot_type type information
             robot_type = api_up.robot_type
             robot_type_name = public_api_types_pb2.RobotType.Name(robot_type)
             # print(f"robot_type 类型: {type(robot_type)}, 值: {robot_type}, 名称: {robot_type_name}")
 
-            # 检查 robot_type 是否有效
+            # Check if robot_type is valid
             if isinstance(api_up.robot_type, int):
                 device = self.find_device_by_robot_type(robot_type)
 

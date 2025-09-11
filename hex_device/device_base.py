@@ -14,46 +14,41 @@ import time
 
 class DeviceBase(ABC):
     """
-    设备基类
-    定义所有设备的通用接口和基本功能
+    Device base class
+    Defines common interfaces and basic functionality for all devices
     """
 
     def __init__(self, name: str = "", send_message_callback=None):
         """
-        初始化设备基类
+        Initialize device base class
         Args:
-            name: 设备名称
+            name: Device name
         """
         self.name = name or "Device"
 
-        # 发送消息回调函数
         self._send_message_callback = send_message_callback
 
-        # 时间戳
         self._last_update_time = time.time()
 
-        # 线程锁
         self._data_lock = threading.Lock()
 
-        # 数据更新标志
         self._has_new_data = False
 
-    # 通用函数
     def _set_send_message_callback(self, callback):
         """
-        设置发送消息的回调函数
+        Set callback function for sending messages
         
         Args:
-            callback: 异步回调函数，接受一个参数（消息对象）
+            callback: Asynchronous callback function that accepts one parameter (message object)
         """
         self._send_message_callback = callback
 
     async def _send_message(self, msg):
         """
-        发送消息的通用方法
+        Generic method for sending messages
         
         Args:
-            msg: 要发送的消息对象
+            msg: Message object to send
         """
         if self._send_message_callback:
             await self._send_message_callback(msg)
@@ -66,70 +61,70 @@ class DeviceBase(ABC):
             self._has_new_data = True
 
     def has_new_data(self) -> bool:
-        """检查是否有新数据"""
+        """Check if there is new data"""
         with self._data_lock:
             return self._has_new_data
 
     def clear_new_data_flag(self):
-        """清除新数据标志"""
+        """Clear new data flag"""
         with self._data_lock:
             self._has_new_data = False
 
     def get_device_summary(self) -> Dict[str, Any]:
-        """获取设备状态摘要"""
+        """Get device status summary"""
         return {
             'name': self.name,
             'has_new_data': self.has_new_data(),
             'last_update_time': self._last_update_time,
         }
 
-    # 抽象方法 - 子类必须实现
+    # Abstract methods - subclasses must implement
     @abstractmethod
     async def _init(self) -> bool:
         """
-        初始化设备
+        Initialize device
         
         Returns:
-            bool: 是否成功初始化
+            bool: Whether initialization was successful
         """
         pass
 
     @abstractmethod
     def _update(self, api_up_data) -> bool:
         """
-        更新设备数据
+        Update device data
         
         Args:
-            api_up_data: 从API接收的上行数据 (APIUp)
+            api_up_data: Upstream data received from API (APIUp)
             
         Returns:
-            bool: 是否成功更新
+            bool: Whether update was successful
         """
         pass
 
     @abstractmethod
     async def _periodic(self):
         """
-        周期性执行函数
+        Periodic execution function
         
-        子类必须实现此方法，用于执行设备的周期性任务，
-        如状态检查、数据更新、控制计算等。
+        Subclasses must implement this method to execute periodic tasks for the device,
+        such as status checking, data updates, control calculations, etc.
         
         Returns:
-            bool: 是否成功执行
+            bool: Whether execution was successful
         """
         pass
 
     @abstractmethod
     def _set_robot_type(self, robot_type):
         """
-        设置机器人类型
+        Set robot type
         
-        子类必须实现此方法，用于设置设备支持的机器人类型。
-        每个子类应该定义自己的SUPPORTED_ROBOT_TYPES列表。
+        Subclasses must implement this method to set the robot types supported by the device.
+        Each subclass should define its own SUPPORTED_ROBOT_TYPES list.
         
         Args:
-            robot_type: 机器人类型
+            robot_type: Robot type
         """
         pass
 
@@ -137,29 +132,29 @@ class DeviceBase(ABC):
     @abstractmethod
     def _supports_robot_type(cls, robot_type):
         """
-        检查是否支持指定的机器人类型
+        Check if the specified robot type is supported
         
-        子类必须实现此方法，用于检查指定的机器人类型是否被支持。
-        每个子类应该定义自己的SUPPORTED_ROBOT_TYPES列表。
+        Subclasses must implement this method to check if the specified robot type is supported.
+        Each subclass should define its own SUPPORTED_ROBOT_TYPES list.
         
         Args:
-            robot_type: 机器人类型
+            robot_type: Robot type
             
         Returns:
-            bool: 是否支持
+            bool: Whether it is supported
         """
         pass
 
     def _update_timestamp(self):
-        """更新时间戳"""
+        """Update timestamp"""
         with self._data_lock:
             self._last_update_time = time.time()
             self._has_new_data = True
 
     def __str__(self) -> str:
-        """字符串表示"""
+        """String representation"""
         return f"{self.name}, {self.has_new_data}, {self._last_update_time}"
 
     def __repr__(self) -> str:
-        """详细字符串表示"""
+        """Detailed string representation"""
         return f"DeviceBase(name='{self.name}', has_new_data={self.has_new_data}, last_update_time={self._last_update_time})"

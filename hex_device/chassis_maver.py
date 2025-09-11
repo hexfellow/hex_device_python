@@ -23,17 +23,16 @@ from hex_device import motor_base
 
 class ChassisMaver(DeviceBase, MotorBase):
     """
-    底盘Maver类
+    ChassisMaver class
     
-    继承自DeviceBase和MotorBase，主要实现对BaseStatus的映射
-    该类对应proto中的BaseStatus，管理底盘状态和电机控制
+    Inherits from DeviceBase and MotorBase, mainly implements mapping to BaseStatus
+    This class corresponds to BaseStatus in proto, managing chassis status and motor control
     
-    支持的机器人类型:
-    - RtCustomPcwVehicle: 自定义PCW车辆
-    - RtPcwVehicle: PCW车辆
+    Supported robot types:
+    - RtCustomPcwVehicle: Custom PCW vehicle
+    - RtPcwVehicle: PCW vehicle
     """
 
-    # 支持的机器人类型列表
     SUPPORTED_ROBOT_TYPES = [
         public_api_types_pb2.RobotType.RtCustomPcwVehicle,
         public_api_types_pb2.RobotType.RtPcwVehicle
@@ -45,81 +44,79 @@ class ChassisMaver(DeviceBase, MotorBase):
                  control_hz: int = 500,
                  send_message_callback=None):
         """
-        初始化底盘Maver
+        Initialize ChassisMaver
         
         Args:
-            motor_count: 电机数量，默认为8
-            name: 设备名称
-            control_hz: 控制频率
-            send_message_callback: 发送消息的回调函数，用于发送下行消息
+            motor_count: Number of motors, default is 8
+            name: Device name
+            control_hz: Control frequency
+            send_message_callback: Callback function for sending messages, used to send downstream messages
         """
-        # 初始化父类
         DeviceBase.__init__(self, name, send_message_callback)
         MotorBase.__init__(self, motor_count, name)
-        # 确保 name 属性正确设置（DeviceBase 的 name 优先级更高）
         self.name = name or "ChassisMaver"
         self._control_hz = control_hz
         self._target_zero_resistance = False
-        self._target_velocity = (0.0, 0.0, 0.0)  # 初始化目标速度
+        self._target_velocity = (0.0, 0.0, 0.0)  # Initialize target velocity
 
-        # 底盘状态
+        # Chassis status
         self._base_state = BaseState.BsParked
         self._api_control_initialized = False
         self._simple_control_mode = None
 
-        # 电池信息
+        # Battery information
         self._battery_voltage = 0.0
         self._battery_thousandth = 0
 
-        # 可选字段
+        # Optional fields
         self._battery_charging = None
         self._parking_stop_detail = None
         self._warning = None
 
-        # 里程计信息
-        self.__vehicle_origin_position = np.eye(3)  # 用于清除里程计偏差
+        # Odometry information
+        self.__vehicle_origin_position = np.eye(3)  # Used to clear odometry bias
         self._vehicle_speed = (0.0, 0.0, 0.0)  # (x, y, z) m/s, m/s, rad/s
         self._vehicle_position = (0.0, 0.0, 0.0)  # (x, y, yaw) m, m, rad
 
-        # 控制相关
+        # Control related
         self._last_command_time = None
-        self._command_timeout = 0.1  # 100ms超时
-        self.__last_warning_time = time.perf_counter()  # 添加警告时间属性
+        self._command_timeout = 0.1  # 100ms timeout
+        self.__last_warning_time = time.perf_counter()  # Add warning time attribute
 
-        # 机器人类型 - 将在匹配时设置
+        # Robot type - will be set when matched
         self.robot_type = None
 
     def set_robot_type(self, robot_type):
         """
-        设置机器人类型
+        Set robot type
         
         Args:
-            robot_type: 机器人类型
+            robot_type: Robot type
         """
         if robot_type in self.SUPPORTED_ROBOT_TYPES:
             self.robot_type = robot_type
         else:
-            raise ValueError(f"不支持的机器人类型: {robot_type}")
+            raise ValueError(f"Unsupported robot type: {robot_type}")
 
     @classmethod
     def _supports_robot_type(cls, robot_type):
         """
-        检查是否支持指定的机器人类型
+        Check if the specified robot type is supported
         
         Args:
-            robot_type: 机器人类型
+            robot_type: Robot type
             
         Returns:
-            bool: 是否支持
+            bool: Whether it is supported
         """
         return robot_type in cls.SUPPORTED_ROBOT_TYPES
 
     async def _init(self) -> bool:
         """
-        初始化底盘
+        Initialize chassis
         
         Returns:
-            bool: 是否成功初始化
+            bool: Whether initialization was successful
         """
         try:
             msg = self._construct_init_message()
@@ -127,33 +124,33 @@ class ChassisMaver(DeviceBase, MotorBase):
             self.set_has_new_data()
             return True
         except Exception as e:
-            log_err(f"ChassisMaver初始化失败: {e}")
+            log_err(f"ChassisMaver initialization failed: {e}")
             return False
 
     def _update(self, api_up_data) -> bool:
         """
-        更新底盘数据
+        Update chassis data
         
         Args:
-            api_up_data: 从API接收的上行数据 (APIUp)
+            api_up_data: Upstream data received from API (APIUp)
             
         Returns:
-            bool: 是否成功更新
+            bool: Whether update was successful
         """
         try:
-            # 检查是否包含BaseStatus
+            # Check if it contains BaseStatus
             if not api_up_data.HasField('base_status'):
                 return False
 
             base_status = api_up_data.base_status
 
-            # 更新底盘状态
+            # Update chassis status
             self._base_state = base_status.state
             self._api_control_initialized = base_status.api_control_initialized
             self._battery_voltage = base_status.battery_voltage
             self._battery_thousandth = base_status.battery_thousandth
 
-            # 更新可选字段
+            # Update optional fields
             if base_status.HasField('battery_charging'):
                 self._battery_charging = base_status.battery_charging
             if base_status.HasField('parking_stop_detail'):
@@ -168,29 +165,29 @@ class ChassisMaver(DeviceBase, MotorBase):
                                           base_status.estimated_odometry.pos_y,
                                           base_status.estimated_odometry.pos_z)
 
-            # 更新电机数据
+            # Update motor data
             self._update_motor_data_from_base_status(base_status)
             self.set_has_new_data()
             return True
         except Exception as e:
-            log_err(f"ChassisMaver数据更新失败: {e}")
+            log_err(f"ChassisMaver data update failed: {e}")
             return False
 
     def _update_motor_data_from_base_status(self, base_status: BaseStatus):
         """
-        从BaseStatus更新电机数据
+        Update motor data from BaseStatus
         
         Args:
-            base_status: BaseStatus对象
+            base_status: BaseStatus object
         """
         motor_status_list = base_status.motor_status
 
         if len(motor_status_list) != self.motor_count:
             log_warn(
-                f"警告: 电机数量不匹配，期望{self.motor_count}，实际{len(motor_status_list)}")
+                f"Warning: Motor count mismatch, expected {self.motor_count}, actual {len(motor_status_list)}")
             return
 
-        # 解析电机数据
+        # Parse motor data
         positions = []
         velocities = []
         torques = []
@@ -202,17 +199,17 @@ class ChassisMaver(DeviceBase, MotorBase):
         error_codes = []
 
         for motor_status in motor_status_list:
-            # 位置 (从encoder position转换)
+            # Position (converted from encoder position)
             positions.append(float(motor_status.position))
-            # 速度 (从speed转换)
+            # Velocity (converted from speed)
             velocities.append(motor_status.speed)
-            # 扭矩
+            # Torque
             torques.append(motor_status.torque)
-            # 额外参数
+            # Additional parameters
             pulse_per_rotation.append(motor_status.pulse_per_rotation)
             wheel_radius.append(motor_status.wheel_radius)
 
-            # 温度
+            # Temperature
             driver_temp = motor_status.driver_temperature if motor_status.HasField(
                 'driver_temperature') else 0.0
             motor_temp = motor_status.motor_temperature if motor_status.HasField(
@@ -220,19 +217,18 @@ class ChassisMaver(DeviceBase, MotorBase):
             driver_temperature.append(driver_temp)
             motor_temperature.append(motor_temp)
 
-            # 电压
+            # Voltage
             volt = motor_status.voltage if motor_status.HasField(
                 'voltage') else 0.0
             voltage.append(volt)
 
-            # 错误代码
+            # Error code
             error_code = None
             if motor_status.error:
-                # 取第一个错误
                 error_code = motor_status.error[0].value
             error_codes.append(error_code)
 
-        # 更新电机数据
+        # Update motor data
         self.update_motor_data(positions=positions,
                                velocities=velocities,
                                torques=torques,
@@ -245,12 +241,12 @@ class ChassisMaver(DeviceBase, MotorBase):
 
     async def _periodic(self):
         """
-        周期性执行函数
+        Periodic execution function
         
-        执行底盘的周期性任务，包括：
-        - 状态检查
-        - 命令超时检查
-        - 安全监控
+        Execute periodic tasks for the chassis, including:
+        - Status check
+        - Command timeout check
+        - Safety monitoring
         """
         cycle_time = 1000.0 / self._control_hz
         start_time = time.perf_counter()
@@ -276,11 +272,11 @@ class ChassisMaver(DeviceBase, MotorBase):
                         )
                         self.__last_warning_time = start_time
 
-                # 检查电机状态
+                # Check motor status
                 if start_time - self.__last_warning_time > 1.0:
                     for i in range(self.motor_count):
                         if self.get_motor_state(i) == "error":
-                            log_err(f"警告: 电机{i}出现错误")
+                            log_err(f"Warning: Motor {i} error occurred")
                     self.__last_warning_time = start_time
 
                 # send control message
@@ -340,17 +336,17 @@ class ChassisMaver(DeviceBase, MotorBase):
                                                        [sin_yaw, cos_yaw, y],
                                                        [0.0, 0.0, 1.0]])
 
-    # 底盘特有方法
+    # Chassis-specific methods
     def get_base_state(self) -> int:
-        """获取底盘状态"""
+        """Get chassis status"""
         return self._base_state
 
     def is_api_control_initialized(self) -> bool:
-        """检查API控制是否已初始化"""
+        """Check if API control is initialized"""
         return self._api_control_initialized
 
     def get_battery_info(self) -> Dict[str, Any]:
-        """获取电池信息"""
+        """Get battery information"""
         return {
             'voltage': self._battery_voltage,
             'thousandth': self._battery_thousandth,
@@ -358,7 +354,7 @@ class ChassisMaver(DeviceBase, MotorBase):
         }
 
     def get_vehicle_speed(self) -> Tuple[float, float, float]:
-        """获取车辆速度 (m/s, m/s, rad/s)"""
+        """Get vehicle speed (m/s, m/s, rad/s)"""
         return self._vehicle_speed
 
     def get_vehicle_position(self) -> Tuple[float, float, float]:
@@ -388,11 +384,11 @@ class ChassisMaver(DeviceBase, MotorBase):
             return (relative_x, relative_y, relative_yaw)
 
     def get_parking_stop_detail(self):
-        """获取停车停止详情"""
+        """Get parking stop details"""
         return self._parking_stop_detail
 
     def get_warning(self) -> Optional[int]:
-        """获取警告信息"""
+        """Get warning information"""
         return self._warning
 
     def enable(self):
@@ -411,11 +407,11 @@ class ChassisMaver(DeviceBase, MotorBase):
 
     def motor_command(self, command_type: CommandType, values: List[float]):
         """
-        设置底盘指令
+        Set chassis command
         
         Args:
-            command_type: 指令类型
-            values: 指令值列表
+            command_type: Command type
+            values: List of command values
         """
         if self._simple_control_mode == True:
             raise NotImplementedError(
@@ -429,12 +425,12 @@ class ChassisMaver(DeviceBase, MotorBase):
     def set_vehicle_speed(self, speed_x: float, speed_y: float,
                           speed_z: float):
         """
-        设置XYZ速度
+        Set XYZ velocity
         
         Args:
-            speed_x: X方向速度 (m/s)
-            speed_y: Y方向速度 (m/s)
-            speed_z: Z方向角速度 (rad/s)
+            speed_x: X-direction velocity (m/s)
+            speed_y: Y-direction velocity (m/s)
+            speed_z: Z-direction angular velocity (rad/s)
         """
         if self._simple_control_mode == False:
             raise NotImplementedError(
@@ -549,10 +545,10 @@ class ChassisMaver(DeviceBase, MotorBase):
         return msg
 
     def get_status_summary(self) -> Dict[str, Any]:
-        """获取底盘状态摘要"""
+        """Get chassis status summary"""
         summary = super().get_device_summary()
 
-        # 添加底盘特有信息
+        # Add chassis-specific information
         chassis_summary = {
             'base_state':
             public_api_types_pb2.BaseState.Name(self._base_state),
@@ -575,11 +571,11 @@ class ChassisMaver(DeviceBase, MotorBase):
         return summary
 
     def __str__(self) -> str:
-        """字符串表示"""
+        """String representation"""
         state_name = public_api_types_pb2.BaseState.Name(self._base_state)
         return f"{self.name}(State:{state_name}, Motors:{self.motor_count}, API:{self._api_control_initialized})"
 
     def __repr__(self) -> str:
-        """详细字符串表示"""
+        """Detailed string representation"""
         state_name = public_api_types_pb2.BaseState.Name(self._base_state)
         return f"ChassisMaver(motor_count={self.motor_count}, name='{self.name}', base_state={state_name})"

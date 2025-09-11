@@ -9,9 +9,9 @@
 ## <a name="overview"></a> **Overview**
 
 This library provides a simple interface for communicating with and controlling hex device. It uses Protocol Buffers for message serialization and WebSocket for real-time communication.The supported hardware list is as follows:
-- [✅] **[hex_vehicle](#hex_vehicle)**
-- [✅] **[hex_arm](#hex_arm)**
-- [ ] **[hex_lift](#hex_lift)**
+- [✅] **[ChassisMaver](#chassis_maver)**
+- [✅] **[ArmArcher](#arm_archer)**
+- [-] **[hex_lift](#hex_lift)**
 
 
 ## Clone
@@ -79,7 +79,7 @@ sys.path.insert(1, '<your project path>/hex_device_python/hex_device/generated')
 
 > **The detailed function interfaces can be found in our [wiki](https://github.com/hexfellow/hex_device_python/wiki).**
 
-### <a name="hex_vehicle"></a> For vehicle <small><sup>[overview ▲](#overview)</sup></small>
+### <a name="chassis_maver"></a> For chassis_maver <small><sup>[overview ▲](#overview)</sup></small>
 ```python
 api = HexDeviceApi(ws_url="ws://<device ip>:8439", control_hz=250)
 try:
@@ -107,7 +107,7 @@ print("Resources have been cleaned up.")
 exit(0)
 ```
 
-### <a name="hex_arm"></a> For Arm <small><sup>[overview ▲](#overview)</sup></small>
+### <a name="arm_archer"></a> For arm_archer <small><sup>[overview ▲](#overview)</sup></small>
 ```python
 api = HexDeviceApi(ws_url="ws://<device ip>:8439", control_hz=250)
 try:
@@ -137,6 +137,8 @@ exit(0)
 
 ### <a name="hex_lift"></a> For lift <small><sup>[overview ▲](#overview)</sup></small>
 waiting...
+
+--- 
 
 <p align="center">
 	Copyright &copy; 2025-present <a href="https://github.com/hexfellow" target="_blank">Hexfellow Org</a>

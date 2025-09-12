@@ -9,6 +9,7 @@
 # A Simple Test for HexDeviceApi
 
 import sys
+import argparse
 
 sys.path.insert(1, '<your project path>/hex_device_python')
 sys.path.insert(
@@ -25,8 +26,21 @@ from hex_device.motor_base import MitMotorCommand
 from hex_device.motor_base import public_api_types_pb2
 
 def main():
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+        description='Hexapod robotic arm trajectory planning and execution test',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    parser.add_argument(
+        '--url', 
+        metavar='URL',
+        default="ws://0.0.0.0:8439",
+        help='WebSocket URL for HEX device connection'
+    )
+    args = parser.parse_args()
+    
     # Init HexDeviceApi
-    api = HexDeviceApi(ws_url="ws://192.168.1.1:8439", control_hz=250)
+    api = HexDeviceApi(ws_url=args.url, control_hz=250)
     first_time = True
 
     try:

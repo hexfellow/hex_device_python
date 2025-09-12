@@ -8,13 +8,15 @@
 
 ## <a name="overview"></a> **Overview**
 
-This library provides a simple interface for communicating with and controlling hex device. It uses Protocol Buffers for message serialization and WebSocket for real-time communication.The supported hardware list is as follows:
+This library provides a simple interface for communicating with and controlling Hex devices. It uses Protocol Buffers for message serialization and WebSocket for real-time communication. The supported hardware list is as follows:
 - [✅] **[ChassisMaver](#chassis_maver)**
 - [✅] **[ArmArcher](#arm_archer)**
 - [-] **[hex_lift](#hex_lift)**
 
 
-## Clone
+## Installation
+
+### Clone the Repository
 ```
 git clone --recurse-submodules https://github.com/hexfellow/hex_device_python.git
 ```
@@ -44,9 +46,9 @@ If you prefer to run the library without installing it in your Python environmen
    protoc --proto_path=proto-public-api --python_out=hex_device/generated proto-public-api/*.proto
    ```
    
-   **Note:** This library requires newer protoc. If compilation fails, please try to install protoc-27.1 using the binary installation method below.
+   **Note:** This library requires a newer version of protoc. If compilation fails, please install protoc-27.1 using the binary installation method below.
 
-   **Installing protoc-27.1 through binary:**
+   **Installing protoc-27.1 via binary download:**
    ```bash
    # For Linux x86_64
    wget https://github.com/protocolbuffers/protobuf/releases/download/v27.1/protoc-27.1-linux-x86_64.zip
@@ -58,8 +60,8 @@ If you prefer to run the library without installing it in your Python environmen
    sudo unzip protoc-27.1-linux-aarch_64.zip -d /usr/local
    rm protoc-27.1-linux-aarch_64.zip
    
-   #  Verify installation
-   protoc --version  # Should show libprotoc 27.1
+   # Verify installation
+   protoc --version  # Should display libprotoc 27.1
    ```
 
 2. **Install dependencies:**
@@ -68,7 +70,6 @@ python3 -m pip install -r requirements.txt
 ```
 
 3. **Add the library path to your script:**
-Add the library path to your script:
 ```python
 import sys
 sys.path.insert(1, '<your project path>/hex_device_python')
@@ -108,6 +109,14 @@ exit(0)
 ```
 
 ### <a name="arm_archer"></a> For arm_archer <small><sup>[overview ▲](#overview)</sup></small>
+
+A path trajectory example is provided:
+```bash
+python3 tests/archer_traj_test.py  --url <ip>:<8439 or 9439>
+```
+
+A simple usage example is shown below:
+
 ```python
 api = HexDeviceApi(ws_url="ws://<device ip>:8439", control_hz=250)
 try:
@@ -135,8 +144,8 @@ print("Resources have been cleaned up.")
 exit(0)
 ```
 
-### <a name="hex_lift"></a> For lift <small><sup>[overview ▲](#overview)</sup></small>
-waiting...
+### <a name="hex_lift"></a> For hex_lift <small><sup>[overview ▲](#overview)</sup></small>
+Coming soon...
 
 --- 
 

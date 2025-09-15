@@ -611,7 +611,7 @@ class MotorBase(ABC):
             if current_targets is not None:
                 self._current_targets = current_targets.copy()
 
-            self._last_update_time = time.time()
+            self._last_update_time = time.time_ns()
             self._has_new_data = True
 
     def clear_new_data_flag(self):
@@ -697,6 +697,16 @@ class MotorBase(ABC):
                 status['target_torque'] = 0.0
 
             return status
+
+    def get_simple_motor_status(self) -> Dict[str, Any]:
+        """Get simple motor status"""
+        with self._data_lock:
+            return {
+                'pos': self._positions.tolist(),
+                'vel': self._velocities.tolist(),
+                'eff': self._torques.tolist(),
+                'ts': self._last_update_time,
+            }
 
     def _construct_target_motor_msg(
             self,

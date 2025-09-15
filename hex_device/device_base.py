@@ -28,7 +28,7 @@ class DeviceBase(ABC):
 
         self._send_message_callback = send_message_callback
 
-        self._last_update_time = time.time()
+        self._last_update_time = None
 
         self._data_lock = threading.Lock()
 
@@ -148,7 +148,7 @@ class DeviceBase(ABC):
     def _update_timestamp(self):
         """Update timestamp"""
         with self._data_lock:
-            self._last_update_time = time.time()
+            self._last_update_time = time.time_ns()
             self._has_new_data = True
 
     def __str__(self) -> str:

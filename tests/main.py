@@ -22,6 +22,7 @@ from hex_device.chassis_maver import ChassisMaver
 from hex_device.motor_base import CommandType
 from hex_device.arm_archer import ArmArcher
 from hex_device.motor_base import MitMotorCommand
+from hex_device.chassis_mark2 import ChassisMark2
 
 from hex_device.motor_base import public_api_types_pb2
 
@@ -62,8 +63,28 @@ def main():
                                 f"vehicle position: {device.get_vehicle_position()}"
                             )
                             device.enable()
+                            
+                            ## command, Please select one of the following commands.
                             # device.set_vehicle_speed(0.0, 0.0, 0.0)
                             # device.motor_command(CommandType.SPEED, [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5])
+
+                    # for ChassisMark2
+                    if isinstance(device, ChassisMark2):
+                        if device.has_new_data():
+                            if first_time:
+                                first_time = False
+                                device.clear_odom_bias()
+
+                            # device.get_device_summary()
+                            print(
+                                f"vehicle position: {device.get_vehicle_position()}"
+                            )
+                            device.enable()
+                            # device.disable()
+
+                            ## command, Please select one of the following commands.
+                            # device.set_vehicle_speed(0.1, 0.0, 0.0)
+                            # device.motor_command(CommandType.SPEED, [0.4, 0.4])
 
                     # for ArmArcher
                     elif isinstance(device, ArmArcher):

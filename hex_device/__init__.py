@@ -15,6 +15,7 @@ A Python library for controlling HexDevice robots and devices.
 from .device_base import DeviceBase
 from .motor_base import MotorBase, MotorError, MotorCommand, CommandType, MitMotorCommand
 from .chassis_maver import ChassisMaver
+from .chassis_mark2 import ChassisMark2
 
 # 机械臂配置系统
 from .arm_config import (ArmConfig, ArmConfigManager, DofType, JointParam,
@@ -42,6 +43,7 @@ __all__ = [
     'MitMotorCommand',
     'VehicleDevice',
     'ChassisMaver',
+    'ChassisMark2',
 
     # 机械臂配置系统
     'ArmConfig',

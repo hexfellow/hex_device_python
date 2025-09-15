@@ -21,40 +21,38 @@ import time
 from hex_device import motor_base
 
 
-class ChassisMaver(DeviceBase, MotorBase):
+class ChassisMark2(DeviceBase, MotorBase):
     """
-    ChassisMaver class
+    ChassisMark2 class
     
     Inherits from DeviceBase and MotorBase, mainly implements mapping to BaseStatus
     This class corresponds to BaseStatus in proto, managing chassis status and motor control
     
     Supported robot types:
-    - RtCustomPcwVehicle: Custom PCW vehicle
-    - RtPcwVehicle: PCW vehicle
+    - RtArk2LrDriver: Chassis Mark2
     """
 
     SUPPORTED_ROBOT_TYPES = [
-        public_api_types_pb2.RobotType.RtCustomPcwVehicle,
-        public_api_types_pb2.RobotType.RtPcwVehicle
+        public_api_types_pb2.RobotType.RtArk2LrDriver,
     ]
 
     def __init__(self,
-                 motor_count: int = 8,
-                 name: str = "ChassisMaver",
+                 motor_count: int = 2,
+                 name: str = "ChassisMark2",
                  control_hz: int = 500,
                  send_message_callback=None):
         """
-        Initialize ChassisMaver
+        Initialize ChassisMark2
         
         Args:
-            motor_count: Number of motors, default is 8
+            motor_count: Number of motors, default is 2
             name: Device name
             control_hz: Control frequency
             send_message_callback: Callback function for sending messages, used to send downstream messages
         """
         DeviceBase.__init__(self, name, send_message_callback)
         MotorBase.__init__(self, motor_count, name)
-        self.name = name or "ChassisMaver"
+        self.name = name or "ChassisMark2"
         self._control_hz = control_hz
         self._target_zero_resistance = False
         self._target_velocity = (0.0, 0.0, 0.0)  # Initialize target velocity
@@ -124,7 +122,7 @@ class ChassisMaver(DeviceBase, MotorBase):
             self.set_has_new_data()
             return True
         except Exception as e:
-            log_err(f"ChassisMaver initialization failed: {e}")
+            log_err(f"ChassisMark2 initialization failed: {e}")
             return False
 
     def _update(self, api_up_data) -> bool:
@@ -172,7 +170,7 @@ class ChassisMaver(DeviceBase, MotorBase):
             self.set_has_new_data()
             return True
         except Exception as e:
-            log_err(f"ChassisMaver data update failed: {e}")
+            log_err(f"ChassisMark2 data update failed: {e}")
             return False
 
     def _update_motor_data_from_base_status(self, base_status: BaseStatus):
@@ -255,7 +253,7 @@ class ChassisMaver(DeviceBase, MotorBase):
         self.__last_warning_time = start_time
 
         await self._init()
-        log_info("ChassisMaver init success")
+        log_info("ChassisMark2 init success")
         while True:
             await delay(start_time, cycle_time)
             start_time = time.perf_counter()
@@ -285,17 +283,13 @@ class ChassisMaver(DeviceBase, MotorBase):
                     self.__last_warning_time = start_time
 
                 # send control message
-                if self._simple_control_mode == True:
-                    if self._target_zero_resistance:
-                        msg = self._construct_zero_resistance_message(
-                            True, True)
-                        await self._send_message(msg)
+                if self._target_zero_resistance:
+                    msg = self._construct_zero_resistance_message(
+                        True)
+                    await self._send_message(msg)
 
-                    else:
-                        msg = self._construct_zero_resistance_message(
-                            False, True)
-                        await self._send_message(msg)
-
+                else:
+                    if self._simple_control_mode == True:
                         if start_time - self._last_command_time > self._command_timeout:
                             msg = self._construct_simple_control_message(
                                 (0.0, 0.0, 0.0))
@@ -304,30 +298,22 @@ class ChassisMaver(DeviceBase, MotorBase):
                                 self._target_velocity)
                         await self._send_message(msg)
 
-                elif self._simple_control_mode == False:
-                    if self._target_zero_resistance:
-                        msg = self._construct_zero_resistance_message(
-                            True, False)
-                    else:
-                        msg = self._construct_zero_resistance_message(
-                            False, False)
-                    await self._send_message(msg)
+                    elif self._simple_control_mode == False:
+                        if start_time - self._last_command_time > self._command_timeout:
+                            self.motor_command(
+                                CommandType.BRAKE,
+                                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+                            msg = self._construct_wheel_control_message()
+                        else:
+                            msg = self._construct_wheel_control_message()
+                        await self._send_message(msg)
 
-                    if start_time - self._last_command_time > self._command_timeout:
-                        self.motor_command(
-                            CommandType.BRAKE,
-                            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-                        msg = self._construct_wheel_control_message()
-                    else:
-                        msg = self._construct_wheel_control_message()
-                    await self._send_message(msg)
-
-                elif self._simple_control_mode is None:
-                    msg = self._construct_init_message()
-                    await self._send_message(msg)
+                    elif self._simple_control_mode is None:
+                        msg = self._construct_init_message()
+                        await self._send_message(msg)
 
             except Exception as e:
-                log_err(f"ChassisMaver periodic failed: {e}")
+                log_err(f"ChassisMark2 periodic failed: {e}")
 
     def clear_odom_bias(self):
         """ reset odometry position """
@@ -384,7 +370,7 @@ class ChassisMaver(DeviceBase, MotorBase):
             relative_x = float(relative_matrix[0, 2])
             relative_y = float(relative_matrix[1, 2])
             relative_yaw = float(np.arctan2(relative_matrix[1, 0],
-                                      relative_matrix[0, 0]))
+                                            relative_matrix[0, 0]))
 
             return (relative_x, relative_y, relative_yaw)
 
@@ -434,7 +420,7 @@ class ChassisMaver(DeviceBase, MotorBase):
         
         Args:
             speed_x: X-direction velocity (m/s)
-            speed_y: Y-direction velocity (m/s)
+            speed_y: Always 0
             speed_z: Z-direction angular velocity (rad/s)
         """
         if self._simple_control_mode == False:
@@ -445,7 +431,7 @@ class ChassisMaver(DeviceBase, MotorBase):
             self._simple_control_mode = True
 
         with self._command_lock:
-            self._target_velocity = (speed_x, speed_y, speed_z)
+            self._target_velocity = (speed_x, 0.0, speed_z)
             self._last_command_time = time.perf_counter()
 
     # msg constructer
@@ -480,12 +466,11 @@ class ChassisMaver(DeviceBase, MotorBase):
         return msg
 
     def _construct_zero_resistance_message(
-            self, data: bool,
-            is_simple_control_mode: bool) -> public_api_down_pb2.APIDown:
+            self, data: bool,) -> public_api_down_pb2.APIDown:
         """
         @brief: For constructing a zero resistance message.
         """
-        if is_simple_control_mode:
+        if data:
             msg = public_api_down_pb2.APIDown()
             base_command = public_api_types_pb2.BaseCommand()
             simple_base_move_command = public_api_types_pb2.SimpleBaseMoveCommand(
@@ -493,11 +478,7 @@ class ChassisMaver(DeviceBase, MotorBase):
             simple_base_move_command.zero_resistance = data
             base_command.simple_move_command.CopyFrom(simple_base_move_command)
             msg.base_command.CopyFrom(base_command)
-        else:
-            msg = public_api_down_pb2.APIDown()
-            base_command = public_api_types_pb2.BaseCommand()
-            base_command.api_control_initialize = not data
-            msg.base_command.CopyFrom(base_command)
+        
         return msg
 
     def _construct_init_message(self) -> public_api_down_pb2.APIDown:
@@ -583,4 +564,4 @@ class ChassisMaver(DeviceBase, MotorBase):
     def __repr__(self) -> str:
         """Detailed string representation"""
         state_name = public_api_types_pb2.BaseState.Name(self._base_state)
-        return f"ChassisMaver(motor_count={self.motor_count}, name='{self.name}', base_state={state_name})"
+        return f"ChassisMark2(motor_count={self.motor_count}, name='{self.name}', base_state={state_name})"

@@ -10,6 +10,7 @@
 
 This library provides a simple interface for communicating with and controlling Hex devices. It uses Protocol Buffers for message serialization and WebSocket for real-time communication. The supported hardware list is as follows:
 - [✅] **[ChassisMaver](#chassis_maver)**
+- [✅] **[ChassisMark2](#chassis_mark2)**
 - [✅] **[ArmArcher](#arm_archer)**
 - [-] **[hex_lift](#hex_lift)**
 
@@ -90,8 +91,9 @@ If you prefer to run the library without installing it in your Python environmen
 
 ### <a name="chassis_maver"></a> For chassis_maver <small><sup>[overview ▲](#overview)</sup></small>
 ```python
-api = HexDeviceApi(ws_url="ws://<device ip>:8439", control_hz=250)
+api = HexDeviceApi(ws_url="ws://<device ip>:8439", control_hz=500)
 try:
+    first_time = True
     while True:
         if api.is_api_exit():
             print("Public API has exited.")
@@ -100,11 +102,50 @@ try:
             for device in api.device_list:
                 # for ChassisMaver
                 if isinstance(device, ChassisMaver):
-                    print(device.get_device_summary())
-                    print(
-                        f"vehicle position: {device.get_vehicle_position()}"
-                    )
-                    device.set_vehicle_speed(0.0, 0.0, 0.0)
+                    if device.has_new_data():
+                        if first_time:
+                            first_time = False
+                            device.clear_odom_bias()
+                        print(device.get_device_summary())
+                        print(
+                            f"vehicle position: {device.get_vehicle_position()}"
+                        )
+                        device.set_vehicle_speed(0.0, 0.0, 0.0)
+        time.sleep(0.004)
+except KeyboardInterrupt:
+    print("Received Ctrl-C.")
+    api.close()
+finally:
+    pass
+
+print("Resources have been cleaned up.")
+exit(0)
+```
+
+### <a name="chassis_mark2"></a> For chassis_mark2 <small><sup>[overview ▲](#overview)</sup></small>
+```python
+api = HexDeviceApi(ws_url="ws://<device ip>:8439", control_hz=500)
+try:
+    first_time = True
+    while True:
+        if api.is_api_exit():
+            print("Public API has exited.")
+            break
+        else:
+            for device in api.device_list:
+                if isinstance(device, ChassisMark2):
+                    if device.has_new_data():
+                        if first_time:
+                            first_time = False
+                            device.clear_odom_bias()
+
+                        print(device.get_device_summary())
+                        print(
+                            f"vehicle position: {device.get_vehicle_position()}"
+                        )
+                        ## command, Please select one of the following commands.
+                        device.set_vehicle_speed(0.0, 0.0, 0.0)
+                        # device.motor_command(CommandType.SPEED, [0.4, 0.4])
         time.sleep(0.004)
 except KeyboardInterrupt:
     print("Received Ctrl-C.")

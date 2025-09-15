@@ -136,6 +136,13 @@ class HexDeviceApi:
         except ImportError as e:
             log_warn(f"Unable to import ArmArcher: {e}")
 
+        try:
+            from .chassis_mark2 import ChassisMark2
+            self._register_device_class(ChassisMark2)
+            log_info("Registered ChassisMark2 device class")
+        except ImportError as e:
+            log_warn(f"Unable to import ChassisMark2: {e}")
+
         # TODO: Add registration for more device classes
         # lift、rotate lift...
 

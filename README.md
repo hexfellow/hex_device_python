@@ -87,7 +87,7 @@ If you prefer to run the library without installing it in your Python environmen
 
 ## Usage
 
-> **The detailed function interfaces can be found in our [wiki](https://github.com/hexfellow/hex_device_python/wiki).**
+> **The detailed function interfaces can be found in our [wiki](https://github.com/hexfellow/hex_device_python/wiki/API-List).**
 
 ### <a name="chassis_maver"></a> For chassis_maver <small><sup>[overview ▲](#overview)</sup></small>
 ```python

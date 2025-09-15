@@ -705,7 +705,10 @@ class MotorBase(ABC):
                 'pos': self._positions.tolist(),
                 'vel': self._velocities.tolist(),
                 'eff': self._torques.tolist(),
-                'ts': self._last_update_time,
+                'ts': {
+                        "s": self._last_update_time // 1_000_000_000,
+                        "ns": self._last_update_time % 1_000_000_000,
+                    }
             }
 
     def _construct_target_motor_msg(

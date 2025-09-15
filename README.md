@@ -28,53 +28,61 @@ git clone --recurse-submodules https://github.com/hexfellow/hex_device_python.gi
 
 ## Quickstart
 
-### Option 1: Package Installation
+### Install `protoc`
+
+We highly recommend you to use **`protoc-27.1`** since we have fully tested it in both `x86_64` and `arm64` archs.
+
+You can use the binary installation method below to install **`protoc-27.1`**.
+
+```bash
+# For Linux x86_64
+wget https://github.com/protocolbuffers/protobuf/releases/download/v27.1/protoc-27.1-linux-x86_64.zip
+sudo unzip protoc-27.1-linux-x86_64.zip -d /usr/local
+rm protoc-27.1-linux-x86_64.zip
+   
+# For Linux arm64
+wget https://github.com/protocolbuffers/protobuf/releases/download/v27.1/protoc-27.1-linux-aarch_64.zip
+sudo unzip protoc-27.1-linux-aarch_64.zip -d /usr/local
+rm protoc-27.1-linux-aarch_64.zip
+   
+# Verify installation
+protoc --version  # Should display libprotoc 27.1
+```
+
+### Install `hex_device`
+
+#### Option 1: Package Installation
 
 To install the library in your Python environment:
 
-```
+```bash
 python3 -m pip install .
 ```
 
-### Option 2: Direct Usage (No Installation)
+#### Option 2: Direct Usage (No Installation)
 
 If you prefer to run the library without installing it in your Python environment:
 
 1. **Compile Protocol Buffer messages:**
+
    ```bash
    mkdir ./hex_device/generated
    protoc --proto_path=proto-public-api --python_out=hex_device/generated proto-public-api/*.proto
    ```
-   
-   **Note:** This library requires a newer version of protoc. If compilation fails, please install protoc-27.1 using the binary installation method below.
-
-   **Installing protoc-27.1 via binary download:**
-   ```bash
-   # For Linux x86_64
-   wget https://github.com/protocolbuffers/protobuf/releases/download/v27.1/protoc-27.1-linux-x86_64.zip
-   sudo unzip protoc-27.1-linux-x86_64.zip -d /usr/local
-   rm protoc-27.1-linux-x86_64.zip
-   
-   # For Linux arm64
-   wget https://github.com/protocolbuffers/protobuf/releases/download/v27.1/protoc-27.1-linux-aarch_64.zip
-   sudo unzip protoc-27.1-linux-aarch_64.zip -d /usr/local
-   rm protoc-27.1-linux-aarch_64.zip
-   
-   # Verify installation
-   protoc --version  # Should display libprotoc 27.1
-   ```
 
 2. **Install dependencies:**
-```bash
-python3 -m pip install -r requirements.txt
-```
+
+    ```bash
+    python3 -m pip install -r requirements.txt
+    ```
 
 3. **Add the library path to your script:**
-```python
-import sys
-sys.path.insert(1, '<your project path>/hex_device_python')
-sys.path.insert(1, '<your project path>/hex_device_python/hex_device/generated')
-```
+
+    ```python
+    import sys
+    sys.path.insert(1, '<your project path>/hex_device_python')
+    sys.path.insert(1, '<your project path>/hex_device_python/hex_device/generated')
+    ```
 
 ## Usage
 

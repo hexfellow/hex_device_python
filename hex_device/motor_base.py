@@ -408,7 +408,7 @@ class MotorBase(ABC):
         with self._data_lock:
             return self._wheel_radius[motor_index]
 
-    def motor_command(self, command_type: CommandType, values: Union[List[bool], List[float], List[MitMotorCommand]]):
+    def motor_command(self, command_type: CommandType, values: Union[List[bool], List[float], List[MitMotorCommand], np.ndarray]):
         """
         Set motor command
         
@@ -421,6 +421,10 @@ class MotorBase(ABC):
                 - TORQUE: Torque value list (Nm) (List[float])
                 - MIT: MIT command list (List[MitMotorCommand])
         """
+        # Convert numpy array to list if needed
+        if isinstance(values, np.ndarray):
+            values = values.tolist()
+
         if command_type == CommandType.BRAKE:
             if not isinstance(values, list) or not all(isinstance(x, bool) for x in values):
                 raise ValueError("BRAKE command type requires boolean list")

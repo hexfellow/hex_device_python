@@ -293,7 +293,22 @@ class ArmArcher(DeviceBase, MotorBase):
         """
         self._command_timeout_check = check_or_not
 
-    def motor_command(self, command_type: CommandType, values: Union[List[bool], List[float], List[MitMotorCommand]]):
+    def construct_mit_command(self, 
+            pos: Union[np.ndarray, List[float]], 
+            speed: Union[np.ndarray, List[float]], 
+            torque: Union[np.ndarray, List[float]], 
+            kp: Union[np.ndarray, List[float]], 
+            kd: Union[np.ndarray, List[float]]
+        ) -> List[MitMotorCommand]:
+        """
+        Construct MIT command
+        """
+        mit_commands = []
+        for i in range(self.motor_count):
+            mit_commands.append(MitMotorCommand(position=pos[i], speed=speed[i], torque=torque[i], kp=kp[i], kd=kd[i]))
+        return deepcopy(mit_commands)
+
+    def motor_command(self, command_type: CommandType, values: Union[List[bool], List[float], List[MitMotorCommand], np.ndarray]):
         """
         Set motor command
         Note:
@@ -301,8 +316,12 @@ class ArmArcher(DeviceBase, MotorBase):
             2. When CommandType is BRAKE, the values can be any, but the length must be the same as the motor count.
         Args:
             command_type: Command type
-            values: List of command values
+            values: List of command values or numpy array
         """
+        # Convert numpy array to list if needed
+        if isinstance(values, np.ndarray):
+            values = values.tolist()
+        
         super().motor_command(command_type, values)
         self._last_command_time = time.perf_counter()
 

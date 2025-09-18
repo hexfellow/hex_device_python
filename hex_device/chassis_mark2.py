@@ -442,7 +442,7 @@ class ChassisMark2(DeviceBase, MotorBase):
         """
         msg = public_api_down_pb2.APIDown()
         base_command = public_api_types_pb2.BaseCommand()
-        motor_targets = self._construct_target_motor_msg()
+        motor_targets = self._construct_target_motor_msg(self._pulse_per_rotation)
         base_command.motor_targets.CopyFrom(motor_targets)
         msg.base_command.CopyFrom(base_command)
         return msg

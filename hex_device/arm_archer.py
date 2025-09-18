@@ -8,6 +8,7 @@
 
 import pprint
 import time
+import numpy as np
 from typing import Optional, Tuple, List, Dict, Any, Union
 from .common_utils import delay, log_common, log_info, log_warn, log_err
 from .device_base import DeviceBase
@@ -66,6 +67,7 @@ class ArmArcher(DeviceBase, MotorBase):
 
         self.name = name or "ArmArcher"
         self._control_hz = control_hz
+        self._period = 1.0 / control_hz
         self._arm_series = robot_type
 
         # arm status
@@ -269,7 +271,7 @@ class ArmArcher(DeviceBase, MotorBase):
                             msg = self._construct_custom_joint_command_msg(motor_msg)
                             await self._send_message(msg)
                         except Exception as e:
-                            log_err(f"ArmArcher failed to construct joint command message: {e}")
+                            log_err(f"ArmArcher failed to construct custom joint command message: {e}")
                             continue
                     # normal command
                     else:
@@ -301,11 +303,6 @@ class ArmArcher(DeviceBase, MotorBase):
             command_type: Command type
             values: List of command values
         """
-        period = float(1.0 / self._control_hz)
-        if command_type == CommandType.POSITION:
-            values = self.validate_joint_positions(values, dt=period)
-        elif command_type == CommandType.SPEED:
-            values = self.validate_joint_velocities(values, dt=period)
         super().motor_command(command_type, values)
         self._last_command_time = time.perf_counter()
 
@@ -315,7 +312,7 @@ class ArmArcher(DeviceBase, MotorBase):
         """
         msg = public_api_down_pb2.APIDown()
         arm_command = public_api_types_pb2.ArmCommand()
-        motor_targets = self._construct_target_motor_msg()
+        motor_targets = self._construct_target_motor_msg(self._pulse_per_rotation, self._period)
         arm_command.motor_targets.CopyFrom(motor_targets)
         msg.arm_command.CopyFrom(arm_command)
         return msg
@@ -365,6 +362,34 @@ class ArmArcher(DeviceBase, MotorBase):
         arm_command.clear_parking_stop = True
         msg.arm_command.CopyFrom(arm_command)
         return msg
+
+    def _construct_target_motor_msg(
+            self,
+            pulse_per_rotation,
+            dt,
+            command: MotorCommand = None) -> public_api_types_pb2.MotorTargets:
+        """Construct downstream message"""
+        # if no new command, use the last command 
+        if command is None:
+            with self._command_lock:
+                if self._target_command is None:
+                    raise ValueError(
+                        "Construct down msg failed, No target command")
+                command = self._target_command
+
+        # validate joint positions and velocities
+        validated_command = deepcopy(command)
+
+        if validated_command.command_type == CommandType.POSITION:
+            validated_positions = self.validate_joint_positions(command.position_command, dt)
+            validated_command.position_command = validated_positions
+        elif validated_command.command_type == CommandType.SPEED:
+            validated_velocities = self.validate_joint_velocities(command.speed_command, dt)
+            validated_command.speed_command = validated_velocities
+
+        motor_targets = super()._construct_target_motor_msg(pulse_per_rotation, validated_command)
+        
+        return motor_targets
 
     # Configuration related methods
     def get_arm_config(self) -> Optional[ArmConfig]:

@@ -135,23 +135,15 @@ class MotorCommand:
     @classmethod
     def create_position_command(
             cls,
-            positions: List[float],
-            pulse_per_rotation: np.ndarray = None) -> 'MotorCommand':
+            positions: List[float]) -> 'MotorCommand':
         """
         Create position command
         Args:
             positions: Position value list (rad)
             pulse_per_rotation: Pulses per rotation
         """
-        if pulse_per_rotation is None:
-            return cls(command_type=CommandType.POSITION,
-                       position_command=deepcopy(positions))
-
-        # Convert to encoder position
-        trans_positions = np.array(positions) / (
-            2 * np.pi) * pulse_per_rotation + 65535.0 / 2.0
         return cls(command_type=CommandType.POSITION,
-                   position_command=trans_positions.tolist())
+                    position_command=deepcopy(positions))
 
     @classmethod
     def create_torque_command(cls, torques: List[float]) -> 'MotorCommand':
@@ -159,28 +151,9 @@ class MotorCommand:
         return cls(command_type=CommandType.TORQUE, torque_command=deepcopy(torques))
 
     @classmethod
-    def create_mit_command(cls, mit_commands: List[MitMotorCommand], pulse_per_rotation: np.ndarray = None) -> 'MotorCommand':
+    def create_mit_command(cls, mit_commands: List[MitMotorCommand]) -> 'MotorCommand':
         """Create MIT command"""
-        if pulse_per_rotation is None:
-            return cls(command_type=CommandType.MIT, mit_command=deepcopy(mit_commands))
-
-        # Convert to encoder position
-        positions = np.array([cmd.position for cmd in mit_commands])
-        trans_positions = positions / (2 * np.pi) * pulse_per_rotation + 65535.0 / 2.0
-        
-        converted_commands = []
-        for i, cmd in enumerate(mit_commands):
-            new_cmd = MitMotorCommand(
-                torque=cmd.torque,
-                speed=cmd.speed,
-                position=trans_positions[i],  # Use converted position
-                kp=cmd.kp,
-                kd=cmd.kd
-            )
-            converted_commands.append(new_cmd)
-        
-        return cls(command_type=CommandType.MIT, mit_command=converted_commands)
-
+        return cls(command_type=CommandType.MIT, mit_command=deepcopy(mit_commands))
 
 class MotorError(Enum):
     """Motor error enumeration, used to implement mapping from MotorError in proto to python class"""
@@ -227,7 +200,7 @@ class MotorBase(ABC):
 
         # Target commands
         self._current_targets = [None] * motor_count  # Commands currently running on the device
-        self._target_command = None  # Current target command, commands here have been converted and are consistent with the scale in proto comments
+        self._target_command = None  # The raw command, not converted to the scale in proto comments
 
         # Timestamp
         self._last_update_time = None
@@ -472,7 +445,7 @@ class MotorBase(ABC):
                     f"Expected {self.motor_count} position values, got {len(values)}"
                 )
             command = MotorCommand.create_position_command(
-                values, self._pulse_per_rotation)
+                values)
         elif command_type == CommandType.TORQUE:
             if not isinstance(values, list) or not all(isinstance(x, float) for x in values):
                 raise ValueError("TORQUE command type requires float list")
@@ -488,7 +461,7 @@ class MotorBase(ABC):
                 raise ValueError(
                     f"Expected {self.motor_count} MIT commands, got {len(values)}"
                 )
-            command = MotorCommand.create_mit_command(values, self._pulse_per_rotation)
+            command = MotorCommand.create_mit_command(values)
         else:
             raise ValueError(f"Unknown command type: {command_type}")
 
@@ -713,6 +686,7 @@ class MotorBase(ABC):
 
     def _construct_target_motor_msg(
             self,
+            pulse_per_rotation,
             command: MotorCommand = None) -> public_api_types_pb2.MotorTargets:
         """Construct downstream message"""
         if command is None:
@@ -734,7 +708,11 @@ class MotorBase(ABC):
                 single_motor_target.speed = target
                 motor_targets.targets.append(deepcopy(single_motor_target))
         elif command.command_type == CommandType.POSITION:
-            for target in command.position_command:
+            # Convert to encoder position
+            trans_positions = np.array(command.position_command) / (
+                2 * np.pi) * pulse_per_rotation + 65535.0 / 2.0
+
+            for target in trans_positions:
                 single_motor_target.position = int(target)
                 motor_targets.targets.append(deepcopy(single_motor_target))
         elif command.command_type == CommandType.TORQUE:
@@ -742,11 +720,15 @@ class MotorBase(ABC):
                 single_motor_target.torque = target
                 motor_targets.targets.append(deepcopy(single_motor_target))
         elif command.command_type == CommandType.MIT:
-            for mit_cmd in command.mit_command:
+            # Convert to encoder position
+            raw_positions = np.array([cmd.position for cmd in command.mit_command])
+            trans_positions = raw_positions / (2 * np.pi) * pulse_per_rotation + 65535.0 / 2.0
+
+            for i, mit_cmd in enumerate(command.mit_command):
                 mit_target = public_api_types_pb2.MitMotorTarget()
                 mit_target.torque = mit_cmd.torque
                 mit_target.speed = mit_cmd.speed
-                mit_target.position = mit_cmd.position
+                mit_target.position = trans_positions[i]
                 mit_target.kp = mit_cmd.kp
                 mit_target.kd = mit_cmd.kd
                 
@@ -767,7 +749,7 @@ class MotorBase(ABC):
             values: Command value list
                 - BRAKE: Ignore values parameter
                 - SPEED: Speed value list (rad/s)
-                - POSITION: Position value list (rad)
+                - POSITION: Position value list (encoder position)
                 - TORQUE: Torque value list (Nm)
         """
         if command_type == CommandType.BRAKE:
@@ -788,7 +770,7 @@ class MotorBase(ABC):
                     f"Expected {self.motor_count} position values, got {len(values)}"
                 )
             command = MotorCommand.create_position_command(
-                values, self._pulse_per_rotation)
+                values)
         elif command_type == CommandType.TORQUE:
             if len(values) != self.motor_count:
                 raise ValueError(
@@ -800,7 +782,7 @@ class MotorBase(ABC):
                 raise ValueError(
                     f"Expected {self.motor_count} mit values, got {len(values)}"
                 )
-            command = MotorCommand.create_mit_command(values, self._pulse_per_rotation)
+            command = MotorCommand.create_mit_command(values)
         else:
             raise ValueError(f"Unknown command type: {command_type}")
 

@@ -6,7 +6,6 @@
 # Date  : 2025-8-1
 ################################################################
 
-import pprint
 import time
 import numpy as np
 from typing import Optional, Tuple, List, Dict, Any, Union
@@ -492,12 +491,12 @@ class ArmArcher(DeviceBase, MotorBase):
             success = arm_config_manager.reload_from_dict(
                 self._arm_series, config_data)
             if success:
-                print(f"ArmArcher: reload arm config success: {config_data.get('name', 'unknown')}")
+                log_common(f"ArmArcher: reload arm config success: {config_data.get('name', 'unknown')}")
             else:
-                print(f"ArmArcher: reload arm config from dict failed: {config_data.get('name', 'unknown')}")
+                log_err(f"ArmArcher: reload arm config from dict failed: {config_data.get('name', 'unknown')}")
             return success
         except Exception as e:
-            print(f"ArmArcher: reload arm config from dict exception: {e}")
+            log_err(f"ArmArcher: reload arm config from dict exception: {e}")
             return False
 
     def set_initial_positions(self, positions: List[float]):

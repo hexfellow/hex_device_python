@@ -8,6 +8,7 @@
 import re
 import time
 import asyncio
+import logging
 
 from .error_type import InvalidWSURLException
 
@@ -42,17 +43,25 @@ async def delay(start_time, ms):
     await asyncio.sleep(end_time - now)
 
 
-def log_warn(message):
-    print(f"\033[33m{message}\033[0m")
+# Create a logger for the hex_device package
+_logger = logging.getLogger(__name__.split('.')[0])  # Use 'hex_device' as logger name
 
+def log_warn(message):
+    """Log warning message"""
+    _logger.warning(message)
 
 def log_err(message):
-    print(f"\033[31m{message}\033[0m")
-
+    """Log error message"""
+    _logger.error(message)
 
 def log_info(message):
-    print(f"\033[32m{message}\033[0m")
-
+    """Log info message"""
+    _logger.info(message)
 
 def log_common(message):
-    print(f"{message}")
+    """Log common message (info level)"""
+    _logger.info(message)
+
+def log_debug(message):
+    """Log debug message"""
+    _logger.debug(message)

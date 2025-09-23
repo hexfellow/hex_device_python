@@ -7,6 +7,7 @@
 ################################################################
 from typing import Optional, Tuple, List, Type, Dict, Any
 from .device_base import DeviceBase
+from .common_utils import log_err
 
 class DeviceFactory:
     """
@@ -100,7 +101,6 @@ class DeviceFactory:
         elif class_name == 'ChassisMark2':
             # Get motor_count from api_up
             motor_count = self._get_motor_count_from_api_up(api_up)
-            print(f"motor_count: {motor_count}")
             if motor_count is not None:
                 params['motor_count'] = motor_count
 
@@ -127,25 +127,21 @@ class DeviceFactory:
         if status_field == 'arm_status':
             if hasattr(api_up.arm_status, 'motor_status'):
                 motor_count = len(api_up.arm_status.motor_status)
-                print(f"Found arm_status with {motor_count} motors")
                 return motor_count
         elif status_field == 'base_status':
             if hasattr(api_up.base_status, 'motor_status'):
                 motor_count = len(api_up.base_status.motor_status)
-                print(f"Found base_status with {motor_count} motors")
                 return motor_count
         elif status_field == 'linear_lift_status':
             if hasattr(api_up.linear_lift_status, 'motor_status'):
                 motor_count = len(api_up.linear_lift_status.motor_status)
-                print(f"Found linear_lift_status with {motor_count} motors")
                 return motor_count
         elif status_field == 'rotate_lift_status':
             if hasattr(api_up.rotate_lift_status, 'motor_status'):
                 motor_count = len(api_up.rotate_lift_status.motor_status)
-                print(f"Found rotate_lift_status with {motor_count} motors")
                 return motor_count
         else:
-            print(f"No recognized status field is set (got: {status_field})")
+            log_err(f"No recognized status field is set (got: {status_field})")
 
         return None
 

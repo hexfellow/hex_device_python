@@ -333,7 +333,7 @@ class ChassisMaver(DeviceBase, MotorBase):
         """ reset odometry position """
         with self._data_lock:
             x, y, yaw = self._vehicle_position
-            print(f"clear odom bias: {x}, {y}, {yaw}")
+            log_common(f"clear odom bias: {x}, {y}, {yaw}")
             # Convert (x, y, yaw) to 2D transformation matrix
             cos_yaw = np.cos(yaw)
             sin_yaw = np.sin(yaw)

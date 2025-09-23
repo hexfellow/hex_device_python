@@ -10,12 +10,15 @@
 
 import sys
 import argparse
+import numpy as np
+import logging
 
 sys.path.insert(1, '<your project path>/hex_device_python')
 sys.path.insert(
     1,
     '<your project path>/hex_device_python/hex_device/generated')
 
+import hex_device
 from hex_device import HexDeviceApi
 import time
 from hex_device.chassis_maver import ChassisMaver
@@ -35,10 +38,20 @@ def main():
     parser.add_argument(
         '--url', 
         metavar='URL',
-        default="ws://0.0.0.0:8439",
+        default="ws://172.18.8.161:8439",
         help='WebSocket URL for HEX device connection'
     )
+    parser.add_argument(
+        '--log-level',
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
+        default='WARNING',
+        help='Set logging level for hex_device package'
+    )
     args = parser.parse_args()
+    
+    # 设置日志等级
+    hex_device.set_log_level(args.log_level)
+    print(f"Log level set to: {args.log_level}")
     
     # Init HexDeviceApi
     api = HexDeviceApi(ws_url=args.url, control_hz=250)
@@ -97,33 +110,37 @@ def main():
                                     'motor_model': [0x80] * 6,
                                     'joints': [{
                                         'joint_name': 'joint_1',
-                                        'joint_limit': [-2.7, 3.1, -0.03, 0.03, -0.0, 0.0]
+                                        'joint_limit': [-2.7, 3.1, -0.3, 0.3, -0.0, 0.0]
                                     }, {
                                         'joint_name': 'joint_2',
-                                        'joint_limit': [-1.57, 2.094, -0.03, 0.03, -0.0, 0.0]
+                                        'joint_limit': [-1.57, 2.094, -0.3, 0.3, -0.0, 0.0]
                                     }, {
                                         'joint_name': 'joint_3',
-                                        'joint_limit': [0.0, 3.14159265359, -0.03, 0.03, -0.0, 0.0]
+                                        'joint_limit': [0.0, 3.14159265359, -0.3, 0.3, -0.0, 0.0]
                                     }, {
                                         'joint_name': 'joint_4',
-                                        'joint_limit': [-1.56, 1.56, -0.03, 0.03, -0.0, 0.0]
+                                        'joint_limit': [-1.56, 1.56, -0.3, 0.3, -0.0, 0.0]
                                     }, {
                                         'joint_name': 'joint_5',
-                                        'joint_limit': [-1.56, 1.56, -0.03, 0.03, -0.0, 0.0]
+                                        'joint_limit': [-1.56, 1.56, -0.3, 0.3, -0.0, 0.0]
                                     }, {
                                         'joint_name': 'joint_6',
-                                        'joint_limit': [-1.57, 1.57, -0.03, 0.03, -0.0, 0.0]
+                                        'joint_limit': [-1.57, 1.57, -0.3, 0.3, -0.0, 0.0]
                                     }]
                                 }
                                 if not device.reload_arm_config_from_dict(config_dict):
                                     exit(1)
 
-                                # device.command_timeout_check(False)
-                                # device.motor_command(
-                                #     CommandType.SPEED,
-                                #     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-                                
+                                device.command_timeout_check(False)
+                                device.motor_command(
+                                    CommandType.SPEED,
+                                    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
+                                # cmd = np.array([-0.3, -1.55, 3.0, 0.0, 0.0, 0.0])
+                                # device.motor_command(
+                                #     CommandType.POSITION,
+                                #     cmd)
+                                
                             # print(device.get_device_summary())
                             # print(device.get_motor_summary())
 
@@ -149,12 +166,32 @@ def main():
 
                             # device.motor_command(
                             #     CommandType.MIT,[
-                            #     MitMotorCommand(torque=0.0, speed=0.0, position=-0.3, kp=150.0, kd=12.0),
-                            #     MitMotorCommand(torque=0.0, speed=0.0, position=-1.48, kp=150.0, kd=12.0),
-                            #     MitMotorCommand(torque=0.0, speed=0.0, position=2.86, kp=150.0, kd=12.0),
-                            #     MitMotorCommand(torque=0.0, speed=0.0, position=0.0, kp=150.0, kd=12.0),
-                            #     MitMotorCommand(torque=0.0, speed=0.0, position=0.0, kp=39.0, kd=0.8),
-                            #     MitMotorCommand(torque=0.0, speed=0.0, position=0.0, kp=39.0, kd=0.8)])
+                            #     MitMotorCommand(position=-0.3, speed=0.0, torque=0.0, kp=150.0, kd=12.0),
+                            #     MitMotorCommand(position=-1.48, speed=0.0, torque=0.0, kp=150.0, kd=12.0),
+                            #     MitMotorCommand(position=2.86, speed=0.0, torque=0.0, kp=150.0, kd=12.0),
+                            #     MitMotorCommand(position=0.0, speed=0.0, torque=0.0, kp=150.0, kd=12.0),
+                            #     MitMotorCommand(position=0.0, speed=0.0, torque=0.0, kp=39.0, kd=0.8),
+                            #     MitMotorCommand(position=0.0, speed=0.0, torque=0.0, kp=39.0, kd=0.8),
+                            #     ])
+
+                            # mit_commands = device.construct_mit_command(
+                            #     np.array([-0.3, -1.48, 2.86, 0.0, 0.0, 0.0]), 
+                            #     np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0]), 
+                            #     np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0]), 
+                            #     np.array([150.0, 150.0, 150.0, 150.0, 39.0, 39.0]), 
+                            #     np.array([12.0, 12.0, 12.0, 12.0, 0.8, 0.8])
+                            # )
+                            # mit_commands = device.construct_mit_command(
+                            #     [0.3, -1.48, 2.86, 0.0, 0.0, 0.0], 
+                            #     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 
+                            #     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 
+                            #     [150.0, 150.0, 150.0, 150.0, 39.0, 39.0], 
+                            #     [12.0, 12.0, 12.0, 12.0, 0.8, 0.8]
+                            # )
+
+                            # device.motor_command(
+                            #     CommandType.MIT,
+                            #     mit_commands)
 
             time.sleep(0.002)
 

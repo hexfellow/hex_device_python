@@ -9,6 +9,7 @@
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 from enum import Enum
+from .common_utils import log_err
 import numpy as np
 
 
@@ -321,7 +322,7 @@ class ArmConfigManager:
                 raise e
 
         except Exception as e:
-            print(f"Failed to reload configuration from dictionary: {e}")
+            log_err(f"Failed to reload configuration from dictionary: {e}")
             return False
 
     def _create_config_from_dict(self, arm_series: int,

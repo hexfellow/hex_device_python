@@ -17,8 +17,13 @@ This library provides a simple interface for communicating with and controlling 
 
 ## Installation
 
-### Clone the Repository
+### Install from PyPI (Recommended)
+```bash
+pip install hex_device
 ```
+
+### Clone the Repository (Development)
+```bash
 git clone --recurse-submodules https://github.com/hexfellow/hex_device_python.git
 ```
 

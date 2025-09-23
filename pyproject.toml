@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=61.0", "protobuf", "websockets"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "hex_device"
-version = "0.0.1"
+version = "1.0.0"
 dependencies = [
   "numpy>=1.17.4",
   "protobuf>=5.29.4,<6.0.0",
@@ -12,19 +12,38 @@ dependencies = [
 ]
 requires-python = ">=3.8.10"
 authors = [
-  { name="jecjune", email="zejun.chen@hexfellow.com" },
+  { name="Jecjune", email="zejun.chen@hexfellow.com" },
 ]
 maintainers = [
-  { name="jecjune", email="zejun.chen@hexfellow.com" },
+  { name="Jecjune", email="zejun.chen@hexfellow.com" },
 ]
-description = "This is a simple package."
+description = "A Python library for controlling HexDevice robots and devices"
 readme = "README.md"
-license = { file = "LICENSE" }
+license = "Apache-2.0"
+license-files = ["LICENSE.txt"]
+keywords = ["robotics", "hexfellow", "device-control", "protobuf", "websocket"]
 classifiers = [
-    "Programming Language :: Python :: 3",
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
     "Operating System :: OS Independent",
-    "License :: OSI Approved :: Apache-2.0 license",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Hardware :: Hardware Drivers",
 ]
 
 [project.urls]
-Homepage = "https://github.com/hexfellow/hex_device_python_lib.git"
+Homepage = "https://github.com/hexfellow/hex_device_python"
+Repository = "https://github.com/hexfellow/hex_device_python.git"
+Documentation = "https://github.com/hexfellow/hex_device_python/wiki"
+"Bug Reports" = "https://github.com/hexfellow/hex_device_python/issues"
+
+[tool.setuptools.packages.find]
+include = ["hex_device*"]
+exclude = ["test_env*", "tests*"]

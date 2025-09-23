@@ -1,6 +1,16 @@
 include requirements.txt
 include LICENSE.txt
 include README.md
+include CHANGELOG.md
+include pyproject.toml
 
-recursive-include proto-public-api *.proto
-recursive-include hex_device/generated *
+# Include proto files if available (for development builds)  
+recursive-include proto-public-api *.proto *.md
+
+# Always include generated Python files (essential for PyPI distribution)
+recursive-include hex_device/generated *.py
+include hex_device/generated/__init__.py
+
+# Exclude Python cache files
+global-exclude *.pyc
+global-exclude __pycache__

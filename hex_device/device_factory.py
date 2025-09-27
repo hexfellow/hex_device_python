@@ -7,28 +7,54 @@
 ################################################################
 from typing import Optional, Tuple, List, Type, Dict, Any
 from .device_base import DeviceBase
+from .device_base_optional import OptionalDeviceBase
 from .common_utils import log_err
 
 class DeviceFactory:
     """
-    Device factory class, responsible for creating and managing device instances based on robot_type
+    Unified device factory class, responsible for creating and managing device instances
+    Supports both robot_type-based devices (DeviceBase) and message_type-based devices (OptionalDeviceBase)
     """
 
     def __init__(self):
+        # Traditional robot_type-based devices
         self._device_classes: List[Type[DeviceBase]] = []
+        
+        # Optional message_type-based devices
+        self._optional_device_classes: Dict[str, Type[OptionalDeviceBase]] = {}
 
     def register_device_class(self, device_class):
         """
-        Register device class
+        Register device class (supports both DeviceBase and OptionalDeviceBase)
         
         Args:
-            device_class: Device class, must support _supports_robot_type class method
+            device_class: Device class
         """
-        if hasattr(device_class, '_supports_robot_type'):
+        # Check if it's an OptionalDeviceBase
+        if issubclass(device_class, OptionalDeviceBase):
+            self.register_optional_device_class(device_class)
+        # Check if it's a traditional DeviceBase
+        elif hasattr(device_class, '_supports_robot_type'):
             self._device_classes.append(device_class)
         else:
             raise ValueError(
-                f"Device class {device_class.__name__} must support _supports_robot_type class method")
+                f"Device class {device_class.__name__} must be either OptionalDeviceBase or support _supports_robot_type class method")
+
+    def register_optional_device_class(self, device_class: Type[OptionalDeviceBase]):
+        """
+        Register an optional device class
+        
+        Args:
+            device_class: The optional device class to register
+        """
+        if not issubclass(device_class, OptionalDeviceBase):
+            raise ValueError(f"Device class {device_class.__name__} must inherit from OptionalDeviceBase")
+            
+        supported_types = device_class.get_supported_message_types_static()
+        for message_type in supported_types:
+            if message_type in self._optional_device_classes:
+                raise ValueError(f"Message type '{message_type}' already registered with device: {self._optional_device_classes[message_type]}")
+            self._optional_device_classes[message_type] = device_class
 
     def create_device_for_robot_type(
         self,
@@ -64,6 +90,81 @@ class DeviceFactory:
                 return device
 
         return None
+
+    def create_optional_device(self, message_type: str, send_message_callback=None, api_up=None) -> Optional[OptionalDeviceBase]:
+        """
+        Create an optional device instance for the specified message type
+        
+        Args:
+            message_type: The message type to create device for
+            send_message_callback: Callback function for sending messages
+            api_up: API upstream data, used to extract device constructor parameters
+            
+        Returns:
+            OptionalDeviceBase: Device instance or None if not supported
+        """
+        if message_type not in self._optional_device_classes:
+            return None
+            
+        device_class = self._optional_device_classes[message_type]
+        
+        # Extract constructor parameters based on device class and api_up
+        constructor_params = self._extract_optional_constructor_params_from_api_up(device_class, message_type, api_up)
+
+        all_params = {
+            'send_message_callback': send_message_callback,
+            **constructor_params,
+        }
+        
+        device_instance = device_class(**all_params)
+        return device_instance
+
+    def get_supported_message_types(self) -> List[str]:
+        """
+        Get all supported message types for optional devices
+        
+        Returns:
+            List[str]: List of all registered message types
+        """
+        return list(self._optional_device_classes.keys())
+
+    def _extract_optional_constructor_params_from_api_up(self, device_class: Type[OptionalDeviceBase], message_type: str, api_up) -> Dict[str, Any]:
+        """
+        Extract optional device constructor parameters from api_up
+        
+        Args:
+            device_class: Optional device class
+            message_type: Message type
+            api_up: API upstream data
+            
+        Returns:
+            dict: Constructor parameters dictionary
+        """
+        params = {}
+        class_name = device_class.__name__
+        
+        if class_name == 'Hands':
+            # Extract motor count from hand_status if available
+            if api_up and hasattr(api_up, 'hand_status') and api_up.hand_status:
+                if hasattr(api_up.hand_status, 'motor_status'):
+                    motor_count = len(api_up.hand_status.motor_status)
+                else:
+                    raise ValueError(f"Hands device motor_status is not set")
+                if hasattr(api_up.hand_status, 'hand_type'):
+                    hand_type = api_up.hand_status.hand_type
+                else:
+                    raise ValueError(f"Hands device hand_type is not set")
+            else:
+                raise ValueError(f"Hands device hand_status is not set")
+            
+            params.update({
+                'hand_type': hand_type,
+                'motor_count': motor_count,
+                'name': f"Hands_{message_type}",
+            })
+
+        #TODO: Add more optional device parameter extraction logic here as needed
+        return params
 
     def _extract_constructor_params(self, device_class, robot_type, api_up):
         """

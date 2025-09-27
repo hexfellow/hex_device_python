@@ -84,6 +84,8 @@ def get_logger():
 
 # Core classes
 from .device_base import DeviceBase
+from .device_base_optional import OptionalDeviceBase
+from .device_factory import DeviceFactory
 from .motor_base import (
     MotorBase, 
     MotorError, 
@@ -95,6 +97,9 @@ from .motor_base import (
 # Device implementations
 from .chassis_maver import ChassisMaver
 from .chassis_mark2 import ChassisMark2
+
+# Optional device implementations
+from .hands import Hands
 
 # Arm configuration system
 from .arm_config import (
@@ -126,6 +131,8 @@ from .hex_device_api import HexDeviceApi
 __all__ = [
     # Core classes
     'DeviceBase',
+    'OptionalDeviceBase',
+    'DeviceFactory',
     'MotorBase',
     'MotorError',
     'MotorCommand',
@@ -135,6 +142,9 @@ __all__ = [
     # Device implementations
     'ChassisMaver',
     'ChassisMark2',
+    
+    # Optional device implementations
+    'Hands',
 
     # Arm configuration system
     'ArmConfig',

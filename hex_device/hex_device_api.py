@@ -13,11 +13,12 @@ from .common_utils import log_warn, log_info, log_err, log_common
 from .error_type import WsError, ProtocolError
 from .device_base import DeviceBase
 from .device_factory import DeviceFactory
+from .device_base_optional import OptionalDeviceBase
 
 import asyncio
 import threading
 import websockets
-from typing import Optional, Tuple, List, Type, Dict, Any
+from typing import Optional, Tuple, List, Type, Dict, Any, Union
 from websockets.exceptions import ConnectionClosed
 
 RAW_DATA_LEN = 50
@@ -49,8 +50,11 @@ class HexDeviceApi:
         # Internal device management (for task management and internal operations)
         self._internal_device_list = []  # Internal device list
         self._device_id_counter = 0  # Device ID counter
-        self._device_id_map = {}  # Device ID to device mapping
+        self._device_id_map: Dict[int, Union[DeviceBase, OptionalDeviceBase]] = {}  # Device ID to device mapping
         self._device_to_id_map = {}  # Device to ID reverse mapping
+        
+        # Optional device management
+        self._optional_device_list: List[OptionalDeviceBase] = []  # Optional device list
         
         # Device task management
         self._device_tasks = {}  # Store device IDs and their corresponding async tasks
@@ -118,6 +122,34 @@ class HexDeviceApi:
         
         return ReadOnlyDeviceList(self._internal_device_list)
 
+    @property
+    def optional_device_list(self):
+        """
+        User optional device list interface (read-only)
+        
+        Returns a read-only view of the optional device list, users cannot modify internal device management through this list
+        """
+        class ReadOnlyOptionalDeviceList:
+            def __init__(self, internal_list):
+                self._internal_list = internal_list
+            
+            def __getitem__(self, index):
+                return self._internal_list[index]
+            
+            def __len__(self):
+                return len(self._internal_list)
+            
+            def __iter__(self):
+                return iter(self._internal_list)
+            
+            def __contains__(self, item):
+                return item in self._internal_list
+            
+            def __repr__(self):
+                return f"ReadOnlyOptionalDeviceList({self._internal_list})"
+
+        return ReadOnlyOptionalDeviceList(self._optional_device_list)
+
     def _register_available_device_classes(self):
         """
         Automatically register available device classes
@@ -142,6 +174,13 @@ class HexDeviceApi:
             log_info("Registered ChassisMark2 device class")
         except ImportError as e:
             log_warn(f"Unable to import ChassisMark2: {e}")
+
+        try:
+            from .hands import Hands
+            self._register_device_class(Hands)
+            log_info("Registered Hands device class")
+        except ImportError as e:
+            log_warn(f"Unable to import Hands: {e}")
 
         # TODO: Add registration for more device classes
         # lift、rotate lift...
@@ -168,6 +207,21 @@ class HexDeviceApi:
         for device in self._internal_device_list:
             if hasattr(device,
                        'robot_type') and device.robot_type == robot_type:
+                return device
+        return None
+
+    def find_optional_device(self, message_type: str) -> Optional[OptionalDeviceBase]:
+        """
+        Find optional device by message_type
+        
+        Args:
+            message_type: Message type (e.g., 'hand_status', 'imu_data', 'gamepad_read')
+            
+        Returns:
+            Matching optional device or None
+        """
+        for device in self._optional_device_list:
+            if hasattr(device, 'supports_message_type') and device.supports_message_type(message_type):
                 return device
         return None
 
@@ -202,6 +256,38 @@ class HexDeviceApi:
 
         return device
 
+    def _create_and_register_optional_device(self, message_type: str, api_up) -> Optional[OptionalDeviceBase]:
+        """
+        Create and register optional device based on message_type
+        
+        Args:
+            message_type: Message type (e.g., 'hand_status', 'imu_data', 'gamepad_read')
+            api_up: API upstream data
+            
+        Returns:
+            Created optional device instance or None
+        """
+        device = self._device_factory.create_optional_device(
+            message_type,
+            send_message_callback=self._send_down_message,
+            api_up=api_up
+        )
+
+        if device:
+            # Add to optional device list
+            self._optional_device_list.append(device)
+
+            # Note: Optional devices don't need periodic tasks by _read_only
+            # They are updated only when data arrives
+            if not device._read_only:
+                device_id = self._device_id_counter
+                self._device_id_counter += 1
+                self._device_id_map[device_id] = device
+                self._device_to_id_map[device] = device_id
+                self._start_device_periodic_task(device_id)
+
+        return device
+
     def _start_device_periodic_task(self, device_id: int):
         """
         Start device periodic task
@@ -232,7 +318,7 @@ class HexDeviceApi:
         Args:
             device_id: Device ID
         """
-        device: DeviceBase = self._device_id_map.get(device_id)
+        device: Union[DeviceBase, OptionalDeviceBase] = self._device_id_map.get(device_id)
         if not device:
             log_err(f"Device with ID {device_id} not found in periodic runner")
             return
@@ -261,9 +347,12 @@ class HexDeviceApi:
         orphaned_count = 0
         tasks_to_remove = []
         
+        # Combine all device lists for checking
+        all_devices = self._internal_device_list + self._optional_device_list
+        
         for device_id, task in self._device_tasks.items():
             device = self._device_id_map.get(device_id)
-            if device and device not in self._internal_device_list:
+            if device and device not in all_devices:
                 log_warn(f"Found orphaned task: device ID {device_id} ({device.name})")
                 task.cancel()
                 tasks_to_remove.append(device_id)
@@ -345,9 +434,17 @@ class HexDeviceApi:
     async def _send_down_message(self, data: public_api_down_pb2.APIDown):
         msg = data.SerializeToString()
         if self.__websocket is None:
-            raise AttributeError("_send_down_message: websocket tx is None")
-        else:
+            # WebSocket is not connected, skip sending message
+            return
+        
+        try:
             await self.__websocket.send(msg)
+        except ConnectionClosed:
+            # Connection was closed during send, this is expected
+            pass
+        except Exception as e:
+            # Log other unexpected errors but don't raise to avoid spam
+            log_err(f"Failed to send message: {e}")
 
     async def __capture_data_frame(self) -> Optional[public_api_up_pb2.APIUp]:
         """
@@ -575,6 +672,74 @@ class HexDeviceApi:
                         log_warn(f"unknown device type: {robot_type_name}")
             else:
                 continue
+
+            # Process optional fields
+            self._process_optional_fields(api_up)
+
+    def _process_optional_fields(self, api_up):
+        """
+        Process optional fields in APIUp message
+        
+        Args:
+            api_up: APIUp message containing optional fields
+        """
+        # Define the mapping of optional field names to their data
+        optional_fields = [
+            ('hand_status', getattr(api_up, 'hand_status', None)),
+        ]
+        
+        for field_name, field_data in optional_fields:
+            # Check if the field has data
+            if field_data is not None and self._has_optional_field(api_up, field_name):
+                try:
+                    # Find existing device or create new one (similar to robot_type logic)
+                    optional_device = self.find_optional_device(field_name)
+                    
+                    if optional_device:
+                        # Update existing device
+                        success = optional_device._update_optional_data(field_name, field_data)
+                        if not success:
+                            log_warn(f"Failed to update optional device data for {field_name}")
+                    else:
+                        log_info(f"create new optional device: {field_name}")
+                        
+                        try:
+                            # Create and register new optional device
+                            optional_device = self._create_and_register_optional_device(field_name, api_up)
+                        except Exception as e:
+                            log_err(f"_create_and_register_optional_device error: {e}")
+                            continue
+                        
+                        if optional_device:
+                            # Update newly created device
+                            success = optional_device._update_optional_data(field_name, field_data)
+                            if not success:
+                                log_warn(f"Failed to update new optional device data for {field_name}")
+                        else:
+                            log_warn(f"unknown optional device type: {field_name}")
+                        
+                except Exception as e:
+                    log_err(f"Error processing optional field {field_name}: {e}")
+
+    def _has_optional_field(self, api_up, field_name: str) -> bool:
+        """
+        Check if APIUp message has the specified optional field
+        
+        Args:
+            api_up: APIUp message
+            field_name: Name of the optional field
+            
+        Returns:
+            bool: True if field exists and has data
+        """
+        try:
+            if hasattr(api_up, 'HasField'):
+                return api_up.HasField(field_name)
+            else:
+                # Fallback: check if attribute exists and is not None
+                return hasattr(api_up, field_name) and getattr(api_up, field_name) is not None
+        except Exception:
+            return False
 
     # data getter
     def get_raw_data(self) -> Tuple[public_api_up_pb2.APIUp, int]:

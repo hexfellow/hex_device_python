@@ -790,7 +790,7 @@ class MotorBase(ABC):
         else:
             raise ValueError(f"Unknown command type: {command_type}")
 
-        return self._construct_target_motor_msg(command)
+        return MotorBase._construct_target_motor_msg(self, self._pulse_per_rotation, command)
 
     def __str__(self) -> str:
         """String representation"""

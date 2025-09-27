@@ -26,7 +26,7 @@ from hex_device.motor_base import CommandType
 from hex_device.arm_archer import ArmArcher
 from hex_device.motor_base import MitMotorCommand
 from hex_device.chassis_mark2 import ChassisMark2
-
+from hex_device.hands import Hands
 from hex_device.motor_base import public_api_types_pb2
 
 def main():
@@ -192,6 +192,16 @@ def main():
                             # device.motor_command(
                             #     CommandType.MIT,
                             #     mit_commands)
+                    
+                for device in api.optional_device_list:
+                    if isinstance(device, Hands):
+                        if device.has_new_data():
+                            print(f"hands position: {device.get_motor_positions()}")
+                            device.motor_command(
+                                CommandType.TORQUE,
+                                [0.0] * device.motor_count
+                            )
+
 
             time.sleep(0.002)
 

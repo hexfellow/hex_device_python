@@ -78,7 +78,7 @@ class Hands(OptionalDeviceBase, MotorBase):
         self._config_lock = threading.Lock()
         if hand_type == public_api_types_pb2.HandType.HtGp100:
             self._hands_limit = [0.0, 1.335, -np.inf, np.inf, -np.inf, np.inf]
-            self._max_torque = 5.0
+            self._max_torque = 3.0
             self._positon_step = 0.02
         self._last_command_send = None
 

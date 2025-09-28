@@ -15,6 +15,7 @@ from .motor_base import MitMotorCommand, MotorBase, MotorError, MotorCommand, Co
 from .generated import public_api_down_pb2, public_api_up_pb2, public_api_types_pb2
 from copy import deepcopy
 from .generated.public_api_types_pb2 import (HandStatus)
+import threading
 
 
 class Hands(OptionalDeviceBase, MotorBase):
@@ -73,6 +74,14 @@ class Hands(OptionalDeviceBase, MotorBase):
         self._command_timeout = 0.3  # 300ms
         self.__last_warning_time = time.perf_counter()  # last log warning time
 
+        ## limit and step
+        self._config_lock = threading.Lock()
+        if hand_type == public_api_types_pb2.HandType.HtGp100:
+            self._pos_limit = [0.0, 1.335]
+            self._max_torque = 5.0
+            self._positon_step = 0.02
+        self._last_command_send = None
+
     def _get_supported_message_types(self) -> List[str]:
         """
         Get supported message types for Hands device
@@ -125,7 +134,7 @@ class Hands(OptionalDeviceBase, MotorBase):
             bool: Whether initialization was successful
         """
         try:
-            # TODO: 将机械爪子缓慢张开
+            self.motor_command(CommandType.POSITION, [0.0] * self.motor_count)
             return True
         except Exception as e:
             log_err(f"Hands initialization failed: {e}")
@@ -289,9 +298,32 @@ class Hands(OptionalDeviceBase, MotorBase):
         # Convert numpy array to list if needed
         if isinstance(values, np.ndarray):
             values = values.tolist()
+
+        # Convert MIT command to POSITION command
+        if command_type == CommandType.MIT:
+            values = [value.position for value in values]
+            command_type = CommandType.POSITION
         
+        # limit position
+        if command_type == CommandType.POSITION:
+            values = [max(min(value, self._pos_limit[1]), self._pos_limit[0]) for value in values]
+
         super().motor_command(command_type, values)
         self._last_command_time = time.perf_counter()
+
+    def set_positon_step(self, step: float):
+        """
+        Set position step
+        """
+        with self._config_lock:
+            self._positon_step = deepcopy(step)
+
+    def set_pos_torque(self, max_torque: float):
+        """
+        Set max torque
+        """
+        with self._config_lock:
+            self._max_torque = deepcopy(max_torque)
 
     def _construct_joint_command_msg(self) -> public_api_down_pb2.APIDown:
         """
@@ -299,7 +331,34 @@ class Hands(OptionalDeviceBase, MotorBase):
         """
         msg = public_api_down_pb2.APIDown()
         hand_command = public_api_types_pb2.HandCommand()
-        motor_targets = self._construct_target_motor_msg(self._pulse_per_rotation)
+        # limit the torque of position command
+        command = deepcopy(self._target_command)
+
+        if command.command_type == CommandType.POSITION:
+            # check the torque if valid
+            torques = self.get_motor_torques()
+            now_pos = self.get_motor_positions()
+            with self._config_lock:
+                positon_step = self._positon_step
+                max_torque = self._max_torque
+
+            if self._last_command_send is not None:
+                last_command = self._last_command_send
+            else:
+                last_command = MotorCommand.create_position_command(now_pos)
+
+            for i in range(self.motor_count):
+                err = np.clip(command.position_command[i] - last_command.position_command[i], -positon_step, positon_step)
+                if err > 0.0 and torques[i] < max_torque:
+                    command.position_command[i] = last_command.position_command[i] + err
+                elif err < 0.0 and torques[i] > -max_torque:
+                    command.position_command[i] = last_command.position_command[i] + err
+                else:
+                    # max torque or reach the target position
+                    command.position_command[i] = last_command.position_command[i]
+            self._last_command_send = deepcopy(command)
+
+        motor_targets = self._construct_target_motor_msg(self._pulse_per_rotation, command)
         hand_command.motor_targets.CopyFrom(motor_targets)
         msg.hand_command.CopyFrom(hand_command)
         return msg

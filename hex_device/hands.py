@@ -396,8 +396,8 @@ class Hands(OptionalDeviceBase, MotorBase):
         """Get hand type"""
         return deepcopy(self._hand_type)
 
-    def get_hands_limit(self) -> List[float]:
-        """Get hands position limit"""
+    def get_joint_limits(self) -> List[float]:
+        """Get hands joint limits"""
         return deepcopy(self._hands_limit)
 
     def get_hands_summary(self) -> dict:

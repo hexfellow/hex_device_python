@@ -77,7 +77,7 @@ class Hands(OptionalDeviceBase, MotorBase):
         ## limit and step
         self._config_lock = threading.Lock()
         if hand_type == public_api_types_pb2.HandType.HtGp100:
-            self._pos_limit = [0.0, 1.335]
+            self._hands_limit = [0.0, 1.335, -np.inf, np.inf, -np.inf, np.inf]
             self._max_torque = 5.0
             self._positon_step = 0.02
         self._last_command_send = None
@@ -306,7 +306,7 @@ class Hands(OptionalDeviceBase, MotorBase):
         
         # limit position
         if command_type == CommandType.POSITION:
-            values = [max(min(value, self._pos_limit[1]), self._pos_limit[0]) for value in values]
+            values = [max(min(value, self._hands_limit[1]), self._hands_limit[0]) for value in values]
 
         super().motor_command(command_type, values)
         self._last_command_time = time.perf_counter()
@@ -395,6 +395,10 @@ class Hands(OptionalDeviceBase, MotorBase):
     def get_hand_type(self) -> int:
         """Get hand type"""
         return deepcopy(self._hand_type)
+
+    def get_hands_limit(self) -> List[float]:
+        """Get hands position limit"""
+        return deepcopy(self._hands_limit)
 
     def get_hands_summary(self) -> dict:
         """

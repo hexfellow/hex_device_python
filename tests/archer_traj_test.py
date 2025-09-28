@@ -205,8 +205,8 @@ def main():
                         if device.has_new_data():
                             if hands_first_time:
                                 hands_first_time = False
-                                device.set_positon_step(0.05)
-                                device.set_pos_torque(0.1)
+                                device.set_positon_step(0.02)
+                                device.set_pos_torque(3.0)
                                 
                             current_positions = device.get_motor_positions()
                             print(f"hands position: {current_positions}")

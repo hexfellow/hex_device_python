@@ -299,11 +299,6 @@ class Hands(OptionalDeviceBase, MotorBase):
         if isinstance(values, np.ndarray):
             values = values.tolist()
 
-        # Convert MIT command to POSITION command
-        if command_type == CommandType.MIT:
-            values = [value.position for value in values]
-            command_type = CommandType.POSITION
-        
         # limit position
         if command_type == CommandType.POSITION:
             values = [max(min(value, self._hands_limit[1]), self._hands_limit[0]) for value in values]

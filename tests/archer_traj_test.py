@@ -10,7 +10,7 @@ sys.path.insert(
 
 from hex_device import HexDeviceApi
 import time
-from hex_device.chassis_maver import ChassisMaver
+from hex_device.chassis import Chassis
 from hex_device.motor_base import CommandType
 from hex_device.arm_archer import ArmArcher
 from hex_device.motor_base import MitMotorCommand
@@ -222,16 +222,16 @@ def main():
                             
                             # For hands, only support the position mode or mit mode, also mit mode only read the position data.
                             # example 1:
-                            mit_commands = device.construct_mit_command(
-                                target_positions, 
-                                [0.0], 
-                                [0.0], 
-                                [0.0], 
-                                [0.0]
-                            )
-                            device.motor_command(
-                                CommandType.MIT,
-                                mit_commands)
+                            # mit_commands = device.construct_mit_command(
+                            #     target_positions, 
+                            #     [0.0], 
+                            #     [0.0], 
+                            #     [0.0], 
+                            #     [0.0]
+                            # )
+                            # device.motor_command(
+                            #     CommandType.MIT,
+                            #     mit_commands)
 
                             # example 2:
                             # device.motor_command(

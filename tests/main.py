@@ -21,11 +21,10 @@ sys.path.insert(
 import hex_device
 from hex_device import HexDeviceApi
 import time
-from hex_device.chassis_maver import ChassisMaver
+from hex_device.chassis import Chassis
 from hex_device.motor_base import CommandType
 from hex_device.arm_archer import ArmArcher
 from hex_device.motor_base import MitMotorCommand
-from hex_device.chassis_mark2 import ChassisMark2
 from hex_device.hands import Hands
 from hex_device.motor_base import public_api_types_pb2
 
@@ -38,7 +37,7 @@ def main():
     parser.add_argument(
         '--url', 
         metavar='URL',
-        default="ws://172.18.8.161:8439",
+        default="ws://0.0.0.0:8439",
         help='WebSocket URL for HEX device connection'
     )
     parser.add_argument(
@@ -49,13 +48,17 @@ def main():
     )
     args = parser.parse_args()
     
-    # 设置日志等级
+    # Set log level
     hex_device.set_log_level(args.log_level)
     print(f"Log level set to: {args.log_level}")
     
     # Init HexDeviceApi
     api = HexDeviceApi(ws_url=args.url, control_hz=250)
     first_time = True
+    
+    # Enable/Disable loop test variable
+    enable_disable_start_time = time.time()
+    is_enabled = True
 
     try:
         while True:
@@ -63,9 +66,15 @@ def main():
                 print("Public API has exited.")
                 break
             else:
+                # Enable/Disable loop test logic
+                elapsed_time = time.time() - enable_disable_start_time
+                if elapsed_time >= 5.0:
+                    is_enabled = not is_enabled
+                    enable_disable_start_time = time.time()
+                
                 for device in api.device_list:
                     # for ChassisMaver
-                    if isinstance(device, ChassisMaver):
+                    if isinstance(device, Chassis):
                         if device.has_new_data():
                             if first_time:
                                 first_time = False
@@ -75,29 +84,18 @@ def main():
                             print(
                                 f"vehicle position: {device.get_vehicle_position()}"
                             )
-                            device.enable()
+                            
+                            # # Enable/Disable loop test
+                            # if is_enabled:
+                            #     device.enable()
+                            #     print(f"Chassis enabled")
+                            # else:
+                            #     device.disable()
+                            #     print(f"Chassis disabled")
                             
                             ## command, Please select one of the following commands.
-                            # device.set_vehicle_speed(0.0, 0.0, 0.0)
-                            # device.motor_command(CommandType.SPEED, [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5])
-
-                    # for ChassisMark2
-                    if isinstance(device, ChassisMark2):
-                        if device.has_new_data():
-                            if first_time:
-                                first_time = False
-                                device.clear_odom_bias()
-
-                            # device.get_device_summary()
-                            print(
-                                f"vehicle position: {device.get_vehicle_position()}"
-                            )
-                            device.enable()
-                            # device.disable()
-
-                            ## command, Please select one of the following commands.
-                            # device.set_vehicle_speed(0.1, 0.0, 0.0)
-                            # device.motor_command(CommandType.SPEED, [0.4, 0.4])
+                            device.set_vehicle_speed(0.0, 0.0, 0.1)
+                            # device.motor_command(CommandType.SPEED, [0.5] * len(device))
 
                     # for ArmArcher
                     elif isinstance(device, ArmArcher):

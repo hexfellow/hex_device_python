@@ -12,6 +12,7 @@ This library provides a simple interface for communicating with and controlling 
 - [✅] **[ChassisMaver](#chassis_maver)**
 - [✅] **[ChassisMark2](#chassis_mark2)**
 - [✅] **[ArmArcher](#arm_archer)**
+- [✅] **[HandsHtGp100](#hands)**
 - [-] **[hex_lift](#hex_lift)**
 
 
@@ -105,25 +106,20 @@ try:
             break
         else:
             for device in api.device_list:
-                # for ChassisMaver
                 if isinstance(device, ChassisMaver):
                     if device.has_new_data():
                         if first_time:
                             first_time = False
                             device.clear_odom_bias()
                         print(device.get_device_summary())
-                        print(
-                            f"vehicle position: {device.get_vehicle_position()}"
-                        )
+                        print(f"vehicle position: {device.get_vehicle_position()}")
                         device.set_vehicle_speed(0.0, 0.0, 0.0)
         time.sleep(0.004)
 except KeyboardInterrupt:
     print("Received Ctrl-C.")
     api.close()
 finally:
-    pass
-
-print("Resources have been cleaned up.")
+    print("Resources have been cleaned up.")
 exit(0)
 ```
 
@@ -145,9 +141,7 @@ try:
                             device.clear_odom_bias()
 
                         print(device.get_device_summary())
-                        print(
-                            f"vehicle position: {device.get_vehicle_position()}"
-                        )
+                        print(f"vehicle position: {device.get_vehicle_position()}")
                         ## command, Please select one of the following commands.
                         device.set_vehicle_speed(0.0, 0.0, 0.0)
                         # device.motor_command(CommandType.SPEED, [0.4, 0.4])
@@ -156,9 +150,7 @@ except KeyboardInterrupt:
     print("Received Ctrl-C.")
     api.close()
 finally:
-    pass
-
-print("Resources have been cleaned up.")
+    print("Resources have been cleaned up.")
 exit(0)
 ```
 
@@ -180,7 +172,6 @@ try:
             break
         else:
             for device in api.device_list:
-                # for ArmArcher
                 if isinstance(device, ArmArcher):
                     print(device.get_device_summary())
                     print(f"motor position: {device.get_motor_positions()}")
@@ -192,9 +183,36 @@ except KeyboardInterrupt:
     print("Received Ctrl-C.")
     api.close()
 finally:
-    pass
+    print("Resources have been cleaned up.")
+exit(0)
+```
 
-print("Resources have been cleaned up.")
+### <a name="hands"></a> For hands <small><sup>[overview ▲](#overview)</sup></small>
+```python
+api = HexDeviceApi(ws_url="ws://<device ip>:8439", control_hz=250)
+hands = None
+while hands == None:
+    hands = api.find_optional_device('hand_status')
+    time.sleep(0.1)
+try:
+    while True:
+        if api.is_api_exit():
+            print("Public API has exited.")
+            break
+        else:
+            if hands:
+                if hands.has_new_data():
+                    print(device.get_device_summary())
+                    print(f"motor position: {device.get_motor_positions()}")
+                    device.motor_command(
+                        CommandType.POSITION,
+                        [0.0])
+        time.sleep(0.004)
+except KeyboardInterrupt:
+    print("Received Ctrl-C.")
+    api.close()
+finally:
+    print("Resources have been cleaned up.")
 exit(0)
 ```
 

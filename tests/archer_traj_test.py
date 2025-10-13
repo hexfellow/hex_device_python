@@ -14,6 +14,7 @@ from hex_device.chassis_maver import ChassisMaver
 from hex_device.motor_base import CommandType
 from hex_device.arm_archer import ArmArcher
 from hex_device.motor_base import MitMotorCommand
+from hex_device.hands import Hands
 
 TRAJ_TIME = 3
 SPEED = 0.5
@@ -115,6 +116,7 @@ def main():
     # Init HexDeviceApi
     api = HexDeviceApi(ws_url=args.url, control_hz=250)
     first_time = True
+    hands_first_time = True
 
     arm_position = [
         [0.0, 0.223598775598, 0.0, 0.0, 0.0, 0.0],
@@ -198,7 +200,46 @@ def main():
                                             loop_counter += 1
                                             print(f"--- Completed trajectory loop {loop_counter} ---")
 
-            time.sleep(0.001)
+                for device in api.optional_device_list:
+                    if isinstance(device, Hands):
+                        if device.has_new_data():
+                            if hands_first_time:
+                                hands_first_time = False
+                                device.set_positon_step(0.02)
+                                device.set_pos_torque(3.0)
+                                
+                            current_positions = device.get_motor_positions()
+                            print(f"hands position: {current_positions}")
+                            
+                            # Create sinusoidal motion for smooth interpolation
+                            t = time.time()
+                            interpolation_factor = (math.sin(t * 0.5) + 1.0) / 2.0  # 0 to 1
+                            # eventhough the range is [-1.56, 1.57], the command will limit the position to the range [0.0, 1.335]
+                            min_pos = -1.56
+                            target_position = min_pos + interpolation_factor * (1.57 - min_pos)
+                            # Apply to first motor (or all motors if desired)
+                            target_positions = [target_position] + [0.0] * (device.motor_count - 1)
+                            
+                            # For hands, only support the position mode or mit mode, also mit mode only read the position data.
+                            # example 1:
+                            mit_commands = device.construct_mit_command(
+                                target_positions, 
+                                [0.0], 
+                                [0.0], 
+                                [0.0], 
+                                [0.0]
+                            )
+                            device.motor_command(
+                                CommandType.MIT,
+                                mit_commands)
+
+                            # example 2:
+                            # device.motor_command(
+                            #     CommandType.POSITION,
+                            #     target_positions
+                            # )
+
+            time.sleep(0.002)
 
     except KeyboardInterrupt:
         print("Received Ctrl-C.")

@@ -50,11 +50,12 @@ class DeviceBase(ABC):
         Args:
             msg: Message object to send
         """
-        if self._send_message_callback:
-            await self._send_message_callback(msg)
-        else:
-            raise AttributeError(
-                "send_message: send_message_callback is not set")
+        if msg is not None:
+            if self._send_message_callback:
+                await self._send_message_callback(msg)
+            else:
+                raise AttributeError(
+                    "send_message: send_message_callback is not set")
 
     def set_has_new_data(self):
         with self._data_lock:

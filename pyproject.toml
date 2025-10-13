@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hex_device"
-version = "1.0.0"
+version = "1.1.2"
 dependencies = [
   "numpy>=1.17.4",
   "protobuf>=5.29.4,<6.0.0",

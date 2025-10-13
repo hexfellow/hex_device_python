@@ -155,11 +155,11 @@ class HexDeviceApi:
         Automatically register available device classes
         """
         try:
-            from .chassis_maver import ChassisMaver
-            self._register_device_class(ChassisMaver)
-            log_info("Registered ChassisMaver device class")
+            from .chassis import Chassis
+            self._register_device_class(Chassis)
+            log_info("Registered Chassis device class")
         except ImportError as e:
-            log_warn(f"Unable to import ChassisMaver: {e}")
+            log_warn(f"Unable to import Chassis: {e}")
 
         try:
             from .arm_archer import ArmArcher
@@ -167,13 +167,6 @@ class HexDeviceApi:
             log_info("Registered ArmArcher device class")
         except ImportError as e:
             log_warn(f"Unable to import ArmArcher: {e}")
-
-        try:
-            from .chassis_mark2 import ChassisMark2
-            self._register_device_class(ChassisMark2)
-            log_info("Registered ChassisMark2 device class")
-        except ImportError as e:
-            log_warn(f"Unable to import ChassisMark2: {e}")
 
         try:
             from .hands import Hands
@@ -520,7 +513,7 @@ class HexDeviceApi:
                                                         close_timeout=5)
         except Exception as e:
             log_err(f"Failed to open WebSocket connection: {e}")
-            log_common(
+            log_err(
                 "Public API haved exited, please check your network connection and restart the server again."
             )
             exit(1)

@@ -188,18 +188,15 @@ class DeviceFactory:
 
         if class_name == 'ArmArcher':
             params['robot_type'] = robot_type
+            params['name'] = f"ArmArcher_{robot_type}"
             # Get motor_count from api_up
             motor_count = self._get_motor_count_from_api_up(api_up)
             if motor_count is not None:
                 params['motor_count'] = motor_count
 
-        elif class_name == 'ChassisMaver':
-            # Get motor_count from api_up
-            motor_count = self._get_motor_count_from_api_up(api_up)
-            if motor_count is not None:
-                params['motor_count'] = motor_count
-
-        elif class_name == 'ChassisMark2':
+        elif class_name == 'Chassis':
+            params['name'] = f"Chassis_{robot_type}"
+            params['robot_type'] = robot_type
             # Get motor_count from api_up
             motor_count = self._get_motor_count_from_api_up(api_up)
             if motor_count is not None:

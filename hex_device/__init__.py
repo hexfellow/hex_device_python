@@ -95,8 +95,7 @@ from .motor_base import (
 )
 
 # Device implementations
-from .chassis_maver import ChassisMaver
-from .chassis_mark2 import ChassisMark2
+from .chassis import Chassis
 
 # Optional device implementations
 from .hands import Hands
@@ -140,8 +139,7 @@ __all__ = [
     'MitMotorCommand',
     
     # Device implementations
-    'ChassisMaver',
-    'ChassisMark2',
+    'Chassis',
     
     # Optional device implementations
     'Hands',

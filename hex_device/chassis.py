@@ -88,6 +88,7 @@ class Chassis(DeviceBase, MotorBase):
         self._vehicle_position = (0.0, 0.0, 0.0)  # (x, y, yaw) m, m, rad
 
         # Control related
+        self.__send_init: Optional[bool] = None
         self._last_command_time = None
         self._command_timeout = 0.1  # 100ms timeout
         self.__last_warning_time = time.perf_counter()  # Add warning time attribute
@@ -120,6 +121,21 @@ class Chassis(DeviceBase, MotorBase):
         """
         return robot_type in cls.SUPPORTED_ROBOT_TYPES
 
+    def start(self):
+        """
+        Start to control chassis
+        
+        """
+        print(f"Start to control chassis")
+        self.__send_init = True
+    
+    def stop(self):
+        """
+        Stop to control chassis
+        
+        """
+        self.__send_init = False
+
     async def _init(self) -> bool:
         """
         Initialize chassis
@@ -128,9 +144,6 @@ class Chassis(DeviceBase, MotorBase):
             bool: Whether initialization was successful
         """
         try:
-            msg = self._construct_init_message()
-            await self._send_message(msg)
-            self.set_has_new_data()
             return True
         except Exception as e:
             log_err(f"Chassis initialization failed: {e}")
@@ -279,65 +292,72 @@ class Chassis(DeviceBase, MotorBase):
                         )
                         self.__last_warning_time = start_time
 
+                # Check motor status
+                if start_time - self.__last_warning_time > 1.0:
+                    for i in range(self.motor_count):
+                        if self.get_motor_state(i) == "error":
+                            log_err(f"Error: Motor {i} error occurred")
+                    self.__last_warning_time = start_time
+
+                # Check if send init message
+                if self.__send_init == True:
+                    msg = self._construct_init_message(True)
+                    await self._send_message(msg)
+                    self.__send_init = None
+                elif self.__send_init == False:
+                    msg = self._construct_init_message(False)
+                    await self._send_message(msg)
+                    self._simple_control_mode = None
+                    self.__send_init = None
+
                 if self._api_control_initialized == False:
                     # if not simple control mode and target zero resistance, it means the vehicle is in zero resistance state
                     if self._simple_control_mode == False and self._target_zero_resistance == True:
                         pass
                     else:
                         if start_time - self.__last_warning_time > 1.0:
-                            log_err(
-                                f"api_control_initialized state was exit, please check the vehicle and restart the api."
+                            log_warn(
+                                f"Chassis is not started."
                             )
                             self.__last_warning_time = start_time
-
-                # Check motor status
-                if start_time - self.__last_warning_time > 1.0:
-                    for i in range(self.motor_count):
-                        if self.get_motor_state(i) == "error":
-                            log_err(f"Warning: Motor {i} error occurred")
-                    self.__last_warning_time = start_time
-
+                else:
                 # send control message
-                if self._simple_control_mode == True:
-                    if self._target_zero_resistance:
-                        msg = self._construct_zero_resistance_message(
-                            True, True)
-                        await self._send_message(msg)
-                    else:
-                        msg = self._construct_zero_resistance_message(
-                            False, True)
-                        await self._send_message(msg)
-
-                        if start_time - self._last_command_time > self._command_timeout:
-                            msg = self._construct_simple_control_message(
-                                (0.0, 0.0, 0.0))
+                    if self._simple_control_mode == True:
+                        if self._target_zero_resistance:
+                            msg = self._construct_zero_resistance_message(
+                                True, True)
+                            await self._send_message(msg)
                         else:
-                            msg = self._construct_simple_control_message(
-                                self._target_velocity)
-                        await self._send_message(msg)
+                            msg = self._construct_zero_resistance_message(
+                                False, True)
+                            await self._send_message(msg)
 
-                elif self._simple_control_mode == False:
-                    if self._target_zero_resistance:
-                        msg = self._construct_zero_resistance_message(
-                            True, False)
-                        await self._send_message(msg)
-                    else:
-                        msg = self._construct_zero_resistance_message(
-                            False, False)
-                        await self._send_message(msg)
+                            if start_time - self._last_command_time > self._command_timeout:
+                                msg = self._construct_simple_control_message(
+                                    (0.0, 0.0, 0.0))
+                            else:
+                                msg = self._construct_simple_control_message(
+                                    self._target_velocity)
+                            await self._send_message(msg)
 
-                        if start_time - self._last_command_time > self._command_timeout:
-                            self.motor_command(
-                                CommandType.BRAKE,
-                                [0.0 * self.motor_count])
-                            msg = self._construct_wheel_control_message()
+                    elif self._simple_control_mode == False:
+                        if self._target_zero_resistance:
+                            msg = self._construct_zero_resistance_message(
+                                True, False)
+                            await self._send_message(msg)
                         else:
-                            msg = self._construct_wheel_control_message()
-                        await self._send_message(msg)
+                            msg = self._construct_zero_resistance_message(
+                                False, False)
+                            await self._send_message(msg)
 
-                elif self._simple_control_mode is None:
-                    msg = self._construct_init_message()
-                    await self._send_message(msg)
+                            if start_time - self._last_command_time > self._command_timeout:
+                                self.motor_command(
+                                    CommandType.BRAKE,
+                                    [0.0 * self.motor_count])
+                                msg = self._construct_wheel_control_message()
+                            else:
+                                msg = self._construct_wheel_control_message()
+                            await self._send_message(msg)
 
             except Exception as e:
                 log_err(f"Chassis periodic failed: {e}")
@@ -518,13 +538,13 @@ class Chassis(DeviceBase, MotorBase):
             msg.base_command.CopyFrom(base_command)
         return msg
 
-    def _construct_init_message(self) -> public_api_down_pb2.APIDown:
+    def _construct_init_message(self, api_control_initialize: bool) -> public_api_down_pb2.APIDown:
         """
         @brief: For constructing a init message.
         """
         msg = public_api_down_pb2.APIDown()
         base_command = public_api_types_pb2.BaseCommand()
-        base_command.api_control_initialize = True
+        base_command.api_control_initialize = api_control_initialize
         msg.base_command.CopyFrom(base_command)
         return msg
 

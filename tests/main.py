@@ -78,6 +78,7 @@ def main():
                         if device.has_new_data():
                             if first_time:
                                 first_time = False
+                                device.start()
                                 device.clear_odom_bias()
 
                             # device.get_device_summary()
@@ -205,6 +206,10 @@ def main():
 
     except KeyboardInterrupt:
         print("Received Ctrl-C.")
+        for device in api.device_list:
+            if isinstance(device, Chassis):
+                device.stop()
+                time.sleep(0.1)
         api.close()
     finally:
         pass

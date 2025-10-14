@@ -12,7 +12,7 @@ from hex_device import HexDeviceApi
 import time
 from hex_device.chassis import Chassis
 from hex_device.motor_base import CommandType
-from hex_device.arm_archer import ArmArcher
+from hex_device.arm import Arm
 from hex_device.motor_base import MitMotorCommand
 from hex_device.hands import Hands
 
@@ -146,7 +146,7 @@ def main():
                 break
             else:
                 for device in api.device_list:
-                    if isinstance(device, ArmArcher):
+                    if isinstance(device, Arm):
                         if device.has_new_data():
                             if first_time:
                                 first_time = False
@@ -156,7 +156,7 @@ def main():
                                     'motor_model': [0x80] * 6,
                                     'joints': [{
                                         'joint_name': 'joint_1',
-                                        'joint_limit': [-2.7, 3.1, -0.1, 0.1, 0.0, 0.0]
+                                        'joint_limit': [-2.7, 2.7, -0.1, 0.1, 0.0, 0.0]
                                     }, {
                                         'joint_name': 'joint_2',
                                         'joint_limit': [-1.57, 2.094, -SPEED, SPEED, 0.0, 0.0]

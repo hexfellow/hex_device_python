@@ -18,15 +18,12 @@ from .arm_config import get_arm_config, ArmConfig, arm_config_manager
 from copy import deepcopy
 
 
-class ArmArcher(DeviceBase, MotorBase):
+class Arm(DeviceBase, MotorBase):
     """
-    ArmArcher class
+    Arm class
 
-    Inherits from DeviceBase and MotorBase, mainly implements control of ArmArcher
+    Inherits from DeviceBase and MotorBase, mainly implements control of Arm
 
-    Supported robot types:
-    - RtArmSaberD6X: Custom PCW vehicle
-    - RtArmSaberD7X: PCW vehicle
     """
 
     SUPPORTED_ROBOT_TYPES = [
@@ -48,7 +45,7 @@ class ArmArcher(DeviceBase, MotorBase):
     def __init__(self,
                  robot_type,
                  motor_count,
-                 name: str = "ArmArcher",
+                 name: str = "Arm",
                  control_hz: int = 500,
                  send_message_callback=None):
         """
@@ -64,7 +61,7 @@ class ArmArcher(DeviceBase, MotorBase):
         DeviceBase.__init__(self, name, send_message_callback)
         MotorBase.__init__(self, motor_count, name)
 
-        self.name = name or "ArmArcher"
+        self.name = name or "Arm"
         self._control_hz = control_hz
         self._period = 1.0 / control_hz
         self._arm_series = robot_type
@@ -120,7 +117,7 @@ class ArmArcher(DeviceBase, MotorBase):
             await self._send_message(msg)
             return True
         except Exception as e:
-            log_err(f"ArmArcher initialization failed: {e}")
+            log_err(f"Arm initialization failed: {e}")
             return False
 
     def _update(self, api_up_data) -> bool:
@@ -154,7 +151,7 @@ class ArmArcher(DeviceBase, MotorBase):
             self.set_has_new_data()
             return True
         except Exception as e:
-            log_err(f"ArmArcher data update failed: {e}")
+            log_err(f"Arm data update failed: {e}")
             return False
 
     def _update_motor_data_from_arm_status(self, arm_status: ArmStatus):
@@ -225,7 +222,7 @@ class ArmArcher(DeviceBase, MotorBase):
         self.__last_warning_time = start_time
 
         await self._init()
-        log_info("ArmArcher init success")
+        log_info("Arm init success")
         while True:
             await delay(start_time, cycle_time)
             start_time = time.perf_counter()
@@ -270,7 +267,7 @@ class ArmArcher(DeviceBase, MotorBase):
                             msg = self._construct_custom_joint_command_msg(motor_msg)
                             await self._send_message(msg)
                         except Exception as e:
-                            log_err(f"ArmArcher failed to construct custom joint command message: {e}")
+                            log_err(f"Arm failed to construct custom joint command message: {e}")
                             continue
                     # normal command
                     else:
@@ -278,11 +275,11 @@ class ArmArcher(DeviceBase, MotorBase):
                             msg = self._construct_joint_command_msg()
                             await self._send_message(msg)
                         except Exception as e:
-                            log_err(f"ArmArcher failed to construct joint command message: {e}")
+                            log_err(f"Arm failed to construct joint command message: {e}")
                             continue
 
             except Exception as e:
-                log_err(f"ArmArcher periodic task exception: {e}")
+                log_err(f"Arm periodic task exception: {e}")
                 continue
 
     # Robotic arm specific methods
@@ -437,9 +434,9 @@ class ArmArcher(DeviceBase, MotorBase):
             current_positions = self.get_motor_positions()
             if len(current_positions) == len(positions):
                 arm_config_manager.set_last_positions(self._arm_series, current_positions)
-                log_common(f"ArmArcher: Initialize current motor positions: {current_positions}")
+                log_common(f"Arm: Initialize current motor positions: {current_positions}")
             else:
-                log_warn(f"ArmArcher: Current motor positions count({len(current_positions)}) does not match the target positions count({len(positions)})")
+                log_warn(f"Arm: Current motor positions count({len(current_positions)}) does not match the target positions count({len(positions)})")
         
         return arm_config_manager.validate_joint_positions(
             self._arm_series, positions, dt)
@@ -491,12 +488,12 @@ class ArmArcher(DeviceBase, MotorBase):
             success = arm_config_manager.reload_from_dict(
                 self._arm_series, config_data)
             if success:
-                log_common(f"ArmArcher: reload arm config success: {config_data.get('name', 'unknown')}")
+                log_common(f"Arm: reload arm config success: {config_data.get('name', 'unknown')}")
             else:
-                log_err(f"ArmArcher: reload arm config from dict failed: {config_data.get('name', 'unknown')}")
+                log_err(f"Arm: reload arm config from dict failed: {config_data.get('name', 'unknown')}")
             return success
         except Exception as e:
-            log_err(f"ArmArcher: reload arm config from dict exception: {e}")
+            log_err(f"Arm: reload arm config from dict exception: {e}")
             return False
 
     def set_initial_positions(self, positions: List[float]):

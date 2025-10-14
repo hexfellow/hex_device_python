@@ -12,6 +12,7 @@ This library provides a simple interface for communicating with and controlling 
 - [✅] **[ChassisMaver](#chassis_maver)**
 - [✅] **[ChassisMark2](#chassis_mark2)**
 - [✅] **[ArmArcher](#arm_archer)**
+- [✅] **[ArmSaber](#arm_saber)**
 - [✅] **[HandsHtGp100](#hands)**
 - [-] **[hex_lift](#hex_lift)**
 
@@ -93,9 +94,11 @@ If you prefer to run the library without installing it in your Python environmen
 
 ## Usage
 
-> **The detailed function interfaces can be found in our [wiki](https://github.com/hexfellow/hex_device_python/wiki/API-List).**
+> **The complete function interfaces can be found in our [wiki](https://github.com/hexfellow/hex_device_python/wiki/API-List).**
 
-A simple test demo: [test/main.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/main.py)
+- A simple demo for all device: [test/main.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/main.py)
+
+- Example of robotic arm trajectory tracking: [test/archer_traj_test.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/archer_traj_test.py)
 
 --- 
 

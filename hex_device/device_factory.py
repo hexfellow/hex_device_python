@@ -186,7 +186,7 @@ class DeviceFactory:
         # Extract different parameters based on device class name
         class_name = device_class.__name__
 
-        if class_name == 'ArmArcher':
+        if class_name == 'Arm':
             params['robot_type'] = robot_type
             params['name'] = f"ArmArcher_{robot_type}"
             # Get motor_count from api_up

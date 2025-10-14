@@ -23,10 +23,9 @@ from hex_device import HexDeviceApi
 import time
 from hex_device.chassis import Chassis
 from hex_device.motor_base import CommandType
-from hex_device.arm_archer import ArmArcher
+from hex_device.arm import Arm
 from hex_device.motor_base import MitMotorCommand
 from hex_device.hands import Hands
-from hex_device.motor_base import public_api_types_pb2
 
 def main():
     # Parse command line arguments
@@ -98,8 +97,8 @@ def main():
                             device.set_vehicle_speed(0.0, 0.0, 0.1)
                             # device.motor_command(CommandType.SPEED, [0.5] * len(device))
 
-                    # for ArmArcher
-                    elif isinstance(device, ArmArcher):
+                    # for Arm
+                    elif isinstance(device, Arm):
                         if device.has_new_data():
                             if first_time:
                                 first_time = False
@@ -131,9 +130,9 @@ def main():
                                     exit(1)
 
                                 device.command_timeout_check(False)
-                                device.motor_command(
-                                    CommandType.SPEED,
-                                    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+                                # device.motor_command(
+                                #     CommandType.SPEED,
+                                #     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
                                 # cmd = np.array([-0.3, -1.55, 3.0, 0.0, 0.0, 0.0])
                                 # device.motor_command(
@@ -151,9 +150,9 @@ def main():
                             #     CommandType.POSITION,
                             #     [-0.3, -1.48, 2.86, 0.0, 0.0, 0.0])
 
-                            # device.motor_command(
-                            #     CommandType.TORQUE,
-                            #     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+                            device.motor_command(
+                                CommandType.TORQUE,
+                                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
                             # device.motor_command(
                             #     CommandType.SPEED,

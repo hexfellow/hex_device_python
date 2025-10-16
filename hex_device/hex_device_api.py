@@ -162,11 +162,11 @@ class HexDeviceApi:
             log_warn(f"Unable to import Chassis: {e}")
 
         try:
-            from .arm_archer import ArmArcher
-            self._register_device_class(ArmArcher)
-            log_info("Registered ArmArcher device class")
+            from .arm import Arm
+            self._register_device_class(Arm)
+            log_info("Registered Arm device class")
         except ImportError as e:
-            log_warn(f"Unable to import ArmArcher: {e}")
+            log_warn(f"Unable to import Arm: {e}")
 
         try:
             from .hands import Hands

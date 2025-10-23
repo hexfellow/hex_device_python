@@ -30,17 +30,12 @@ class Chassis(DeviceBase, MotorBase):
     Inherits from DeviceBase and MotorBase, mainly implements mapping to BaseStatus
     This class corresponds to BaseStatus in proto, managing chassis status and motor control
     
-    Supported robot types:
-    - RtCustomPcwVehicle: Custom PCW vehicle
-    - RtPcwVehicle: PCW vehicle
-    - RtArk2LrDriver: Chassis Mark2
-    - RtTripleOmniWheelLRDriver: Triple Omni Wheel LR Driver
     """
 
     SUPPORTED_ROBOT_TYPES = [
         public_api_types_pb2.RobotType.RtTripleOmniWheelLRDriver,
         public_api_types_pb2.RobotType.RtCustomPcwVehicle,
-        public_api_types_pb2.RobotType.RtPcwVehicle,
+        public_api_types_pb2.RobotType.RtMaverX4,
         public_api_types_pb2.RobotType.RtArk2LrDriver,
     ]
 

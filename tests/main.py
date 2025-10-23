@@ -209,6 +209,9 @@ def main():
             if isinstance(device, Chassis):
                 device.stop()
                 time.sleep(0.1)
+            elif isinstance(device, Arm):
+                device.stop()
+                time.sleep(0.1)
         api.close()
     finally:
         pass

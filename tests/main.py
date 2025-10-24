@@ -13,10 +13,10 @@ import argparse
 import numpy as np
 import logging
 
-sys.path.insert(1, '<your project path>/hex_device_python')
+sys.path.insert(1, '/Users/jecjune/Downloads/python/hex_device/hex_device_python')
 sys.path.insert(
     1,
-    '<your project path>/hex_device_python/hex_device/generated')
+    '/Users/jecjune/Downloads/python/hex_device/hex_device_python/hex_device/generated')
 
 import hex_device
 from hex_device import HexDeviceApi
@@ -36,7 +36,7 @@ def main():
     parser.add_argument(
         '--url', 
         metavar='URL',
-        default="ws://0.0.0.0:8439",
+        default="ws://172.18.23.18:8439",
         help='WebSocket URL for HEX device connection'
     )
     parser.add_argument(
@@ -77,6 +77,7 @@ def main():
                         if device.has_new_data():
                             if first_time:
                                 first_time = False
+                                # Must start device before using it.
                                 device.start()
                                 device.clear_odom_bias()
 
@@ -102,6 +103,8 @@ def main():
                         if device.has_new_data():
                             if first_time:
                                 first_time = False
+                                # Must start device before using it.
+                                device.start()
                                 config_dict = {
                                     'name':'Archer_d6y',
                                     'dof_num': 'six_axis',
@@ -146,13 +149,14 @@ def main():
 
                             ## command, Please select one of the following commands.
                             ## warning!!!! Only position command is limit position & speed.Only speed command is limit speed & acc.
+
                             # device.motor_command(
                             #     CommandType.POSITION,
                             #     [-0.3, -1.48, 2.86, 0.0, 0.0, 0.0])
 
-                            device.motor_command(
-                                CommandType.TORQUE,
-                                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+                            # device.motor_command(
+                            #     CommandType.TORQUE,
+                            #     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
                             # device.motor_command(
                             #     CommandType.SPEED,
@@ -186,7 +190,6 @@ def main():
                             #     [150.0, 150.0, 150.0, 150.0, 39.0, 39.0], 
                             #     [12.0, 12.0, 12.0, 12.0, 0.8, 0.8]
                             # )
-
                             # device.motor_command(
                             #     CommandType.MIT,
                             #     mit_commands)
@@ -207,9 +210,11 @@ def main():
         print("Received Ctrl-C.")
         for device in api.device_list:
             if isinstance(device, Chassis):
+                # Safe stop device
                 device.stop()
                 time.sleep(0.1)
             elif isinstance(device, Arm):
+                # Safe stop device
                 device.stop()
                 time.sleep(0.1)
         api.close()

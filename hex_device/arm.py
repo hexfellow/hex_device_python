@@ -117,7 +117,7 @@ class Arm(DeviceBase, MotorBase):
             bool: Whether initialization was successful
         """
         try:
-            self.start()
+            # self.start()
             return True
         except Exception as e:
             log_err(f"Arm initialization failed: {e}")

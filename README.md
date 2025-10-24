@@ -11,6 +11,7 @@
 This library provides a simple interface for communicating with and controlling Hex devices. It uses Protocol Buffers for message serialization and WebSocket for real-time communication. The supported hardware list is as follows:
 - [✅] **[ChassisMaver](#chassis_maver)**
 - [✅] **[ChassisMark2](#chassis_mark2)**
+- [✅] **[ChassisTriggerA3](#ChassisTriggerA3)**
 - [✅] **[ArmArcher](#arm_archer)**
 - [✅] **[ArmSaber](#arm_saber)**
 - [✅] **[HandsHtGp100](#hands)**

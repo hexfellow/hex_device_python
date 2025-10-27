@@ -69,6 +69,8 @@ def main():
                         if device.has_new_data():
                             if first_time:
                                 first_time = False
+                                # Must start device before using it.
+                                device.start()
                                 config_dict = {
                                     'name':'Archer_d6y',
                                     'dof_num': 'six_axis',
@@ -122,6 +124,11 @@ def main():
 
     except KeyboardInterrupt:
         print("Received Ctrl-C.")
+        for device in api.device_list:
+            if isinstance(device, Arm):
+                # Safe stop device
+                device.stop()
+                time.sleep(0.1)
         api.close()
     finally:
         pass

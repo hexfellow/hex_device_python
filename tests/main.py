@@ -13,10 +13,10 @@ import argparse
 import numpy as np
 import logging
 
-sys.path.insert(1, '/Users/jecjune/Downloads/python/hex_device/hex_device_python')
+sys.path.insert(1, '<your project path>/hex_device_python')
 sys.path.insert(
     1,
-    '/Users/jecjune/Downloads/python/hex_device/hex_device_python/hex_device/generated')
+    '<your project path>/hex_device_python/hex_device/generated')
 
 import hex_device
 from hex_device import HexDeviceApi
@@ -36,7 +36,7 @@ def main():
     parser.add_argument(
         '--url', 
         metavar='URL',
-        default="ws://172.18.23.18:8439",
+        default="ws://0.0.0.0:8439",
         help='WebSocket URL for HEX device connection'
     )
     parser.add_argument(

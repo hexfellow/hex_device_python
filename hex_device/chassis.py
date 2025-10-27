@@ -8,7 +8,7 @@
 
 from typing import Optional, List, Dict, Any, Tuple
 import numpy as np
-from copy import deepcopy
+import threading
 from .common_utils import delay, log_common, log_info, log_warn, log_err
 from .device_base import DeviceBase
 from .generated import public_api_down_pb2, public_api_up_pb2, public_api_types_pb2
@@ -64,9 +64,12 @@ class Chassis(DeviceBase, MotorBase):
         self._target_velocity = (0.0, 0.0, 0.0)  # Initialize target velocity
 
         # Chassis status
+        self._status_lock = threading.Lock()
         self._base_state = BaseState.BsParked
         self._api_control_initialized = False
         self._simple_control_mode = None
+        self._session_holder = 0
+        self._previous_session_holder = None
 
         # Battery information
         self._battery_voltage = 0.0
@@ -84,9 +87,12 @@ class Chassis(DeviceBase, MotorBase):
 
         # Control related
         self.__send_init: Optional[bool] = None
+        self._send_clear_parking_stop: Optional[bool] = None
+
         self._last_command_time = None
         self._command_timeout = 0.1  # 100ms timeout
         self.__last_warning_time = time.perf_counter()  # Add warning time attribute
+        self._my_session_id = 0   # my session id, was assigned by server
 
         # Robot type - will be set when matched
         self.robot_type = None
@@ -121,7 +127,6 @@ class Chassis(DeviceBase, MotorBase):
         Start to control chassis
         
         """
-        print(f"Start to control chassis")
         self.__send_init = True
     
     def stop(self):
@@ -161,28 +166,39 @@ class Chassis(DeviceBase, MotorBase):
 
             base_status = api_up_data.base_status
 
-            # Update chassis status
-            self._base_state = base_status.state
-            self._api_control_initialized = base_status.api_control_initialized
-            self._battery_voltage = base_status.battery_voltage
-            self._battery_thousandth = base_status.battery_thousandth
+            with self._status_lock:
+                # update my session id
+                self._my_session_id = api_up_data.session_id
+                # Update chassis status
+                self._base_state = base_status.state
+                self._api_control_initialized = base_status.api_control_initialized
+                self._battery_voltage = base_status.battery_voltage
+                self._battery_thousandth = base_status.battery_thousandth
+                self._session_holder = base_status.session_holder
 
-            # Update optional fields
-            if base_status.HasField('battery_charging'):
-                self._battery_charging = base_status.battery_charging
-            if base_status.HasField('parking_stop_detail'):
-                self._parking_stop_detail = base_status.parking_stop_detail
-            else:
-                self._parking_stop_detail = public_api_types_pb2.ParkingStopDetail()
-            if base_status.HasField('warning'):
-                self._warning = base_status.warning
-            if base_status.HasField('estimated_odometry'):
-                self._vehicle_speed = (base_status.estimated_odometry.speed_x,
-                                       base_status.estimated_odometry.speed_y,
-                                       base_status.estimated_odometry.speed_z)
-                self._vehicle_position = (base_status.estimated_odometry.pos_x,
-                                          base_status.estimated_odometry.pos_y,
-                                          base_status.estimated_odometry.pos_z)
+                if self._session_holder != self._previous_session_holder:
+                    if self._session_holder == self._my_session_id:
+                        log_warn(f"Chassis: You can control the chassis now! Your session ID: {self._session_holder}")
+                    else:
+                        log_warn(f"Chassis: Can not control the chassis, now holder is ID: {self._session_holder}, waiting...")
+                self._previous_session_holder = self._session_holder
+
+                # Update optional fields
+                if base_status.HasField('battery_charging'):
+                    self._battery_charging = base_status.battery_charging
+                if base_status.HasField('parking_stop_detail'):
+                    self._parking_stop_detail = base_status.parking_stop_detail
+                else:
+                    self._parking_stop_detail = public_api_types_pb2.ParkingStopDetail()
+                if base_status.HasField('warning'):
+                    self._warning = base_status.warning
+                if base_status.HasField('estimated_odometry'):
+                    self._vehicle_speed = (base_status.estimated_odometry.speed_x,
+                                        base_status.estimated_odometry.speed_y,
+                                        base_status.estimated_odometry.speed_z)
+                    self._vehicle_position = (base_status.estimated_odometry.pos_x,
+                                            base_status.estimated_odometry.pos_y,
+                                            base_status.estimated_odometry.pos_z)
 
             # Update motor data
             self._update_motor_data_from_base_status(base_status)
@@ -288,24 +304,53 @@ class Chassis(DeviceBase, MotorBase):
                         self.__last_warning_time = start_time
 
                 # Check motor status
-                if start_time - self.__last_warning_time > 1.0:
-                    for i in range(self.motor_count):
-                        if self.get_motor_state(i) == "error":
-                            log_err(f"Error: Motor {i} error occurred")
-                    self.__last_warning_time = start_time
+                error_found = False
+                for i in range(self.motor_count):
+                    if self.get_motor_state(i) == "error":
+                        log_err(f"Error: Motor {i} error occurred")
+                        error_found = True
+                if error_found:
+                    if start_time - self.__last_warning_time > 1.0:
+                        self.__last_warning_time = start_time
+
+                # prepare sending message
+                with self._status_lock:
+                    s = self.__send_init
+                    a = self._api_control_initialized
+                    sh = self._session_holder
+                    mi = self._my_session_id
+                    sps = self._send_clear_parking_stop
+
+                # check if send clear parking stop message
+                if sps is not None:
+                    if sps:
+                        msg = self._construct_clear_parking_stop_message()
+                        await self._send_message(msg)
+                        sps = None
+                    else:
+                        sps = None
 
                 # Check if send init message
-                if self.__send_init == True:
+                if s is None:
+                    pass
+                elif s:
                     msg = self._construct_init_message(True)
                     await self._send_message(msg)
                     self.__send_init = None
-                elif self.__send_init == False:
+                elif not s:
                     msg = self._construct_init_message(False)
                     await self._send_message(msg)
                     self._simple_control_mode = None
                     self.__send_init = None
 
-                if self._api_control_initialized == False:
+                # check if is holder:
+                if sh != mi:
+                    if start_time - self.__last_warning_time > 3.0:
+                        log_warn(f"Chassis: You are not the session holder, please use start() method to get the control of the chassis...")
+                        self.__last_warning_time = start_time
+                    continue
+
+                if a == False:
                     # if not simple control mode and target zero resistance, it means the vehicle is in zero resistance state
                     if self._simple_control_mode == False and self._target_zero_resistance == True:
                         pass
@@ -423,6 +468,21 @@ class Chassis(DeviceBase, MotorBase):
     def get_warning(self) -> Optional[int]:
         """Get warning information"""
         return self._warning
+
+    def get_session_holder(self) -> int:
+        """Get session holder"""
+        with self._status_lock:
+            return self._session_holder
+
+    def get_my_session_id(self) -> int:
+        """Get my session id"""
+        with self._status_lock:
+            return self._my_session_id
+
+    def clear_parking_stop(self):
+        """Clear parking stop"""
+        with self._status_lock:
+            self._send_clear_parking_stop = True
 
     def enable(self):
         '''

@@ -484,6 +484,16 @@ class Arm(DeviceBase, MotorBase):
         return motor_targets
 
     # Configuration related methods
+    def get_session_holder(self) -> int:
+        """Get session holder"""
+        with self._status_lock:
+            return self._session_holder
+
+    def get_my_session_id(self) -> int:
+        """Get my session id"""
+        with self._status_lock:
+            return self._my_session_id
+            
     def get_arm_config(self) -> Optional[ArmConfig]:
         """Get current robotic arm configuration"""
         return copy.deepcopy(get_arm_config(self._arm_series))

@@ -87,6 +87,53 @@ class Arm(DeviceBase, MotorBase):
         # Statistics for debugging
         self._cycle_time_stats = {"total": 0, "exceeded": 0, "max": 0.0}
         self._last_command_timeout_warn = 0
+        
+        # Add send timing tracking
+        self._last_send_time = None
+        self._send_interval_stats = {
+            "total": 0,
+            "over_200ms": 0,
+            "max_interval": 0.0
+        }
+        
+    async def _send_message_with_timing(self, msg):
+        """Send message with timing tracking"""
+        pre_send_time = time.perf_counter()
+        
+        # Track send intervals
+        if self._last_send_time is not None:
+            interval_ms = (pre_send_time - self._last_send_time) * 1000.0
+            self._send_interval_stats["total"] += 1
+            
+            if interval_ms > self._send_interval_stats["max_interval"]:
+                self._send_interval_stats["max_interval"] = interval_ms
+                
+            if interval_ms > 200.0:  # Over 200ms
+                self._send_interval_stats["over_200ms"] += 1
+                over_200ms_rate = (self._send_interval_stats["over_200ms"] / self._send_interval_stats["total"]) * 100
+                log_warn(f"Arm: Send interval {interval_ms:.2f}ms > 200ms (rate: {over_200ms_rate:.1f}%, max: {self._send_interval_stats['max_interval']:.2f}ms)")
+            elif interval_ms > 10.0:  # Also log intervals > 10ms for debugging
+                log_warn(f"Arm: Send interval {interval_ms:.2f}ms > 10ms")
+        
+        # Measure actual send time
+        await self._send_message(msg)
+        post_send_time = time.perf_counter()
+        send_duration_ms = (post_send_time - pre_send_time) * 1000.0
+        
+        # Log if send operation takes too long
+        if send_duration_ms > 5.0:
+            log_warn(f"Arm: Message send took {send_duration_ms:.2f}ms > 5ms")
+        
+        self._last_send_time = pre_send_time
+        
+    def get_send_interval_stats(self):
+        """Get send interval statistics"""
+        return {
+            "total_sends": self._send_interval_stats["total"],
+            "over_200ms_count": self._send_interval_stats["over_200ms"],
+            "over_200ms_rate": (self._send_interval_stats["over_200ms"] / max(1, self._send_interval_stats["total"])) * 100,
+            "max_interval_ms": self._send_interval_stats["max_interval"]
+        }
 
     def _set_robot_type(self, robot_type):
         """
@@ -265,6 +312,9 @@ class Arm(DeviceBase, MotorBase):
             start_time = now_time
 
             try:
+                # Track processing time for different stages
+                stage_start = time.perf_counter()
+                
                 # check arm error
                 error = self.get_parking_stop_detail()
                 if error != public_api_types_pb2.ParkingStopDetail():
@@ -278,9 +328,14 @@ class Arm(DeviceBase, MotorBase):
                             log_warn(f"You have disconnected from arm, trying to connect again.")
                             self.__last_warning_time = start_time
                         msg = self._construct_clear_parking_stop_message()
-                        await self._send_message(msg)
+                        await self._send_message_with_timing(msg)
                         # when timeout, the session holder will be release, should re-api-control-initialize again
                         self.start()
+                
+                error_check_time = time.perf_counter()
+                error_check_ms = (error_check_time - stage_start) * 1000.0
+                if error_check_ms > 5.0:
+                    log_warn(f"Arm: Error check took {error_check_ms:.2f}ms > 5ms")
 
                 # check motor error
                 for i in range(self.motor_count):
@@ -302,11 +357,11 @@ class Arm(DeviceBase, MotorBase):
                     pass
                 elif s:
                     msg = self._construct_init_message()
-                    await self._send_message(msg)
+                    await self._send_message_with_timing(msg)
                     self.__send_init = None
                 elif not s:
                     msg = self._construct_init_message(False)
-                    await self._send_message(msg)
+                    await self._send_message_with_timing(msg)
                     self.__send_init = None
 
                 ## check if is holder:
@@ -320,7 +375,7 @@ class Arm(DeviceBase, MotorBase):
                     ### no command
                     if self._last_command_time is None:
                         msg = self._construct_init_message()
-                        await self._send_message(msg)
+                        await self._send_message_with_timing(msg)
                     ### command timeout
                     elif self._command_timeout_check and (start_time -
                           self._last_command_time) > self._command_timeout:
@@ -332,7 +387,7 @@ class Arm(DeviceBase, MotorBase):
                             motor_msg = self._construct_custom_motor_msg(
                                 CommandType.BRAKE, [True] * self.motor_count)
                             msg = self._construct_custom_joint_command_msg(motor_msg)
-                            await self._send_message(msg)
+                            await self._send_message_with_timing(msg)
                         except Exception as e:
                             log_err(f"Arm failed to construct custom joint command message: {e}")
                             continue
@@ -340,14 +395,14 @@ class Arm(DeviceBase, MotorBase):
                     else:
                         try:
                             msg = self._construct_joint_command_msg()
-                            await self._send_message(msg)
+                            await self._send_message_with_timing(msg)
                         except Exception as e:
                             log_err(f"Arm failed to construct joint command message: {e}")
                             continue
                 elif c == False:
                     # If there is anything that requires special action, modify this calibrate sending logic.
                     msg = self._construct_calibrate_message()
-                    await self._send_message(msg)
+                    await self._send_message_with_timing(msg)
 
             except Exception as e:
                 log_err(f"Arm periodic task exception: {e}")

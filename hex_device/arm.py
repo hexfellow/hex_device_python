@@ -83,6 +83,10 @@ class Arm(DeviceBase, MotorBase):
         self.__last_warning_time = time.perf_counter()  # last log warning time
         self._my_session_id = 0   # my session id, was assigned by server
         self.__send_init: Optional[bool] = None
+        
+        # Statistics for debugging
+        self._cycle_time_stats = {"total": 0, "exceeded": 0, "max": 0.0}
+        self._last_command_timeout_warn = 0
 
     def _set_robot_type(self, robot_type):
         """
@@ -239,9 +243,26 @@ class Arm(DeviceBase, MotorBase):
 
         await self._init()
         log_info("Arm init success")
+        
         while True:
             await delay(start_time, cycle_time)
-            start_time = time.perf_counter()
+            
+            # check cycle time - measure actual cycle time
+            now_time = time.perf_counter()
+            expected_end_time = start_time + cycle_time / 1000.0
+            actual_delay_overhead = (now_time - expected_end_time) * 1000.0
+            total_cycle_time_ms = (now_time - start_time) * 1000.0
+            
+            self._cycle_time_stats["total"] += 1
+            if total_cycle_time_ms > self._cycle_time_stats["max"]:
+                self._cycle_time_stats["max"] = total_cycle_time_ms
+                
+            if total_cycle_time_ms > 10.0:
+                self._cycle_time_stats["exceeded"] += 1
+                exceed_rate = (self._cycle_time_stats["exceeded"] / self._cycle_time_stats["total"]) * 100
+                log_warn(f"Arm: Cycle time {total_cycle_time_ms:.2f}ms (overhead: {actual_delay_overhead:.2f}ms) exceeds 10ms (rate: {exceed_rate:.1f}%, max: {self._cycle_time_stats['max']:.2f}ms)")
+            
+            start_time = now_time
 
             try:
                 # check arm error
@@ -253,7 +274,9 @@ class Arm(DeviceBase, MotorBase):
 
                     # auto clear api communication timeout
                     if error.category == public_api_types_pb2.ParkingStopCategory.PscAPICommunicationTimeout:
-                        log_warn(f"You have disconnected from arm, trying to connect again.")
+                        if start_time - self.__last_warning_time > 1.0:
+                            log_warn(f"You have disconnected from arm, trying to connect again.")
+                            self.__last_warning_time = start_time
                         msg = self._construct_clear_parking_stop_message()
                         await self._send_message(msg)
                         # when timeout, the session holder will be release, should re-api-control-initialize again
@@ -301,6 +324,10 @@ class Arm(DeviceBase, MotorBase):
                     ### command timeout
                     elif self._command_timeout_check and (start_time -
                           self._last_command_time) > self._command_timeout:
+                        timeout_duration_ms = (start_time - self._last_command_time) * 1000.0
+                        if start_time - self._last_command_timeout_warn > 1.0:
+                            log_warn(f"Arm: Command timeout ({timeout_duration_ms:.1f}ms > {self._command_timeout*1000:.1f}ms), sending brake")
+                            self._last_command_timeout_warn = start_time
                         try:
                             motor_msg = self._construct_custom_motor_msg(
                                 CommandType.BRAKE, [True] * self.motor_count)

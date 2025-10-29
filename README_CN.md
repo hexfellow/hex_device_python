@@ -42,25 +42,29 @@ git clone --recurse-submodules https://github.com/hexfellow/hex_device_python.gi
 ## 快速开始
 
 ### 安装 `protoc`
+1. 从包管理器安装 protoc (仅适用于 Debian13/Ubuntu24.04)
+    ```bash
+    sudo apt install protobuf-compiler
+    ```
 
-我们强烈建议您使用 **`protoc-27.1`**，因为我们已经在 `x86_64` 和 `arm64` 架构上进行了全面测试。
+2. 从 Github Releases 安装 protoc (适用于 Ubuntu22.04 及以下版本)
+    
+    选择一个合适的版本并安装。以下是一个安装 `protoc-27.1` 的示例。
 
-您可以使用下面的二进制安装方法来安装 **`protoc-27.1`**。
-
-```bash
-# Linux x86_64
-wget https://github.com/protocolbuffers/protobuf/releases/download/v27.1/protoc-27.1-linux-x86_64.zip
-sudo unzip protoc-27.1-linux-x86_64.zip -d /usr/local
-rm protoc-27.1-linux-x86_64.zip
-   
-# Linux arm64
-wget https://github.com/protocolbuffers/protobuf/releases/download/v27.1/protoc-27.1-linux-aarch_64.zip
-sudo unzip protoc-27.1-linux-aarch_64.zip -d /usr/local
-rm protoc-27.1-linux-aarch_64.zip
-   
-# 验证安装
-protoc --version  # 应显示 libprotoc 27.1
-```
+    ```bash
+    # For Linux x86_64
+    wget https://github.com/protocolbuffers/protobuf/releases/download/v27.1/protoc-27.1-linux-x86_64.zip
+    sudo unzip protoc-27.1-linux-x86_64.zip -d /usr/local
+    rm protoc-27.1-linux-x86_64.zip
+    
+    # For Linux arm64
+    wget https://github.com/protocolbuffers/protobuf/releases/download/v27.1/protoc-27.1-linux-aarch_64.zip
+    sudo unzip protoc-27.1-linux-aarch_64.zip -d /usr/local
+    rm protoc-27.1-linux-aarch_64.zip
+    
+    # Verify installation
+    protoc --version # Should be or more than 3.21.12
+    ```
 
 ### 安装 `hex_device`
 

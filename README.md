@@ -47,7 +47,8 @@ git clone --recurse-submodules https://github.com/hexfellow/hex_device_python.gi
     ```bash
     sudo apt install protobuf-compiler
     ```
-    2. Install protoc from Github Releases (Recommended Ubuntu22.04 and below)
+
+2. Install protoc from Github Releases (Recommended Ubuntu22.04 and below)
     
     Just choose a suitable version and install it. Here below is an example of installing `protoc-27.1`. 
 

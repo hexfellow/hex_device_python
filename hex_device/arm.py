@@ -253,7 +253,9 @@ class Arm(DeviceBase, MotorBase):
 
                     # auto clear api communication timeout
                     if error.category == public_api_types_pb2.ParkingStopCategory.PscAPICommunicationTimeout:
-                        log_warn(f"You have disconnected from arm, trying to connect again.")
+                        if start_time - self.__last_warning_time > 1.0:
+                            log_warn(f"You have disconnected from arm, trying to connect again.")
+                            self.__last_warning_time = start_time
                         msg = self._construct_clear_parking_stop_message()
                         await self._send_message(msg)
                         # when timeout, the session holder will be release, should re-api-control-initialize again

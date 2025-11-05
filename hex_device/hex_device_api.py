@@ -170,8 +170,14 @@ class HexDeviceApi:
 
         try:
             from .hands import Hands
-            self._register_device_class(Hands)
-            log_info("Registered Hands device class")
+            # Register Hands for all supported device types (with duplicate check)
+            registered_count = 0
+            for device_type in Hands.SUPPORTED_DEVICE_TYPE:
+                # Check if already registered to avoid duplicate registration
+                if device_type not in self._device_factory._optional_device_classes:
+                    self._register_optional_device_class(device_type, Hands)
+                    registered_count += 1
+            log_info(f"Registered Hands optional device class for {registered_count} new device types out of {len(Hands.SUPPORTED_DEVICE_TYPE)} total: {[dt.name for dt in Hands.SUPPORTED_DEVICE_TYPE]}")
         except ImportError as e:
             log_warn(f"Unable to import Hands: {e}")
 
@@ -186,6 +192,16 @@ class HexDeviceApi:
             device_class: Device class
         """
         self._device_factory.register_device_class(device_class)
+
+    def _register_optional_device_class(self, device_type: int, device_class):
+        """
+        Register optional device class to factory
+
+        Args:
+            device_type: Device type (SecondaryDeviceType)
+            device_class: Optional device class
+        """
+        self._device_factory.register_optional_device_class(device_type, device_class)
 
     def find_device_by_robot_type(self, robot_type) -> Optional[DeviceBase]:
         """
@@ -203,18 +219,19 @@ class HexDeviceApi:
                 return device
         return None
 
-    def find_optional_device(self, message_type: str) -> Optional[OptionalDeviceBase]:
+
+    def find_optional_device_by_id(self, device_id: int) -> Optional[OptionalDeviceBase]:
         """
-        Find optional device by message_type
+        Find optional device by device_id
         
         Args:
-            message_type: Message type (e.g., 'hand_status', 'imu_data', 'gamepad_read')
+            device_id: Device ID from SecondaryDeviceStatus
             
         Returns:
             Matching optional device or None
         """
         for device in self._optional_device_list:
-            if hasattr(device, 'supports_message_type') and device.supports_message_type(message_type):
+            if hasattr(device, 'device_id') and device.device_id == device_id:
                 return device
         return None
 
@@ -249,21 +266,24 @@ class HexDeviceApi:
 
         return device
 
-    def _create_and_register_optional_device(self, message_type: str, api_up) -> Optional[OptionalDeviceBase]:
+    def _create_and_register_optional_device(self, device_id: int, device_type, secondary_device_status) -> Optional[OptionalDeviceBase]:
         """
-        Create and register optional device based on message_type
+        Create and register optional device based on device_id and device_type
         
         Args:
-            message_type: Message type (e.g., 'hand_status', 'imu_data', 'gamepad_read')
-            api_up: API upstream data
+            device_id: Device ID from SecondaryDeviceStatus
+            device_type: Device type
+            secondary_device_status: The SecondaryDeviceStatus object
             
         Returns:
             Created optional device instance or None
         """
+        # init optional device
         device = self._device_factory.create_optional_device(
-            message_type,
+            device_id,
+            device_type,
+            secondary_device_status=secondary_device_status,
             send_message_callback=self._send_down_message,
-            api_up=api_up
         )
 
         if device:
@@ -273,11 +293,11 @@ class HexDeviceApi:
             # Note: Optional devices don't need periodic tasks by _read_only
             # They are updated only when data arrives
             if not device._read_only:
-                device_id = self._device_id_counter
+                internal_device_id = self._device_id_counter
                 self._device_id_counter += 1
-                self._device_id_map[device_id] = device
-                self._device_to_id_map[device] = device_id
-                self._start_device_periodic_task(device_id)
+                self._device_id_map[internal_device_id] = device
+                self._device_to_id_map[device] = internal_device_id
+                self._start_device_periodic_task(internal_device_id)
 
         return device
 
@@ -683,48 +703,50 @@ class HexDeviceApi:
 
     def _process_optional_fields(self, api_up):
         """
-        Process optional fields in APIUp message
+        Process SecondaryDeviceStatus array in APIUp message
         
         Args:
-            api_up: APIUp message containing optional fields
+            api_up: APIUp message containing secondary_device_status array
         """
-        # Define the mapping of optional field names to their data
-        optional_fields = [
-            ('hand_status', getattr(api_up, 'hand_status', None)),
-        ]
-        
-        for field_name, field_data in optional_fields:
-            # Check if the field has data
-            if field_data is not None and self._has_optional_field(api_up, field_name):
+        # Process SecondaryDeviceStatus array
+        if hasattr(api_up, 'secondary_device_status') and api_up.secondary_device_status:
+            for secondary_device in api_up.secondary_device_status:
                 try:
-                    # Find existing device or create new one (similar to robot_type logic)
-                    optional_device = self.find_optional_device(field_name)
+                    device_id = secondary_device.device_id
                     
-                    if optional_device:
-                        # Update existing device
-                        success = optional_device._update_optional_data(field_name, field_data)
-                        if not success:
-                            log_warn(f"Failed to update optional device data for {field_name}")
-                    else:
-                        log_info(f"create new optional device: {field_name}")
-                        
-                        try:
-                            # Create and register new optional device
-                            optional_device = self._create_and_register_optional_device(field_name, api_up)
-                        except Exception as e:
-                            log_err(f"_create_and_register_optional_device error: {e}")
-                            continue
+                    # Determine message type from the oneof status field
+                    message_data = None
+                    device_type = secondary_device.device_type
+                    
+                    if device_type and message_data:
+                        # Find existing device by device_id
+                        optional_device = self.find_optional_device_by_id(device_id)
                         
                         if optional_device:
-                            # Update newly created device
-                            success = optional_device._update_optional_data(field_name, field_data)
+                            # Update existing device
+                            success = optional_device._update_optional_data(device_type, message_data)
                             if not success:
-                                log_warn(f"Failed to update new optional device data for {field_name}")
+                                log_warn(f"Failed to update optional device data for device_id {device_id}, type {device_type}")
                         else:
-                            log_warn(f"unknown optional device type: {field_name}")
-                        
+                            log_info(f"create new optional device: device_id={device_id}, type={device_type}")
+                            
+                            try:
+                                # Create and register new optional device
+                                optional_device = self._create_and_register_optional_device(device_id, device_type, secondary_device)
+                            except Exception as e:
+                                log_err(f"_create_and_register_optional_device_by_id error: {e}")
+                                continue
+                            
+                            if optional_device:
+                                # Update newly created device
+                                success = optional_device._update_optional_data(device_type, message_data)
+                                if not success:
+                                    log_warn(f"Failed to update new optional device data for device_id {device_id}, type {device_type}")
+                            else:
+                                log_warn(f"unknown optional device type: device_id={device_id}, type={device_type}")
+                    
                 except Exception as e:
-                    log_err(f"Error processing optional field {field_name}: {e}")
+                    log_err(f"Error processing secondary device {getattr(secondary_device, 'device_id', 'unknown')}: {e}")
 
     def _has_optional_field(self, api_up, field_name: str) -> bool:
         """

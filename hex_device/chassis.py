@@ -33,7 +33,7 @@ class Chassis(DeviceBase, MotorBase):
     """
 
     SUPPORTED_ROBOT_TYPES = [
-        public_api_types_pb2.RobotType.RtTripleOmniWheelLRDriver,
+        public_api_types_pb2.RobotType.RtTriggerA3,
         public_api_types_pb2.RobotType.RtCustomPcwVehicle,
         public_api_types_pb2.RobotType.RtMaverX4,
         public_api_types_pb2.RobotType.RtArk2LrDriver,
@@ -64,7 +64,7 @@ class Chassis(DeviceBase, MotorBase):
         self._target_velocity = (0.0, 0.0, 0.0)  # Initialize target velocity
 
         # Chassis status
-        self._status_lock = threading.Lock()
+        self._status_lock = super()._status_lock
         self._base_state = BaseState.BsParked
         self._api_control_initialized = False
         self._simple_control_mode = None
@@ -86,7 +86,7 @@ class Chassis(DeviceBase, MotorBase):
         self._vehicle_position = (0.0, 0.0, 0.0)  # (x, y, yaw) m, m, rad
 
         # Control related
-        self.__send_init: Optional[bool] = None
+        self.__send_init = super().__send_init
         self._send_clear_parking_stop: Optional[bool] = None
 
         self._last_command_time = None
@@ -121,20 +121,6 @@ class Chassis(DeviceBase, MotorBase):
             bool: Whether it is supported
         """
         return robot_type in cls.SUPPORTED_ROBOT_TYPES
-
-    def start(self):
-        """
-        Start to control chassis
-        
-        """
-        self.__send_init = True
-    
-    def stop(self):
-        """
-        Stop to control chassis
-        
-        """
-        self.__send_init = False
 
     async def _init(self) -> bool:
         """

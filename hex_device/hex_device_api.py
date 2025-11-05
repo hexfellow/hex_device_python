@@ -620,6 +620,18 @@ class HexDeviceApi:
         check_counter = 0
         ORPHANED_TASK_CHECK_INTERVAL = 100
         
+        # Check if the protocol version is supported
+        try:
+            api_up = await self.__capture_data_frame()
+            if not self._is_support_version(api_up):
+                self.close()
+                return
+        except Exception as e:
+            log_err(f"__periodic_data_parser error: {e}")
+            self.close()
+            return
+        
+        # Begin to parse the data
         while True:
             try:
                 api_up = await self.__capture_data_frame()
@@ -733,6 +745,24 @@ class HexDeviceApi:
                 return hasattr(api_up, field_name) and getattr(api_up, field_name) is not None
         except Exception:
             return False
+
+    def _is_support_version(self, api_up) -> bool:
+        """
+        Check if the protocol version is supported
+        @return:
+            bool: True if protocol version is supported, False otherwise
+        """
+        if not hasattr(api_up, 'protocol_major_version'):
+            log_err("Your hardware version is too lower!!! please use hex_device v1.2.1 or lower.")
+            log_err("Your hardware version is too lower!!! please use hex_device v1.2.1 or lower.")
+            log_err("Your hardware version is too lower!!! please use hex_device v1.2.1 or lower.")
+            return False
+        elif api_up.protocol_major_version < 1:
+            log_err(f"Unsupported protocol version: {api_up.protocol_major_version}")
+            log_err(f"Unsupported protocol version: {api_up.protocol_major_version}")
+            log_err(f"Unsupported protocol version: {api_up.protocol_major_version}")
+            return False
+        return True
 
     # data getter
     def get_raw_data(self) -> Tuple[public_api_up_pb2.APIUp, int]:

@@ -100,7 +100,7 @@ class OptionalDeviceBase(ABC):
         pass
 
     @abstractmethod
-    def _update_optional_data(self, device_type, message_data) -> bool:
+    def _update_optional_data(self, device_type, device_status) -> bool:
         """
         Update device with optional message data
         

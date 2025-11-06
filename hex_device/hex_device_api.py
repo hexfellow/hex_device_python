@@ -8,7 +8,7 @@
 
 import time
 from .generated import public_api_down_pb2, public_api_up_pb2, public_api_types_pb2
-from .common_utils import is_valid_ws_url, InvalidWSURLException, delay
+from .common_utils import is_valid_ws_url, InvalidWSURLException, delay, log_debug
 from .common_utils import log_warn, log_info, log_err, log_common
 from .error_type import WsError, ProtocolError
 from .device_base import DeviceBase
@@ -177,7 +177,7 @@ class HexDeviceApi:
                 if device_type not in self._device_factory._optional_device_classes:
                     self._register_optional_device_class(device_type, Hands)
                     registered_count += 1
-            log_info(f"Registered Hands optional device class for {registered_count} new device types out of {len(Hands.SUPPORTED_DEVICE_TYPE)} total: {[dt.name for dt in Hands.SUPPORTED_DEVICE_TYPE]}")
+            log_info(f"Registered Hands optional device class for {registered_count} new device types out of {len(Hands.SUPPORTED_DEVICE_TYPE)} total: {[dt for dt in Hands.SUPPORTED_DEVICE_TYPE]}")
         except ImportError as e:
             log_warn(f"Unable to import Hands: {e}")
 
@@ -490,6 +490,7 @@ class HexDeviceApi:
                         # Protobuf parse
                         api_up = public_api_up_pb2.APIUp()
                         api_up.ParseFromString(message)
+                        log_debug(f"api_up: {api_up}")
 
                         if not api_up.IsInitialized():
                             raise ProtocolError("Incomplete message")
@@ -713,20 +714,20 @@ class HexDeviceApi:
             for secondary_device in api_up.secondary_device_status:
                 try:
                     device_id = secondary_device.device_id
-                    
                     # Determine message type from the oneof status field
-                    message_data = None
                     device_type = secondary_device.device_type
                     
-                    if device_type and message_data:
+                    if device_type:
                         # Find existing device by device_id
                         optional_device = self.find_optional_device_by_id(device_id)
                         
                         if optional_device:
                             # Update existing device
-                            success = optional_device._update_optional_data(device_type, message_data)
+                            success = optional_device._update_optional_data(device_type, secondary_device)
                             if not success:
-                                log_warn(f"Failed to update optional device data for device_id {device_id}, type {device_type}")
+                                log_err(f"Failed to update optional device data for device_id {device_id}, type {device_type}")
+                            else:
+                                log_info(f"Updated optional device data for device_id {device_id}, type {device_type}")
                         else:
                             log_info(f"create new optional device: device_id={device_id}, type={device_type}")
                             
@@ -739,7 +740,7 @@ class HexDeviceApi:
                             
                             if optional_device:
                                 # Update newly created device
-                                success = optional_device._update_optional_data(device_type, message_data)
+                                success = optional_device._update_optional_data(device_type, secondary_device)
                                 if not success:
                                     log_warn(f"Failed to update new optional device data for device_id {device_id}, type {device_type}")
                             else:
@@ -747,26 +748,6 @@ class HexDeviceApi:
                     
                 except Exception as e:
                     log_err(f"Error processing secondary device {getattr(secondary_device, 'device_id', 'unknown')}: {e}")
-
-    def _has_optional_field(self, api_up, field_name: str) -> bool:
-        """
-        Check if APIUp message has the specified optional field
-        
-        Args:
-            api_up: APIUp message
-            field_name: Name of the optional field
-            
-        Returns:
-            bool: True if field exists and has data
-        """
-        try:
-            if hasattr(api_up, 'HasField'):
-                return api_up.HasField(field_name)
-            else:
-                # Fallback: check if attribute exists and is not None
-                return hasattr(api_up, field_name) and getattr(api_up, field_name) is not None
-        except Exception:
-            return False
 
     def _is_support_version(self, api_up) -> bool:
         """
@@ -779,11 +760,13 @@ class HexDeviceApi:
             log_err("Your hardware version is too lower!!! please use hex_device v1.2.1 or lower.")
             log_err("Your hardware version is too lower!!! please use hex_device v1.2.1 or lower.")
             return False
-        elif api_up.protocol_major_version < 1:
-            log_err(f"Unsupported protocol version: {api_up.protocol_major_version}")
-            log_err(f"Unsupported protocol version: {api_up.protocol_major_version}")
-            log_err(f"Unsupported protocol version: {api_up.protocol_major_version}")
-            return False
+        else:
+            version = api_up.protocol_major_version + (api_up.protocol_minor_version) / 10
+            if version < 1.0:
+                log_err(f"The hardware firmware version is too low({version})!!! Please use a lower version of hex_device.")
+                log_err(f"The hardware firmware version is too low({version})!!! Please use a lower version of hex_device.")
+                log_err(f"The hardware firmware version is too low({version})!!! Please use a lower version of hex_device.")
+                return False
         return True
 
     # data getter

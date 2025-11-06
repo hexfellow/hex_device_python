@@ -113,13 +113,13 @@ class Hands(OptionalDeviceBase, MotorBase):
             log_err(f"Hands initialization failed: {e}")
             return False
 
-    def _update_optional_data(self, device_type, message_data) -> bool:
+    def _update_optional_data(self, device_type, device_status: public_api_types_pb2.SecondaryDeviceStatus) -> bool:
         """
         Update hands device with optional message data
         
         Args:
             device_type: Should be equal to self._device_type
-            message_data: The HandStatus message from APIUp
+            device_status: The SecondaryDeviceStatus from APIUp
             
         Returns:
             bool: Whether update was successful
@@ -130,7 +130,7 @@ class Hands(OptionalDeviceBase, MotorBase):
             
         try:
             # Update motor data
-            self._update_motor_data_from_hands_status(message_data)
+            self._update_motor_data_from_hands_status(device_status.hand_status)
             self._update_timestamp()
             return True
         except Exception as e:

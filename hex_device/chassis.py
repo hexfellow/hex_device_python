@@ -86,7 +86,7 @@ class Chassis(DeviceBase, MotorBase):
         self._vehicle_position = (0.0, 0.0, 0.0)  # (x, y, yaw) m, m, rad
 
         # Control related
-        self.__send_init = super().__send_init
+        self._send_init = self._send_init
         self._send_clear_parking_stop: Optional[bool] = None
 
         self._last_command_time = None
@@ -301,7 +301,7 @@ class Chassis(DeviceBase, MotorBase):
 
                 # prepare sending message
                 with self._status_lock:
-                    s = self.__send_init
+                    s = self._send_init
                     a = self._api_control_initialized
                     sh = self._session_holder
                     mi = self._my_session_id
@@ -322,12 +322,12 @@ class Chassis(DeviceBase, MotorBase):
                 elif s:
                     msg = self._construct_init_message(True)
                     await self._send_message(msg)
-                    self.__send_init = None
+                    self._send_init = None
                 elif not s:
                     msg = self._construct_init_message(False)
                     await self._send_message(msg)
                     self._simple_control_mode = None
-                    self.__send_init = None
+                    self._send_init = None
 
                 # check if is holder:
                 if sh != mi:

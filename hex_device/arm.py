@@ -68,7 +68,6 @@ class Arm(DeviceBase, MotorBase):
         self._arm_series = robot_type
 
         # arm status
-        self._status_lock = super()._status_lock
         self._api_control_initialized = False
         self._calibrated = False
         self._parking_stop_detail = public_api_types_pb2.ParkingStopDetail()
@@ -81,7 +80,7 @@ class Arm(DeviceBase, MotorBase):
         self._command_timeout = 0.3  # 300ms
         self.__last_warning_time = time.perf_counter()  # last log warning time
         self._my_session_id = 0   # my session id, was assigned by server
-        self.__send_init = super().__send_init
+        self._send_init = self._send_init
 
     def _set_robot_type(self, robot_type):
         """
@@ -266,7 +265,7 @@ class Arm(DeviceBase, MotorBase):
 
                 # prepare sending message
                 with self._status_lock:
-                    s = self.__send_init
+                    s = self._send_init
                     a = self._api_control_initialized
                     c = self._calibrated
                     sh = self._session_holder
@@ -280,11 +279,11 @@ class Arm(DeviceBase, MotorBase):
                 elif s:
                     msg = self._construct_init_message()
                     await self._send_message(msg)
-                    self.__send_init = None
+                    self._send_init = None
                 elif not s:
                     msg = self._construct_init_message(False)
                     await self._send_message(msg)
-                    self.__send_init = None
+                    self._send_init = None
 
                 ## check if is holder:
                 if sh != mi:

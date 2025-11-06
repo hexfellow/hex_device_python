@@ -36,7 +36,7 @@ class DeviceBase(ABC):
         self._has_new_data = False
 
         # Api_control_initialized
-        self.__send_init: Optional[bool] = None
+        self._send_init: Optional[bool] = None
 
     def _set_send_message_callback(self, callback):
         """
@@ -67,7 +67,7 @@ class DeviceBase(ABC):
         
         """
         with self._status_lock:
-            self.__send_init = True
+            self._send_init = True
     
     def stop(self):
         """
@@ -75,7 +75,7 @@ class DeviceBase(ABC):
         
         """
         with self._status_lock:
-            self.__send_init = False
+            self._send_init = False
 
     def set_has_new_data(self):
         with self._data_lock:

@@ -18,6 +18,8 @@ from .device_base_optional import OptionalDeviceBase
 import asyncio
 import threading
 import websockets
+import socket
+from urllib.parse import urlparse
 from typing import Optional, Tuple, List, Type, Dict, Any, Union
 from websockets.exceptions import ConnectionClosed
 
@@ -501,16 +503,50 @@ class HexDeviceApi:
                 log_err(f"Unknown error: {str(e)}")
                 raise WsError("Unexpected error") from e
 
+    def _create_socket_with_nodelay(self, host: str, port: int) -> socket.socket:
+        """
+        Create a connected socket with TCP_NODELAY option enabled
+        
+        Args:
+            host: Target host
+            port: Target port
+            
+        Returns:
+            Connected socket with TCP_NODELAY enabled
+        """
+        sock = socket.create_connection((host, port))
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        return sock
+
     # websocket function
     async def __connect_ws(self):
         """
         @brief: Connect to the WebSocket server.
         """
         try:
+            # Parse URL to get host and port
+            parsed_url = urlparse(self.__ws_url)
+            host = parsed_url.hostname
+            port = parsed_url.port
+            
+            # Set default ports if not specified
+            if port is None:
+                if parsed_url.scheme == 'ws':
+                    port = 80
+                elif parsed_url.scheme == 'wss':
+                    port = 443
+                else:
+                    raise ValueError(f"Unsupported scheme: {parsed_url.scheme}")
+            
+            # Create socket with TCP_NODELAY option
+            sock = self._create_socket_with_nodelay(host, port)
+            
             self.__websocket = await websockets.connect(self.__ws_url,
                                                         ping_interval=20,
                                                         ping_timeout=60,
-                                                        close_timeout=5)
+                                                        close_timeout=5,
+                                                        sock=sock
+                                                        )
         except Exception as e:
             log_err(f"Failed to open WebSocket connection: {e}")
             log_err(
@@ -527,10 +563,30 @@ class HexDeviceApi:
             try:
                 if self.__websocket:
                     await self.__websocket.close()
+                
+                # Parse URL to get host and port
+                parsed_url = urlparse(self.__ws_url)
+                host = parsed_url.hostname
+                port = parsed_url.port
+                
+                # Set default ports if not specified
+                if port is None:
+                    if parsed_url.scheme == 'ws':
+                        port = 80
+                    elif parsed_url.scheme == 'wss':
+                        port = 443
+                    else:
+                        raise ValueError(f"Unsupported scheme: {parsed_url.scheme}")
+                
+                # Create socket with TCP_NODELAY option
+                sock = self._create_socket_with_nodelay(host, port)
+                
                 self.__websocket = await websockets.connect(self.__ws_url,
                                                             ping_interval=20,
                                                             ping_timeout=60,
-                                                            close_timeout=5)
+                                                            close_timeout=5,
+                                                            sock=sock
+                                                            )
                 return
             except Exception as e:
                 delay = base_delay * (2**retry_count)

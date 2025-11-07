@@ -13,10 +13,10 @@ import argparse
 import numpy as np
 import logging
 
-sys.path.insert(1, '<your project path>/hex_device_python')
+sys.path.insert(1, '/home/tl/ssd/docker_link/python/hex_device_python')
 sys.path.insert(
     1,
-    '<your project path>/hex_device_python/hex_device/generated')
+    '/home/tl/ssd/docker_link/python/hex_device_python/hex_device/generated')
 
 import hex_device
 from hex_device import HexDeviceApi
@@ -133,9 +133,9 @@ def main():
                                     exit(1)
 
                                 device.command_timeout_check(False)
-                                # device.motor_command(
-                                #     CommandType.SPEED,
-                                #     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+                                device.motor_command(
+                                    CommandType.SPEED,
+                                    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
                                 # cmd = np.array([-0.3, -1.55, 3.0, 0.0, 0.0, 0.0])
                                 # device.motor_command(
@@ -145,7 +145,7 @@ def main():
                             # print(device.get_device_summary())
                             # print(device.get_motor_summary())
 
-                            print(f"arm position: {device.get_motor_positions()}")
+                            # print(f"arm position: {device.get_motor_positions()}")
 
                             ## command, Please select one of the following commands.
                             ## warning!!!! Only position command is limit position & speed.Only speed command is limit speed & acc.
@@ -197,7 +197,7 @@ def main():
                 for device in api.optional_device_list:
                     if isinstance(device, Hands):
                         if device.has_new_data():
-                            print(f"hands position: {device.get_motor_positions()}")
+                            # print(f"hands position: {device.get_motor_positions()}")
                             device.motor_command(
                                 CommandType.TORQUE,
                                 [0.0] * device.motor_count

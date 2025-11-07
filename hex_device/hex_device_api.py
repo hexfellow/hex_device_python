@@ -6,6 +6,7 @@
 # Date  : 2025-8-1
 ################################################################
 
+from syslog import LOG_INFO
 import time
 from .generated import public_api_down_pb2, public_api_up_pb2, public_api_types_pb2
 from .common_utils import is_valid_ws_url, InvalidWSURLException, delay
@@ -505,17 +506,29 @@ class HexDeviceApi:
 
     def _create_socket_with_nodelay(self, host: str, port: int) -> socket.socket:
         """
-        Create a connected socket with TCP_NODELAY option enabled
+        Create a connected socket with TCP_NODELAY and TCP_QUICKACK for fast retransmission
         
         Args:
             host: Target host
             port: Target port
             
         Returns:
-            Connected socket with TCP_NODELAY enabled
+            Connected socket with TCP optimizations for fast retransmission
         """
         sock = socket.create_connection((host, port))
+        
+        # Enable TCP_NODELAY to disable Nagle's algorithm for low latency
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        
+        # Enable TCP_QUICKACK for fast retransmission
+        # This enables quick acknowledgments which helps with fast retransmission
+        try:
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_QUICKACK, 1)
+            log_info("TCP_QUICKACK enabled")
+        except (OSError, AttributeError):
+            # TCP_QUICKACK may not be available on all platforms (Linux-specific)
+            log_warn("TCP_QUICKACK not supported on this platform")
+        
         return sock
 
     # websocket function
@@ -538,7 +551,7 @@ class HexDeviceApi:
                 else:
                     raise ValueError(f"Unsupported scheme: {parsed_url.scheme}")
             
-            # Create socket with TCP_NODELAY option
+            # Create socket with TCP_NODELAY and TCP_QUICKACK for fast retransmission
             sock = self._create_socket_with_nodelay(host, port)
             
             self.__websocket = await websockets.connect(self.__ws_url,
@@ -578,7 +591,7 @@ class HexDeviceApi:
                     else:
                         raise ValueError(f"Unsupported scheme: {parsed_url.scheme}")
                 
-                # Create socket with TCP_NODELAY option
+                # Create socket with TCP_NODELAY and TCP_QUICKACK for fast retransmission
                 sock = self._create_socket_with_nodelay(host, port)
                 
                 self.__websocket = await websockets.connect(self.__ws_url,

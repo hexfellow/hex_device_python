@@ -300,6 +300,7 @@ class Hands(OptionalDeviceBase, MotorBase):
         """
         msg = public_api_down_pb2.APIDown()
         hand_command = public_api_types_pb2.HandCommand()
+        secondary_device_command = public_api_types_pb2.SecondaryDeviceCommand()
         # limit the torque of position command
         command = deepcopy(self._target_command)
 
@@ -329,7 +330,9 @@ class Hands(OptionalDeviceBase, MotorBase):
 
         motor_targets = self._construct_target_motor_msg(self._pulse_per_rotation, command)
         hand_command.motor_targets.CopyFrom(motor_targets)
-        msg.hand_command.CopyFrom(hand_command)
+        secondary_device_command.device_id = self._device_id
+        secondary_device_command.hand_command.CopyFrom(hand_command)
+        msg.secondary_device_command.CopyFrom(secondary_device_command)
         return msg
 
     def _construct_custom_joint_command_msg(self, motor_msg: public_api_types_pb2.MotorTargets) -> public_api_down_pb2.APIDown:
@@ -338,8 +341,11 @@ class Hands(OptionalDeviceBase, MotorBase):
         """
         msg = public_api_down_pb2.APIDown()
         hand_command = public_api_types_pb2.HandCommand()
+        secondary_device_command = public_api_types_pb2.SecondaryDeviceCommand()
         hand_command.motor_targets.CopyFrom(motor_msg)
-        msg.hand_command.CopyFrom(hand_command)
+        secondary_device_command.device_id = self._device_id
+        secondary_device_command.hand_command.CopyFrom(hand_command)
+        msg.secondary_device_command.CopyFrom(secondary_device_command)
         return msg
 
     # msg constructor

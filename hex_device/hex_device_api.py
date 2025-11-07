@@ -6,7 +6,6 @@
 # Date  : 2025-8-1
 ################################################################
 
-import time
 from .generated import public_api_down_pb2, public_api_up_pb2, public_api_types_pb2
 from .common_utils import is_valid_ws_url, InvalidWSURLException, delay, log_debug
 from .common_utils import log_warn, log_info, log_err, log_common
@@ -18,6 +17,8 @@ from .device_base_optional import OptionalDeviceBase
 import asyncio
 import threading
 import websockets
+import socket
+from urllib.parse import urlparse
 from typing import Optional, Tuple, List, Type, Dict, Any, Union
 from websockets.exceptions import ConnectionClosed
 
@@ -523,15 +524,46 @@ class HexDeviceApi:
                 raise WsError("Unexpected error") from e
 
     # websocket function
+    def _create_socket_with_nodelay(self, host: str, port: int) -> socket.socket:
+        """
+        Create a connected socket with TCP_NODELAY and TCP_QUICKACK for fast retransmission
+        
+        Args:
+            host: Target host
+            port: Target port
+            
+        Returns:
+            Connected socket with TCP optimizations for fast retransmission
+        """
+        sock = socket.create_connection((host, port))
+        # Enable TCP_NODELAY to disable Nagle's algorithm for low latency
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        # Enable TCP_QUICKACK for fast retransmission
+        # This enables quick acknowledgments which helps with fast retransmission
+        try:
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_QUICKACK, 1)
+            log_info("TCP_QUICKACK enabled")
+        except (OSError, AttributeError):
+            # TCP_QUICKACK may not be available on all platforms (Linux-specific)
+            log_warn("TCP_QUICKACK not supported on this platform")
+        
+        return sock
+
     async def __connect_ws(self):
         """
         @brief: Connect to the WebSocket server.
         """
         try:
+            parsed_url = urlparse(self.__ws_url)
+            host = parsed_url.hostname
+            port = parsed_url.port
+            # Create socket with TCP_NODELAY and TCP_QUICKACK for fast retransmission
+            sock = self._create_socket_with_nodelay(host, port)
             self.__websocket = await websockets.connect(self.__ws_url,
                                                         ping_interval=20,
                                                         ping_timeout=60,
-                                                        close_timeout=5)
+                                                        close_timeout=5,
+                                                        sock=sock)
         except Exception as e:
             log_err(f"Failed to open WebSocket connection: {e}")
             log_err(
@@ -548,10 +580,17 @@ class HexDeviceApi:
             try:
                 if self.__websocket:
                     await self.__websocket.close()
+                # Parse URL to get host and port
+                parsed_url = urlparse(self.__ws_url)
+                host = parsed_url.hostname
+                port = parsed_url.port
+                # Create socket with TCP_NODELAY and TCP_QUICKACK for fast retransmission
+                sock = self._create_socket_with_nodelay(host, port)
                 self.__websocket = await websockets.connect(self.__ws_url,
                                                             ping_interval=20,
                                                             ping_timeout=60,
-                                                            close_timeout=5)
+                                                            close_timeout=5,
+                                                            sock=sock)
                 return
             except Exception as e:
                 delay = base_delay * (2**retry_count)

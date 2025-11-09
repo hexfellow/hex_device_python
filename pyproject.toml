@@ -10,7 +10,10 @@ dependencies = [
   "protobuf>=5.29.4,<6.0.0",
   "websockets>=13.1",
 ]
-requires-python = ">=3.8.10"
+requires-python = ">=3.9"
+
+[project.optional-dependencies]
+kcp = ["kcp==0.1.6"]
 authors = [
   { name="Jecjune", email="zejun.chen@hexfellow.com" },
 ]

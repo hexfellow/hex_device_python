@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# -*- coding:utf-8 -*-
 set -Eeuo pipefail
 ################################################################
 # Copyright 2025 Jecjune. All rights reserved.

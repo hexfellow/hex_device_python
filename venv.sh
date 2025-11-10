@@ -25,7 +25,6 @@ source .venv/bin/activate
 
 # Install hex_zmq_servers
 rm -rf dist build *.egg-info
-uv pip uninstall hex_zmq_servers || true
 uv pip install -e .
 
 # install requirements for advanced examples

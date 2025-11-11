@@ -1,27 +1,40 @@
 #!/usr/bin/env python3
+# -*- coding:utf-8 -*-
+################################################################
+# Copyright 2025 Jecjune. All rights reserved.
+# Author: Jecjune zejun.chen@hexfellow.com
+# Date  : 2025-8-1
+################################################################
 """
 KCP Client Core - Pure KCP Communication Implementation
 Minimal implementation focusing on KCP protocol communication only
 """
-
-
-## todo：检查代发送消息长度
 
 import socket
 import time
 import threading
 import struct
 from typing import Optional, Callable
+from dataclasses import dataclass
+from .common_utils import log_err, log_info, log_debug, log_warn
 
 from kcp.extension import KCP
 
-# Default KCP configuration
-DEFAULT_UPDATE_INTERVAL = 10
-DEFAULT_NO_DELAY = True
-DEFAULT_RESEND_COUNT = 2
-DEFAULT_NO_CONGESTION_CONTROL = True
-DEFAULT_SEND_WINDOW_SIZE = 128
-DEFAULT_RECEIVE_WINDOW_SIZE = 128
+
+@dataclass
+class KCPConfig:
+    """KCP configuration parameters"""
+    update_interval: int = 10
+    no_delay: bool = True
+    resend_count: int = 2
+    no_congestion_control: bool = True
+    send_window_size: int = 128
+    receive_window_size: int = 128
+    max_message_length: int = 2048
+
+
+# Default KCP configuration instance
+DEFAULT_KCP_CONFIG = KCPConfig()
 
 
 class KCPClient:
@@ -35,61 +48,29 @@ class KCPClient:
     - Configurable KCP parameters
     """
     
-    def __init__(
-        self,
-        server_address: str,
-        server_port: int,
-        conv_id: int,
-        local_port: int = 0,
-        # KCP parameters
-        update_interval: int = DEFAULT_UPDATE_INTERVAL,
-        no_delay: bool = DEFAULT_NO_DELAY,
-        resend_count: int = DEFAULT_RESEND_COUNT,
-        no_congestion_control: bool = DEFAULT_NO_CONGESTION_CONTROL,
-        send_window_size: int = DEFAULT_SEND_WINDOW_SIZE,
-        receive_window_size: int = DEFAULT_RECEIVE_WINDOW_SIZE,
-    ):
+    def __init__(self, config: Optional[KCPConfig] = None):
         """
         Initialize KCP client
         
         Args:
-            server_address: Server IP address
-            server_port: Server port
-            conv_id: KCP conversation ID (must match server)
-            local_port: Local port to bind (0 for auto-assign)
-            update_interval: KCP update interval in ms
-            no_delay: Enable no-delay mode for low latency
-            resend_count: Fast retransmission trigger count
-            no_congestion_control: Disable congestion control
-            send_window_size: Send window size
-            receive_window_size: Receive window size
+            config: KCP configuration (uses DEFAULT_KCP_CONFIG if None)
         """
-        self.server_address = server_address
-        self.server_port = server_port
-        self.conv_id = conv_id
+        self.server_address = None
+        self.server_port = None
+        self.filter_address = None
+        self._kcp = None
+        
+        # Store configuration
+        self._config = config if config is not None else DEFAULT_KCP_CONFIG
         
         # Create UDP socket
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, 0)
         self._sock.settimeout(0.5)
-        self._sock.bind(('0.0.0.0', local_port))
+        self._sock.bind(('0.0.0.0', 0))
         
         # Get actual bound port
         self.local_port = self._sock.getsockname()[1]
-        
-        # Create KCP instance
-        self._kcp = KCP(
-            conv_id=conv_id,
-            no_delay=no_delay,
-            update_interval=update_interval,
-            resend_count=resend_count,
-            no_congestion_control=no_congestion_control,
-            send_window_size=send_window_size,
-            receive_window_size=receive_window_size,
-        )
-        
-        # Set KCP outbound handler
-        self._kcp.include_outbound_handler(self._on_kcp_output)
-        
+
         # Message callback
         self._message_callback: Optional[Callable[[bytes], None]] = None
         
@@ -97,12 +78,44 @@ class KCPClient:
         self._running = False
         self._update_thread: Optional[threading.Thread] = None
         self._receive_thread: Optional[threading.Thread] = None
+
+    def config_kcp(
+        self, 
+        address: str, 
+        port: int, 
+        conv_id: int
+    ) -> None:
+        """
+        Configure KCP connection with server address and parameters
         
-        print(f"[KCP Client] Initialized")
-        print(f"  Server: {server_address}:{server_port}")
-        print(f"  Local port: {self.local_port}")
-        print(f"  Conv ID: {conv_id}")
-        print(f"  Update interval: {update_interval}ms")
+        Args:
+            address: Server IP address
+            port: Server port
+            conv_id: KCP conversation ID
+        """
+        # Create KCP instance using stored configuration
+        self._kcp = KCP(
+            conv_id=conv_id,
+            no_delay=self._config.no_delay,
+            update_interval=self._config.update_interval,
+            resend_count=self._config.resend_count,
+            no_congestion_control=self._config.no_congestion_control,
+            send_window_size=self._config.send_window_size,
+            receive_window_size=self._config.receive_window_size,
+        )
+        
+        # Set KCP outbound handler
+        self._kcp.include_outbound_handler(self._on_kcp_output)
+
+        self.server_address = address
+        self.server_port = port
+        self._set_filter(address, port)
+
+    def get_local_port(self) -> int:
+        """
+        Get the local port
+        """
+        return self.local_port
     
     def set_message_callback(self, callback: Callable[[bytes], None]) -> None:
         """
@@ -122,9 +135,15 @@ class KCPClient:
             data: Raw bytes to send
         """
         try:
+            if self.server_address is None or self.server_port is None:
+                log_warn(f"[KCP Client] Server not started, skip sending.")
+                return
+            if len(data) > self._config.max_message_length:
+                log_err(f"[KCP Client] Message length exceeds {self._config.max_message_length} bytes: {len(data)}, skip")
+                return
             self._sock.sendto(data, (self.server_address, self.server_port))
         except Exception as e:
-            print(f"[KCP Client] Socket send error: {e}")
+            log_err(f"[KCP Client] Socket send error: {e}")
     
     def _on_kcp_output(self, kcp: KCP, data: bytes) -> None:
         """
@@ -144,15 +163,27 @@ class KCPClient:
             Received bytes or None if error
         """
         try:
-            data, addr = self._sock.recvfrom(2048)
+            data, addr = self._sock.recvfrom(self._config.max_message_length)
+            if self.filter_address is not None and addr != self.filter_address:
+                return None
             return data
         except socket.timeout:
             return None
         except Exception as e:
             if self._running:  # Only log if we're still running
-                print(f"[KCP Client] Socket receive error: {e}")
+                log_err(f"[KCP Client] Socket receive error: {e}")
             return None
-    
+
+    def _set_filter(self, address: str, port: int) -> None:
+        """
+        Set filter function for received messages
+        
+        Args:
+            address: Server IP address
+            port: Server port
+        """
+        self.filter_address = (address, port)
+
     def _process_received_data(self, raw_data: bytes) -> None:
         """
         Process received raw data through KCP protocol
@@ -170,7 +201,7 @@ class KCPClient:
                 try:
                     self._message_callback(data)
                 except Exception as e:
-                    print(f"[KCP Client] Message callback error: {e}")
+                    log_err(f"[KCP Client] Message callback error: {e}")
     
     def send(self, data: bytes) -> bool:
         """
@@ -191,7 +222,7 @@ class KCPClient:
             
             return True
         except Exception as e:
-            print(f"[KCP Client] Send error: {e}")
+            log_err(f"[KCP Client] Send error: {e}")
             return False
     
     def _update_loop(self) -> None:
@@ -199,7 +230,7 @@ class KCPClient:
         KCP update loop - runs in separate thread
         Handles KCP protocol state updates and retransmissions
         """
-        print("[KCP Client] Update loop started")
+        log_debug("[KCP Client] Update loop started")
         
         while self._running:
             try:
@@ -217,16 +248,16 @@ class KCPClient:
                     
             except Exception as e:
                 if self._running:
-                    print(f"[KCP Client] Update loop error: {e}")
+                    log_err(f"[KCP Client] Update loop error: {e}")
         
-        print("[KCP Client] Update loop stopped")
+        log_debug("[KCP Client] Update loop stopped")
     
     def _receive_loop(self) -> None:
         """
         Socket receive loop - runs in separate thread
         Continuously receives data from socket and processes through KCP
         """
-        print("[KCP Client] Receive loop started")
+        log_debug("[KCP Client] Receive loop started")
         
         while self._running:
             try:
@@ -239,19 +270,23 @@ class KCPClient:
                     
             except Exception as e:
                 if self._running:
-                    print(f"[KCP Client] Receive loop error: {e}")
+                    log_err(f"[KCP Client] Receive loop error: {e}")
         
-        print("[KCP Client] Receive loop stopped")
+        log_debug("[KCP Client] Receive loop stopped")
     
     def start(self) -> None:
         """
         Start KCP client
         Launches update and receive threads
         """
-        if self._running:
-            print("[KCP Client] Already running")
+        if self._kcp is None or self._message_callback is None:
+            log_err("[KCP Client] KCP not configured, can not start")
+            return
+        elif self._running:
+            log_debug("[KCP Client] Already running")
             return
         
+        log_debug(f"[KCP Client] Starting, local port: {self.local_port}")
         self._running = True
         
         # Start update thread
@@ -270,7 +305,7 @@ class KCPClient:
         )
         self._receive_thread.start()
         
-        print("[KCP Client] Started")
+        log_debug("[KCP Client] Started")
     
     def stop(self) -> None:
         """
@@ -280,7 +315,7 @@ class KCPClient:
         if not self._running:
             return
         
-        print("[KCP Client] Stopping...")
+        log_debug("[KCP Client] Stopping...")
         self._running = False
         
         # Wait for threads to finish
@@ -295,7 +330,7 @@ class KCPClient:
         except:
             pass
         
-        print("[KCP Client] Stopped")
+        log_debug("[KCP Client] Stopped")
     
     def is_running(self) -> bool:
         """Check if client is running"""
@@ -321,19 +356,22 @@ if __name__ == "__main__":
     # Message callback
     def on_message(data: bytes):
         """Handle received messages"""
-        print(f"[Main] Received: {data}")
+        log_info(f"[Main] Received: {data}")
     
-    # Create and start client
-    print("=" * 60)
-    print("KCP Client Core - Example Usage")
-    print("=" * 60)
-    
-    client = KCPClient(
-        server_address=SERVER_HOST,
-        server_port=SERVER_PORT,
-        conv_id=CONV_ID,
-        local_port=52323,  # Specific port or 0 for auto
+    # Create custom KCP configuration (optional)
+    custom_config = KCPConfig(
+        update_interval=10,
+        no_delay=True,
+        resend_count=2,
+        no_congestion_control=True,
+        send_window_size=128,
+        receive_window_size=128,
+        max_message_length=2048
     )
+    
+    # Create and configure client
+    client = KCPClient(config=custom_config)  # Or use KCPClient() for default config
+    client.config_kcp(SERVER_HOST, SERVER_PORT, CONV_ID)
     
     # Set message callback
     client.set_message_callback(on_message)
@@ -343,21 +381,18 @@ if __name__ == "__main__":
     
     try:
         # Send some test messages
-        print("\n[Main] Sending test messages...")
         for i in range(5):
             message = f"Hello {i}".encode()
             if client.send(message):
-                print(f"[Main] Sent: {message}")
+                log_info(f"[Main] Sent: {message}")
             time.sleep(1)
         
         # Keep running
-        print("\n[Main] Press Ctrl+C to stop...")
         while True:
             time.sleep(1)
             
     except KeyboardInterrupt:
-        print("\n[Main] Interrupted by user")
+        log_info("\n[Main] Interrupted by user")
     finally:
         client.stop()
-        print("[Main] Done")
 

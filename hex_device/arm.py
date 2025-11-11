@@ -259,9 +259,11 @@ class Arm(DeviceBase, MotorBase):
                         self.start()
 
                 # check motor error
-                for i in range(self.motor_count):
-                    if self.get_motor_state(i) == "error":
-                        log_err(f"Warning: Motor {i} error occurred")
+                if start_time - self.__last_warning_time > 1.0:
+                    for i in range(self.motor_count):
+                        if self.get_motor_state(i) == "error":
+                            log_err(f"Error: Motor {i} error occurred")
+                            self.__last_warning_time = start_time
 
                 # prepare sending message
                 with self._status_lock:

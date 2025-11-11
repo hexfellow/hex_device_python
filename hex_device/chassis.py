@@ -290,14 +290,11 @@ class Chassis(DeviceBase, MotorBase):
                         self.__last_warning_time = start_time
 
                 # Check motor status
-                error_found = False
-                for i in range(self.motor_count):
-                    if self.get_motor_state(i) == "error":
-                        log_err(f"Error: Motor {i} error occurred")
-                        error_found = True
-                if error_found:
-                    if start_time - self.__last_warning_time > 1.0:
-                        self.__last_warning_time = start_time
+                if start_time - self.__last_warning_time > 1.0:
+                    for i in range(self.motor_count):
+                        if self.get_motor_state(i) == "error":
+                            log_err(f"Error: Motor {i} error occurred")
+                            self.__last_warning_time = start_time
 
                 # prepare sending message
                 with self._status_lock:

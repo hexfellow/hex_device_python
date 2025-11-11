@@ -232,37 +232,6 @@ class HexDeviceApi:
         """
         self._device_factory.register_optional_device_class(device_type, device_class)
 
-    def find_device_by_robot_type(self, robot_type) -> Optional[DeviceBase]:
-        """
-        Find device by robot_type
-        
-        Args:
-            robot_type: Robot type
-            
-        Returns:
-            Matching device or None
-        """
-        for device in self._internal_device_list:
-            if hasattr(device,
-                       'robot_type') and device.robot_type == robot_type:
-                return device
-        return None
-
-    def find_optional_device_by_id(self, device_id: int) -> Optional[OptionalDeviceBase]:
-        """
-        Find optional device by device_id
-        
-        Args:
-            device_id: Device ID from SecondaryDeviceStatus
-            
-        Returns:
-            Matching optional device or None
-        """
-        for device in self._optional_device_list:
-            if hasattr(device, 'device_id') and device.device_id == device_id:
-                return device
-        return None
-
     def _create_and_register_device(self, robot_type,
                                    api_up) -> Optional[DeviceBase]:
         """
@@ -329,6 +298,7 @@ class HexDeviceApi:
 
         return device
 
+    # Device task management
     def _start_device_periodic_task(self, device_id: int):
         """
         Start device periodic task
@@ -478,7 +448,27 @@ class HexDeviceApi:
 
         return status
 
-    # message function
+    # Message function
+    def _is_support_version(self, api_up) -> bool:
+        """
+        Check if the protocol version is supported
+        @return:
+            bool: True if protocol version is supported, False otherwise
+        """
+        if not hasattr(api_up, 'protocol_major_version'):
+            log_err("Your hardware version is too lower!!! please use hex_device v1.2.1 or lower.")
+            log_err("Your hardware version is too lower!!! please use hex_device v1.2.1 or lower.")
+            log_err("Your hardware version is too lower!!! please use hex_device v1.2.1 or lower.")
+            return False
+        else:
+            version = api_up.protocol_major_version
+            if version < 1.0:
+                log_err(f"The hardware firmware version is too low({version})!!! Please use a lower version of hex_device.")
+                log_err(f"The hardware firmware version is too low({version})!!! Please use a lower version of hex_device.")
+                log_err(f"The hardware firmware version is too low({version})!!! Please use a lower version of hex_device.")
+                return False
+        return True
+
     def _construct_enable_kcp_message(self, client_port: int) -> public_api_down_pb2.APIDown:
         """
         Construct enable KCP message
@@ -609,7 +599,7 @@ class HexDeviceApi:
                 log_err(f"Unknown error: {str(e)}")
                 raise WsError("Unexpected error") from e
 
-    # websocket function
+    # Websocket function
     def _create_socket_with_nodelay(self, host: str, port: int, local_port: int = None) -> socket.socket:
         """
         Create a connected socket with TCP_NODELAY and TCP_QUICKACK for fast retransmission
@@ -715,119 +705,6 @@ class HexDeviceApi:
         self.__loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.__loop)
         self.__loop.run_until_complete(self.__main_loop())
-
-    ## async function
-    async def __async_close(self):
-        """
-        @brief: Close async thread and connection
-        @return:
-            None
-        """
-        try:
-            # Close WebSocket connection
-            if self.__websocket:
-                await self.__websocket.close()
-                self.__websocket = None
-                log_info("WebSocket connection closed successfully")
-            
-            # Close KCP connection using stop() method
-            if self.__kcp_client is not None:
-                self.__kcp_client.stop()
-                self.__kcp_client = None
-                log_info("KCP connection closed successfully")
-        except Exception as e:
-            log_err(f"Error closing connection: {e}")
-        finally:
-            if self.__shutdown_event is not None:
-                self.__shutdown_event.set()
-
-    async def __main_loop(self):
-        self.__shutdown_event = asyncio.Event()
-        log_common("HexDevice Api started.")
-
-        await self.__connect_ws()
-
-        task1 = asyncio.create_task(self.__websocket_data_parser())
-        self.__tasks = [task1]
-        await self.__shutdown_event.wait()
-
-        # Stop all device tasks
-        await self._stop_all_device_tasks()
-
-        # Stop main tasks
-        for task in self.__tasks:
-            task.cancel()
-
-        # Wait for all tasks to complete, handle cancellation exceptions
-        try:
-            await asyncio.gather(*self.__tasks, return_exceptions=True)
-        except Exception as e:
-            log_err(f"Error during task cleanup: {e}")
-
-        log_err("HexDevice api main_loop exited.")
-
-    async def __websocket_data_parser(self):
-        """
-        @brief: Periodic data parsing
-        @return:
-            None
-        """
-        # Check if the protocol version is supported
-        try:
-            api_up = await self.__capture_data_frame_from_websocket()
-            if not self._is_support_version(api_up):
-                self.close()
-                return
-        except Exception as e:
-            log_err(f"__websocket_data_parser error: {e}")
-            self.close()
-            return
-
-        # try to connect kcp connection
-        if self.enable_kcp:
-            kcp_client = KCPClient()
-            client_port = kcp_client.get_local_port()
-            msg = self._construct_enable_kcp_message(client_port)
-            await self._send_down_message(msg)
-
-            kcp_init = False
-            while not kcp_init:
-                try:
-                    # Set raise_on_timeout=True to catch timeout and resend enable_kcp message
-                    api_up = await self.__capture_data_frame_from_websocket(raise_on_timeout=True)
-
-                    if api_up.HasField('kcp_server_status'):
-                        server_port = api_up.kcp_server_status.server_port
-                        session_id = api_up.session_id
-                        kcp_client.config_kcp(self.parsed_url.hostname, server_port, session_id)
-                        kcp_client.set_message_callback(self._process_kcp_data)
-                        kcp_client.start()
-                        # set report frequency to 1Hz
-                        msg = self._construct_tcp_report_frequency_message(ReportFrequency.Rf1Hz)
-                        await self._send_down_message(msg)
-                        kcp_init = True
-                    # If received other messages, just ignore and continue waiting
-                    
-                except asyncio.TimeoutError:
-                    log_debug("Waiting for KCP server status, resending enable_kcp message...")
-                    msg = self._construct_enable_kcp_message(client_port)
-                    await self._send_down_message(msg)
-
-            # kcp init finished
-            self.__kcp_client = kcp_client
-            log_debug(f"kcp client initialized, session_id={session_id}")
-            # send a start message to kcp
-            msg = self._construct_kcp_start_message()
-            await self._send_down_message(msg)
-
-        # Begin to parse the data
-        while True:
-            try:
-                api_up = await self.__capture_data_frame_from_websocket()
-            except Exception as e:
-                log_err(f"__websocket_data_parser error: {e}")
-                continue
-            self._process_api_up(api_up)
 
     def _process_kcp_data(self, data: bytes):
         """
@@ -947,27 +824,151 @@ class HexDeviceApi:
                 except Exception as e:
                     log_err(f"Error processing secondary device {getattr(secondary_device, 'device_id', 'unknown')}: {e}")
 
-    def _is_support_version(self, api_up) -> bool:
+    ## async function
+    async def __async_close(self):
         """
-        Check if the protocol version is supported
+        @brief: Close async thread and connection
         @return:
-            bool: True if protocol version is supported, False otherwise
+            None
         """
-        if not hasattr(api_up, 'protocol_major_version'):
-            log_err("Your hardware version is too lower!!! please use hex_device v1.2.1 or lower.")
-            log_err("Your hardware version is too lower!!! please use hex_device v1.2.1 or lower.")
-            log_err("Your hardware version is too lower!!! please use hex_device v1.2.1 or lower.")
-            return False
-        else:
-            version = api_up.protocol_major_version
-            if version < 1.0:
-                log_err(f"The hardware firmware version is too low({version})!!! Please use a lower version of hex_device.")
-                log_err(f"The hardware firmware version is too low({version})!!! Please use a lower version of hex_device.")
-                log_err(f"The hardware firmware version is too low({version})!!! Please use a lower version of hex_device.")
-                return False
-        return True
+        try:
+            # Close WebSocket connection
+            if self.__websocket:
+                await self.__websocket.close()
+                self.__websocket = None
+                log_info("WebSocket connection closed successfully")
+            
+            # Close KCP connection using stop() method
+            if self.__kcp_client is not None:
+                self.__kcp_client.stop()
+                self.__kcp_client = None
+                log_info("KCP connection closed successfully")
+        except Exception as e:
+            log_err(f"Error closing connection: {e}")
+        finally:
+            if self.__shutdown_event is not None:
+                self.__shutdown_event.set()
+
+    async def __main_loop(self):
+        self.__shutdown_event = asyncio.Event()
+        log_common("HexDevice Api started.")
+
+        await self.__connect_ws()
+
+        task1 = asyncio.create_task(self.__websocket_data_parser())
+        self.__tasks = [task1]
+        await self.__shutdown_event.wait()
+
+        # Stop all device tasks
+        await self._stop_all_device_tasks()
+
+        # Stop main tasks
+        for task in self.__tasks:
+            task.cancel()
+
+        # Wait for all tasks to complete, handle cancellation exceptions
+        try:
+            await asyncio.gather(*self.__tasks, return_exceptions=True)
+        except Exception as e:
+            log_err(f"Error during task cleanup: {e}")
+
+        log_err("HexDevice api main_loop exited.")
+
+    async def __websocket_data_parser(self):
+        """
+        @brief: Periodic data parsing
+        @return:
+            None
+        """
+        # Check if the protocol version is supported
+        try:
+            api_up = await self.__capture_data_frame_from_websocket()
+            if not self._is_support_version(api_up):
+                self.close()
+                return
+        except Exception as e:
+            log_err(f"__websocket_data_parser error: {e}")
+            self.close()
+            return
+
+        # try to connect kcp connection
+        if self.enable_kcp:
+            kcp_client = KCPClient()
+            client_port = kcp_client.get_local_port()
+            msg = self._construct_enable_kcp_message(client_port)
+            await self._send_down_message(msg)
+
+            kcp_init = False
+            while not kcp_init:
+                try:
+                    # Set raise_on_timeout=True to catch timeout and resend enable_kcp message
+                    api_up = await self.__capture_data_frame_from_websocket(raise_on_timeout=True)
+
+                    if api_up.HasField('kcp_server_status'):
+                        server_port = api_up.kcp_server_status.server_port
+                        session_id = api_up.session_id
+                        kcp_client.config_kcp(self.parsed_url.hostname, server_port, session_id)
+                        kcp_client.set_message_callback(self._process_kcp_data)
+                        kcp_client.start()
+                        # set report frequency to 1Hz
+                        msg = self._construct_tcp_report_frequency_message(ReportFrequency.Rf1Hz)
+                        await self._send_down_message(msg)
+                        kcp_init = True
+                    # If received other messages, just ignore and continue waiting
+                    
+                except asyncio.TimeoutError:
+                    log_debug("Waiting for KCP server status, resending enable_kcp message...")
+                    msg = self._construct_enable_kcp_message(client_port)
+                    await self._send_down_message(msg)
+
+            # kcp init finished
+            self.__kcp_client = kcp_client
+            log_debug(f"kcp client initialized, session_id={session_id}")
+            # send a start message to kcp
+            msg = self._construct_kcp_start_message()
+            await self._send_down_message(msg)
+
+        # Begin to parse the data
+        while True:
+            try:
+                api_up = await self.__capture_data_frame_from_websocket()
+            except Exception as e:
+                log_err(f"__websocket_data_parser error: {e}")
+                continue
+            self._process_api_up(api_up)
 
     # User api
+    def find_device_by_robot_type(self, robot_type) -> Optional[DeviceBase]:
+        """
+        Find device by robot_type
+        
+        Args:
+            robot_type: Robot type
+            
+        Returns:
+            Matching device or None
+        """
+        for device in self._internal_device_list:
+            if hasattr(device,
+                       'robot_type') and device.robot_type == robot_type:
+                return device
+        return None
+
+    def find_optional_device_by_id(self, device_id: int) -> Optional[OptionalDeviceBase]:
+        """
+        Find optional device by device_id
+        
+        Args:
+            device_id: Device ID from SecondaryDeviceStatus
+            
+        Returns:
+            Matching optional device or None
+        """
+        for device in self._optional_device_list:
+            if hasattr(device, 'device_id') and device.device_id == device_id:
+                return device
+        return None
+
     def close(self):
         if self.__loop and self.__loop.is_running():
             log_warn("HexDevice API is closing...")

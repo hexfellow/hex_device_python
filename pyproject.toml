@@ -9,6 +9,7 @@ dependencies = [
   "numpy>=1.17.4",
   "protobuf>=5.29.4,<6.0.0",
   "websockets>=13.1",
+  "kcp==0.1.6",
 ]
 requires-python = ">=3.9"
 authors = [
@@ -36,9 +37,6 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: System :: Hardware :: Hardware Drivers",
 ]
-
-[project.optional-dependencies]
-kcp = ["kcp==0.1.6"]
 
 [project.urls]
 Homepage = "https://github.com/hexfellow/hex_device_python"

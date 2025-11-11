@@ -46,7 +46,7 @@ class HexDeviceApi:
         control_hz: the frequency of the control loop
     """
 
-    def __init__(self, ws_url: str, control_hz: int = 500, enable_kcp: bool = False, local_port: int = None):
+    def __init__(self, ws_url: str, control_hz: int = 500, enable_kcp: bool = True, local_port: int = None):
         # variables init
         self.ws_url = ws_url
         try:

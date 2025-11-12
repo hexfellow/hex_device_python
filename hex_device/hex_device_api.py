@@ -456,9 +456,9 @@ class HexDeviceApi:
             bool: True if protocol version is supported, False otherwise
         """
         if not hasattr(api_up, 'protocol_major_version'):
-            log_err("Your hardware version is too lower!!! please use hex_device v1.2.1 or lower.")
-            log_err("Your hardware version is too lower!!! please use hex_device v1.2.1 or lower.")
-            log_err("Your hardware version is too lower!!! please use hex_device v1.2.1 or lower.")
+            log_err("Your hardware version is too lower!!! please use hex_device v1.2.2 or lower.")
+            log_err("Your hardware version is too lower!!! please use hex_device v1.2.2 or lower.")
+            log_err("Your hardware version is too lower!!! please use hex_device v1.2.2 or lower.")
             return False
         else:
             version = api_up.protocol_major_version

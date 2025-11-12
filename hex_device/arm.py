@@ -68,8 +68,6 @@ class Arm(DeviceBase, MotorBase):
         self._arm_series = robot_type
 
         # arm status
-        self._status_lock = threading.Lock()
-        self._arm_mode = public_api_types_pb2.ArmMode.AmBrake
         self._api_control_initialized = False
         self._calibrated = False
         self._parking_stop_detail = public_api_types_pb2.ParkingStopDetail()
@@ -82,7 +80,7 @@ class Arm(DeviceBase, MotorBase):
         self._command_timeout = 0.3  # 300ms
         self.__last_warning_time = time.perf_counter()  # last log warning time
         self._my_session_id = 0   # my session id, was assigned by server
-        self.__send_init: Optional[bool] = None
+        self._send_init = self._send_init
 
     def _set_robot_type(self, robot_type):
         """
@@ -145,7 +143,6 @@ class Arm(DeviceBase, MotorBase):
                 # update my session id
                 self._my_session_id = api_up_data.session_id
                 # Update robotic arm status
-                self._arm_mode = arm_status.current_mode
                 self._api_control_initialized = arm_status.api_control_initialized
                 self._calibrated = arm_status.calibrated
                 self._session_holder = arm_status.session_holder
@@ -262,13 +259,15 @@ class Arm(DeviceBase, MotorBase):
                         self.start()
 
                 # check motor error
-                for i in range(self.motor_count):
-                    if self.get_motor_state(i) == "error":
-                        log_err(f"Warning: Motor {i} error occurred")
+                if start_time - self.__last_warning_time > 1.0:
+                    for i in range(self.motor_count):
+                        if self.get_motor_state(i) == "error":
+                            log_err(f"Error: Motor {i} error occurred")
+                            self.__last_warning_time = start_time
 
                 # prepare sending message
                 with self._status_lock:
-                    s = self.__send_init
+                    s = self._send_init
                     a = self._api_control_initialized
                     c = self._calibrated
                     sh = self._session_holder
@@ -282,11 +281,11 @@ class Arm(DeviceBase, MotorBase):
                 elif s:
                     msg = self._construct_init_message()
                     await self._send_message(msg)
-                    self.__send_init = None
+                    self._send_init = None
                 elif not s:
                     msg = self._construct_init_message(False)
                     await self._send_message(msg)
-                    self.__send_init = None
+                    self._send_init = None
 
                 ## check if is holder:
                 if sh != mi:
@@ -327,20 +326,6 @@ class Arm(DeviceBase, MotorBase):
             except Exception as e:
                 log_err(f"Arm periodic task exception: {e}")
                 continue
-
-    def start(self):
-        """
-        Set init message to True to start the arm
-        """
-        with self._status_lock:
-            self.__send_init = True
-
-    def stop(self):
-        """
-        Set init message to False to stop the arm
-        """
-        with self._status_lock:
-            self.__send_init = False
 
     # Robotic arm specific methods
     def command_timeout_check(self, check_or_not: bool = True):
@@ -387,12 +372,12 @@ class Arm(DeviceBase, MotorBase):
         """
         msg = public_api_down_pb2.APIDown()
         arm_command = public_api_types_pb2.ArmCommand()
-        
         arm_exclusive_command = public_api_types_pb2.ArmExclusiveCommand()
-        motor_targets = self._construct_target_motor_msg(self._pulse_per_rotation, self._period)
-        arm_exclusive_command.motor_targets.CopyFrom(motor_targets)
-        arm_exclusive_command.target_mode = public_api_types_pb2.ArmMode.AmApiControl
+        arm_api_control_command = public_api_types_pb2.ArmApiControlCommand()
 
+        motor_targets = self._construct_target_motor_msg(self._pulse_per_rotation, self._period)
+        arm_api_control_command.motor_targets.CopyFrom(motor_targets)
+        arm_exclusive_command.arm_api_control_command.CopyFrom(arm_api_control_command)
         arm_command.arm_exclusive_command.CopyFrom(arm_exclusive_command)
         msg.arm_command.CopyFrom(arm_command)
         return msg
@@ -403,11 +388,11 @@ class Arm(DeviceBase, MotorBase):
         """
         msg = public_api_down_pb2.APIDown()
         arm_command = public_api_types_pb2.ArmCommand()
-
         arm_exclusive_command = public_api_types_pb2.ArmExclusiveCommand()
-        arm_exclusive_command.motor_targets.CopyFrom(motor_msg)
-        arm_exclusive_command.target_mode = public_api_types_pb2.ArmMode.AmApiControl
-
+        arm_api_control_command = public_api_types_pb2.ArmApiControlCommand()
+        
+        arm_api_control_command.motor_targets.CopyFrom(motor_msg)
+        arm_exclusive_command.arm_api_control_command.CopyFrom(arm_api_control_command)
         arm_command.arm_exclusive_command.CopyFrom(arm_exclusive_command)
         msg.arm_command.CopyFrom(arm_command)
         return msg
@@ -426,7 +411,6 @@ class Arm(DeviceBase, MotorBase):
         arm_command = public_api_types_pb2.ArmCommand()
         arm_exclusive_command = public_api_types_pb2.ArmExclusiveCommand()
         arm_exclusive_command.api_control_initialize = api_control_initialize
-        arm_exclusive_command.target_mode = public_api_types_pb2.ArmMode.AmApiControl
         arm_command.arm_exclusive_command.CopyFrom(arm_exclusive_command)
         msg.arm_command.CopyFrom(arm_command)
         return msg
@@ -439,7 +423,6 @@ class Arm(DeviceBase, MotorBase):
         arm_command = public_api_types_pb2.ArmCommand()
         arm_exclusive_command = public_api_types_pb2.ArmExclusiveCommand()
         arm_exclusive_command.calibrate = True
-        arm_exclusive_command.target_mode = public_api_types_pb2.ArmMode.AmApiControl
         arm_command.arm_exclusive_command.CopyFrom(arm_exclusive_command)
         msg.arm_command.CopyFrom(arm_command)
         return msg
@@ -450,10 +433,9 @@ class Arm(DeviceBase, MotorBase):
         """
         msg = public_api_down_pb2.APIDown()
         arm_command = public_api_types_pb2.ArmCommand()
-        arm_exclusive_command = public_api_types_pb2.ArmExclusiveCommand()
-        arm_exclusive_command.clear_parking_stop = True
-        arm_exclusive_command.target_mode = public_api_types_pb2.ArmMode.AmApiControl
-        arm_command.arm_exclusive_command.CopyFrom(arm_exclusive_command)
+        arm_shared_command = public_api_types_pb2.ArmSharedCommand()
+        arm_shared_command.clear_parking_stop = True
+        arm_command.arm_shared_command.CopyFrom(arm_shared_command)
         msg.arm_command.CopyFrom(arm_command)
         return msg
 

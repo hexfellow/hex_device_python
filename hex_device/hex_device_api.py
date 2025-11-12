@@ -6,22 +6,37 @@
 # Date  : 2025-8-1
 ################################################################
 
-import time
 from .generated import public_api_down_pb2, public_api_up_pb2, public_api_types_pb2
-from .common_utils import is_valid_ws_url, InvalidWSURLException, delay
+from .common_utils import is_valid_ws_url, InvalidWSURLException, delay, log_debug
 from .common_utils import log_warn, log_info, log_err, log_common
 from .error_type import WsError, ProtocolError
 from .device_base import DeviceBase
 from .device_factory import DeviceFactory
 from .device_base_optional import OptionalDeviceBase
+from .hex_socket import HexSocketParser, HexSocketOpcode
+from .kcp_client_core import KCPClient, KCPConfig
 
 import asyncio
 import threading
 import websockets
+import socket
+from urllib.parse import urlparse
 from typing import Optional, Tuple, List, Type, Dict, Any, Union
 from websockets.exceptions import ConnectionClosed
 
 RAW_DATA_LEN = 50
+ORPHANED_TASK_CHECK_INTERVAL = 100
+
+class ReportFrequency:
+    """
+    Report frequency
+    """
+    Rf1000Hz = 0
+    Rf500Hz = 3
+    Rf250Hz = 4
+    Rf100Hz = 1
+    Rf50Hz = 2
+    Rf1Hz = 5
 
 class HexDeviceApi:
     """
@@ -31,14 +46,19 @@ class HexDeviceApi:
         control_hz: the frequency of the control loop
     """
 
-    def __init__(self, ws_url: str, control_hz: int = 500):
+    def __init__(self, ws_url: str, control_hz: int = 500, enable_kcp: bool = True, local_port: int = None):
         # variables init
         self.ws_url = ws_url
         try:
             self.__ws_url: str = is_valid_ws_url(ws_url)
         except InvalidWSURLException as e:
             log_err("Invalid WebSocket URL: " + str(e))
+        self.parsed_url = urlparse(self.__ws_url)
+        self.local_port = local_port  # Local port to bind tcp socket (None for random port)
+        self.enable_kcp = enable_kcp
 
+        self.__kcp_client: Optional[KCPClient] = None
+        self.__kcp_parser = HexSocketParser()
         self.__websocket = None
         self.__raw_data = []  ## raw data buffer
         self.__control_hz = control_hz
@@ -57,7 +77,11 @@ class HexDeviceApi:
         self._optional_device_list: List[OptionalDeviceBase] = []  # Optional device list
         
         # Device task management
-        self._device_tasks = {}  # Store device IDs and their corresponding async tasks
+        self._device_tasks = {}  # Store device IDs and their corresponding futures (from run_coroutine_threadsafe)
+        
+        # Counter for orphaned task checking
+        self._check_counter = 0  # Global counter for tracking function calls
+        self._process_lock = threading.Lock()  # Thread lock for _process_api_up
 
         self.__shutdown_event = None  # the handle event for shutdown api
         self.__loop = None  ## async loop thread
@@ -65,7 +89,12 @@ class HexDeviceApi:
                                               daemon=True)
         # init api
         self.__loop_thread.start()
+        if self.local_port:
+            log_info(f"HexDeviceApi initialized (local port: {self.local_port}).")
+        else:
+            log_info(f"HexDeviceApi initialized.")
 
+    # Device interface
     @property
     def device_list(self):
         """
@@ -170,8 +199,14 @@ class HexDeviceApi:
 
         try:
             from .hands import Hands
-            self._register_device_class(Hands)
-            log_info("Registered Hands device class")
+            # Register Hands for all supported device types (with duplicate check)
+            registered_count = 0
+            for device_type in Hands.SUPPORTED_DEVICE_TYPE:
+                # Check if already registered to avoid duplicate registration
+                if device_type not in self._device_factory._optional_device_classes:
+                    self._register_optional_device_class(device_type, Hands)
+                    registered_count += 1
+            log_info(f"Registered Hands optional device class for {registered_count} new device types out of {len(Hands.SUPPORTED_DEVICE_TYPE)} total: {[dt for dt in Hands.SUPPORTED_DEVICE_TYPE]}")
         except ImportError as e:
             log_warn(f"Unable to import Hands: {e}")
 
@@ -187,36 +222,15 @@ class HexDeviceApi:
         """
         self._device_factory.register_device_class(device_class)
 
-    def find_device_by_robot_type(self, robot_type) -> Optional[DeviceBase]:
+    def _register_optional_device_class(self, device_type: int, device_class):
         """
-        Find device by robot_type
-        
-        Args:
-            robot_type: Robot type
-            
-        Returns:
-            Matching device or None
-        """
-        for device in self._internal_device_list:
-            if hasattr(device,
-                       'robot_type') and device.robot_type == robot_type:
-                return device
-        return None
+        Register optional device class to factory
 
-    def find_optional_device(self, message_type: str) -> Optional[OptionalDeviceBase]:
-        """
-        Find optional device by message_type
-        
         Args:
-            message_type: Message type (e.g., 'hand_status', 'imu_data', 'gamepad_read')
-            
-        Returns:
-            Matching optional device or None
+            device_type: Device type (SecondaryDeviceType)
+            device_class: Optional device class
         """
-        for device in self._optional_device_list:
-            if hasattr(device, 'supports_message_type') and device.supports_message_type(message_type):
-                return device
-        return None
+        self._device_factory.register_optional_device_class(device_type, device_class)
 
     def _create_and_register_device(self, robot_type,
                                    api_up) -> Optional[DeviceBase]:
@@ -249,21 +263,24 @@ class HexDeviceApi:
 
         return device
 
-    def _create_and_register_optional_device(self, message_type: str, api_up) -> Optional[OptionalDeviceBase]:
+    def _create_and_register_optional_device(self, device_id: int, device_type, secondary_device_status) -> Optional[OptionalDeviceBase]:
         """
-        Create and register optional device based on message_type
+        Create and register optional device based on device_id and device_type
         
         Args:
-            message_type: Message type (e.g., 'hand_status', 'imu_data', 'gamepad_read')
-            api_up: API upstream data
+            device_id: Device ID from SecondaryDeviceStatus
+            device_type: Device type
+            secondary_device_status: The SecondaryDeviceStatus object
             
         Returns:
             Created optional device instance or None
         """
+        # init optional device
         device = self._device_factory.create_optional_device(
-            message_type,
+            device_id,
+            device_type,
+            secondary_device_status=secondary_device_status,
             send_message_callback=self._send_down_message,
-            api_up=api_up
         )
 
         if device:
@@ -273,14 +290,15 @@ class HexDeviceApi:
             # Note: Optional devices don't need periodic tasks by _read_only
             # They are updated only when data arrives
             if not device._read_only:
-                device_id = self._device_id_counter
+                internal_device_id = self._device_id_counter
                 self._device_id_counter += 1
-                self._device_id_map[device_id] = device
-                self._device_to_id_map[device] = device_id
-                self._start_device_periodic_task(device_id)
+                self._device_id_map[internal_device_id] = device
+                self._device_to_id_map[device] = internal_device_id
+                self._start_device_periodic_task(internal_device_id)
 
         return device
 
+    # Device task management
     def _start_device_periodic_task(self, device_id: int):
         """
         Start device periodic task
@@ -299,10 +317,16 @@ class HexDeviceApi:
             log_err(f"Device with ID {device_id} not found")
             return
 
-        # Create async task
-        task = asyncio.create_task(self._device_periodic_runner(device_id))
-        self._device_tasks[device_id] = task
-        log_common(f"Begin periodic task for {device.name}")
+        # Create async task using run_coroutine_threadsafe to handle cross-thread scheduling
+        if self.__loop:
+            future = asyncio.run_coroutine_threadsafe(
+                self._device_periodic_runner(device_id), 
+                self.__loop
+            )
+            self._device_tasks[device_id] = future
+            log_common(f"Begin periodic task for {device.name}")
+        else:
+            log_err(f"Event loop not available, cannot start periodic task for {device.name}")
 
     async def _device_periodic_runner(self, device_id: int):
         """
@@ -385,12 +409,13 @@ class HexDeviceApi:
         Stop all device periodic tasks
         """
         tasks_to_cancel = list(self._device_tasks.values())
-        for task in tasks_to_cancel:
-            task.cancel()
+        for future in tasks_to_cancel:
+            future.cancel()
 
+        # Wait a bit for cancellations to complete
         if tasks_to_cancel:
             try:
-                await asyncio.gather(*tasks_to_cancel, return_exceptions=True)
+                await asyncio.sleep(0.1)  # Give time for cancellation to propagate
             except Exception as e:
                 log_err(f"Error stopping device tasks: {e}")
 
@@ -423,23 +448,90 @@ class HexDeviceApi:
 
         return status
 
-    # message function
+    # Message function
+    def _is_support_version(self, api_up) -> bool:
+        """
+        Check if the protocol version is supported
+        @return:
+            bool: True if protocol version is supported, False otherwise
+        """
+        if not hasattr(api_up, 'protocol_major_version'):
+            log_err("Your hardware version is too lower!!! please use hex_device v1.2.1 or lower.")
+            log_err("Your hardware version is too lower!!! please use hex_device v1.2.1 or lower.")
+            log_err("Your hardware version is too lower!!! please use hex_device v1.2.1 or lower.")
+            return False
+        else:
+            version = api_up.protocol_major_version
+            if version < 1.0:
+                log_err(f"The hardware firmware version is too low({version})!!! Please use a lower version of hex_device.")
+                log_err(f"The hardware firmware version is too low({version})!!! Please use a lower version of hex_device.")
+                log_err(f"The hardware firmware version is too low({version})!!! Please use a lower version of hex_device.")
+                return False
+        return True
+
+    def _construct_enable_kcp_message(self, client_port: int) -> public_api_down_pb2.APIDown:
+        """
+        Construct enable KCP message
+        Args:
+            local_port: The local port of the KCP client
+        Returns:
+            Enable KCP message
+        """
+        default_config = KCPConfig()
+        msg = public_api_down_pb2.APIDown()
+        kcp_command = public_api_types_pb2.EnableKcp()
+        kcp_config = public_api_types_pb2.KcpConfig()
+        kcp_command.client_peer_port = client_port
+        kcp_config.window_size_snd_wnd = default_config.send_window_size
+        kcp_config.window_size_rcv_wnd = default_config.receive_window_size
+        kcp_config.interval_ms = default_config.update_interval
+        kcp_config.no_delay = default_config.no_delay
+        kcp_config.nc = default_config.no_congestion_control
+        kcp_config.resend = default_config.resend_count
+        kcp_command.kcp_config.CopyFrom(kcp_config)
+        msg.enable_kcp.CopyFrom(kcp_command)
+        return msg
+
+    def _construct_tcp_report_frequency_message(self, report_frequency) -> public_api_down_pb2.APIDown:
+        """
+        Construct TCP report frequency message
+        """
+        msg = public_api_down_pb2.APIDown()
+        msg.set_report_frequency = report_frequency
+        return msg
+
+    def _construct_kcp_start_message(self) -> public_api_down_pb2.APIDown:
+        """
+        Construct KCP start message
+        """
+        msg = public_api_down_pb2.APIDown()
+        msg.placeholder_message = True
+        return msg
+
     async def _send_down_message(self, data: public_api_down_pb2.APIDown):
         msg = data.SerializeToString()
-        if self.__websocket is None:
-            # WebSocket is not connected, skip sending message
-            return
         
-        try:
-            await self.__websocket.send(msg)
-        except ConnectionClosed:
-            # Connection was closed during send, this is expected
-            pass
-        except Exception as e:
-            # Log other unexpected errors but don't raise to avoid spam
-            log_err(f"Failed to send message: {e}")
+        if not self.enable_kcp or self.__kcp_client is None:
+            if self.__websocket is None:
+                log_warn("TCP connection is not established, skipping message send")
+                return
+            
+            try:
+                await self.__websocket.send(msg)
+            except ConnectionClosed:
+                log_err("WebSocket connection was closed during message send, please check your network connection and restart the server again.")
+                self.close()
+            except Exception as e:
+                log_err(f"Failed to send message via TCP: {e}")
+                
+        elif self.enable_kcp and self.__kcp_client is not None:
+            try:
+                frame = HexSocketParser.create_header(msg, HexSocketOpcode.Binary)
+                self.__kcp_client.send(frame)
+            except Exception as e:
+                log_err(f"Failed to send message via KCP: {e}")
 
-    async def __capture_data_frame(self) -> Optional[public_api_up_pb2.APIUp]:
+    async def __capture_data_frame_from_websocket(self, raise_on_timeout: bool = False) -> Optional[public_api_up_pb2.APIUp]:
         """
         @brief: Continuously monitor WebSocket connections until:
         1. Received a valid binary Protobuf message
@@ -447,9 +539,7 @@ class HexDeviceApi:
         3. Connection closed
         4. No data due to timeout
         
-        @params:
-            websocket: Established WebSocket connection object
-            
+        @param raise_on_timeout: If True, raise TimeoutError instead of continuing on timeout
         @return:
             base_backend.APIUp object or None
         """
@@ -483,15 +573,23 @@ class HexDeviceApi:
                     log_common(f"ignore string message: {message[:50]}...")
                     continue
 
+                else:
+                    log_warn(f"Received unexpected message type: {type(message)}, content: {message}")
+                    continue
+
             except asyncio.TimeoutError:
-                log_err("No data received for 3 seconds")
-                continue
+                if raise_on_timeout:
+                    # Re-raise timeout for caller to handle
+                    raise
+                else:
+                    log_err("No data received for 3 seconds")
+                    continue
 
             except ConnectionClosed as e:
                 log_err(
                     f"Connection closed (code: {e.code}, reason: {e.reason})")
                 try:
-                    await self.__reconnect()
+                    await self.__reconnect_ws()
                     continue
                 except ConnectionError as e:
                     log_err(f"Reconnect failed: {e}")
@@ -501,16 +599,64 @@ class HexDeviceApi:
                 log_err(f"Unknown error: {str(e)}")
                 raise WsError("Unexpected error") from e
 
-    # websocket function
+    # Websocket function
+    def _create_socket_with_nodelay(self, host: str, port: int, local_port: int = None) -> socket.socket:
+        """
+        Create a connected socket with TCP_NODELAY and TCP_QUICKACK for fast retransmission
+        
+        Args:
+            host: Target host
+            port: Target port
+            local_port: Local port to bind (None for random port)
+            
+        Returns:
+            Connected socket with TCP optimizations for fast retransmission
+        """
+        if local_port is not None:
+            # Create socket manually and bind to specific local port
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                # Allow reuse of local address to avoid "Address already in use" errors
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                # Bind to specific local port (0.0.0.0 means any local interface)
+                sock.bind(('0.0.0.0', local_port))
+                log_info(f"Socket bound to local port {local_port}")
+                # Connect to remote host
+                sock.connect((host, port))
+            except OSError as e:
+                sock.close()
+                log_err(f"Failed to bind to local port {local_port}: {e}")
+                raise
+        else:
+            # Use default behavior (random local port)
+            sock = socket.create_connection((host, port))
+        
+        # Enable TCP_NODELAY to disable Nagle's algorithm for low latency
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        # Enable TCP_QUICKACK for fast retransmission
+        # This enables quick acknowledgments which helps with fast retransmission
+        try:
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_QUICKACK, 1)
+            log_debug("TCP_QUICKACK enabled")
+        except (OSError, AttributeError):
+            # TCP_QUICKACK may not be available on all platforms (Linux-specific)
+            log_warn("TCP_QUICKACK not supported on this platform")
+        
+        return sock
+
     async def __connect_ws(self):
         """
-        @brief: Connect to the WebSocket server.
+        @brief: Connect to the device server.
         """
         try:
+            # Create socket with TCP_NODELAY and TCP_QUICKACK for fast retransmission
+            sock = self._create_socket_with_nodelay(self.parsed_url.hostname, self.parsed_url.port, self.local_port)
             self.__websocket = await websockets.connect(self.__ws_url,
                                                         ping_interval=20,
                                                         ping_timeout=60,
-                                                        close_timeout=5)
+                                                        close_timeout=5,
+                                                        sock=sock)
+            log_debug("WebSocket connection established.")
         except Exception as e:
             log_err(f"Failed to open WebSocket connection: {e}")
             log_err(
@@ -518,7 +664,10 @@ class HexDeviceApi:
             )
             exit(1)
 
-    async def __reconnect(self):
+    async def __reconnect_ws(self):
+        """
+        @brief: Reconnect to the device server.
+        """
         retry_count = 0
         max_retries = 3
         base_delay = 1
@@ -527,15 +676,19 @@ class HexDeviceApi:
             try:
                 if self.__websocket:
                     await self.__websocket.close()
+                # Create socket with TCP_NODELAY and TCP_QUICKACK for fast retransmission
+                sock = self._create_socket_with_nodelay(self.parsed_url.hostname, self.parsed_url.port, self.local_port)
                 self.__websocket = await websockets.connect(self.__ws_url,
                                                             ping_interval=20,
                                                             ping_timeout=60,
-                                                            close_timeout=5)
+                                                            close_timeout=5,
+                                                            sock=sock)
+                log_info(f"Successfully reconnected using WebSocket protocol")
                 return
             except Exception as e:
                 delay = base_delay * (2**retry_count)
                 log_warn(
-                    f"Reconnect failed (attempt {retry_count+1}): {e}, retrying in {delay}s"
+                    f"Reconnect failed (attempt {retry_count+1}) using WebSocket: {e}, retrying in {delay}s"
                 )
                 await asyncio.sleep(delay)
                 retry_count += 1
@@ -553,87 +706,42 @@ class HexDeviceApi:
         asyncio.set_event_loop(self.__loop)
         self.__loop.run_until_complete(self.__main_loop())
 
-    def close(self):
-        if self.__loop and self.__loop.is_running():
-            log_warn("HexDevice API is closing...")
-            asyncio.run_coroutine_threadsafe(self.__async_close(), self.__loop)
-
-    def is_api_exit(self) -> bool:
+    def _process_kcp_data(self, data: bytes):
         """
-        @brief: Check if API is exiting
-        @return:
-            bool: True if API is exiting, False otherwise
-        """
-        if self.__loop is None:
-            return False
-        return self.__loop.is_closed()
-
-    ## async function
-    async def __async_close(self):
-        """
-        @brief: Close async thread
+        Process KCP data
+        @param data: KCP data to process
         @return:
             None
         """
-        try:
-            if self.__websocket:
-                await self.__websocket.close()
-        except Exception as e:
-            log_err(f"Error closing websocket: {e}")
-        finally:
-            if self.__shutdown_event is not None:
-                self.__shutdown_event.set()
+        result = self.__kcp_parser.parse(data)
+        if result is not None:
+            for opcode, payload in result:
+                if opcode == HexSocketOpcode.Binary:
+                    api_up = public_api_up_pb2.APIUp()
+                    api_up.ParseFromString(payload)
+                    self._process_api_up(api_up)
+                elif opcode == HexSocketOpcode.Text:
+                    log_common(f"kcp text message: {payload}")
+                else:
+                    log_warn(f"unsupported opcode: {opcode} from kcp")
 
-    async def __main_loop(self):
-        self.__shutdown_event = asyncio.Event()
-        log_common("HexDevice Api started.")
-
-        # Establish WebSocket connection
-        await self.__connect_ws()
-        log_common("WebSocket connected.")
-
-        task1 = asyncio.create_task(self.__periodic_data_parser())
-        self.__tasks = [task1]
-        await self.__shutdown_event.wait()
-
-        # Stop all device tasks
-        await self._stop_all_device_tasks()
-
-        # Stop main tasks
-        for task in self.__tasks:
-            task.cancel()
-
-        # Wait for all tasks to complete, handle cancellation exceptions
-        try:
-            await asyncio.gather(*self.__tasks, return_exceptions=True)
-        except Exception as e:
-            log_err(f"Error during task cleanup: {e}")
-
-        log_err("HexDevice api main_loop exited.")
-
-    async def __periodic_data_parser(self):
+    def _process_api_up(self, api_up):
         """
-        @brief: Periodic data parsing
+        Process APIUp message (thread-safe with lock)
+        @param api_up: APIUp message to process
         @return:
             None
         """
-        check_counter = 0
-        ORPHANED_TASK_CHECK_INTERVAL = 100
-        
-        while True:
-            try:
-                api_up = await self.__capture_data_frame()
-                if len(self.__raw_data) >= RAW_DATA_LEN:
-                    self.__raw_data.pop(0)
-                self.__raw_data.append(api_up)
-            except Exception as e:
-                log_err(f"__periodic_data_parser error: {e}")
-                continue
+        # Acquire lock to ensure thread safety
+        with self._process_lock:
+            if len(self.__raw_data) >= RAW_DATA_LEN:
+                self.__raw_data.pop(0)
+            self.__raw_data.append(api_up)
 
             # Periodically check for orphaned tasks
-            check_counter += 1
-            if check_counter >= ORPHANED_TASK_CHECK_INTERVAL:
-                check_counter = 0
+            self._check_counter += 1
+            if self._check_counter >= ORPHANED_TASK_CHECK_INTERVAL:
+                self._check_counter = 0
                 orphaned_count = self._check_and_cleanup_orphaned_tasks()
                 if orphaned_count > 0:
                     log_warn(f"found {orphaned_count} orphaned tasks")
@@ -657,84 +765,225 @@ class HexDeviceApi:
                             robot_type, api_up)
                     except Exception as e:
                         log_err(f"_create_and_register_device error: {e}")
-                        continue
+                        return
 
                     if device:
                         device._update(api_up)
                     else:
                         log_warn(f"unknown device type: {robot_type_name}")
             else:
-                continue
+                return
 
             # Process optional fields
             self._process_optional_fields(api_up)
 
     def _process_optional_fields(self, api_up):
         """
-        Process optional fields in APIUp message
+        Process SecondaryDeviceStatus array in APIUp message
         
         Args:
-            api_up: APIUp message containing optional fields
+            api_up: APIUp message containing secondary_device_status array
         """
-        # Define the mapping of optional field names to their data
-        optional_fields = [
-            ('hand_status', getattr(api_up, 'hand_status', None)),
-        ]
-        
-        for field_name, field_data in optional_fields:
-            # Check if the field has data
-            if field_data is not None and self._has_optional_field(api_up, field_name):
+        # Process SecondaryDeviceStatus array
+        if hasattr(api_up, 'secondary_device_status') and api_up.secondary_device_status:
+            for secondary_device in api_up.secondary_device_status:
                 try:
-                    # Find existing device or create new one (similar to robot_type logic)
-                    optional_device = self.find_optional_device(field_name)
+                    device_id = secondary_device.device_id
+                    # Determine message type from the oneof status field
+                    device_type = secondary_device.device_type
                     
-                    if optional_device:
-                        # Update existing device
-                        success = optional_device._update_optional_data(field_name, field_data)
-                        if not success:
-                            log_warn(f"Failed to update optional device data for {field_name}")
-                    else:
-                        log_info(f"create new optional device: {field_name}")
-                        
-                        try:
-                            # Create and register new optional device
-                            optional_device = self._create_and_register_optional_device(field_name, api_up)
-                        except Exception as e:
-                            log_err(f"_create_and_register_optional_device error: {e}")
-                            continue
+                    if device_type:
+                        # Find existing device by device_id
+                        optional_device = self.find_optional_device_by_id(device_id)
                         
                         if optional_device:
-                            # Update newly created device
-                            success = optional_device._update_optional_data(field_name, field_data)
+                            # Update existing device
+                            success = optional_device._update_optional_data(device_type, secondary_device)
                             if not success:
-                                log_warn(f"Failed to update new optional device data for {field_name}")
+                                log_err(f"Failed to update optional device data for device_id {device_id}, type {device_type}")
+                            else:
+                                log_info(f"Updated optional device data for device_id {device_id}, type {device_type}")
                         else:
-                            log_warn(f"unknown optional device type: {field_name}")
-                        
+                            log_info(f"create new optional device: device_id={device_id}, type={device_type}")
+                            
+                            try:
+                                # Create and register new optional device
+                                optional_device = self._create_and_register_optional_device(device_id, device_type, secondary_device)
+                            except Exception as e:
+                                log_err(f"_create_and_register_optional_device_by_id error: {e}")
+                                continue
+                            
+                            if optional_device:
+                                # Update newly created device
+                                success = optional_device._update_optional_data(device_type, secondary_device)
+                                if not success:
+                                    log_warn(f"Failed to update new optional device data for device_id {device_id}, type {device_type}")
+                            else:
+                                log_warn(f"unknown optional device type: device_id={device_id}, type={device_type}")
+                    
                 except Exception as e:
-                    log_err(f"Error processing optional field {field_name}: {e}")
+                    log_err(f"Error processing secondary device {getattr(secondary_device, 'device_id', 'unknown')}: {e}")
 
-    def _has_optional_field(self, api_up, field_name: str) -> bool:
+    ## async function
+    async def __async_close(self):
         """
-        Check if APIUp message has the specified optional field
-        
-        Args:
-            api_up: APIUp message
-            field_name: Name of the optional field
-            
-        Returns:
-            bool: True if field exists and has data
+        @brief: Close async thread and connection
+        @return:
+            None
         """
         try:
-            if hasattr(api_up, 'HasField'):
-                return api_up.HasField(field_name)
-            else:
-                # Fallback: check if attribute exists and is not None
-                return hasattr(api_up, field_name) and getattr(api_up, field_name) is not None
-        except Exception:
-            return False
+            # Close WebSocket connection
+            if self.__websocket:
+                await self.__websocket.close()
+                self.__websocket = None
+                log_info("WebSocket connection closed successfully")
+            
+            # Close KCP connection using stop() method
+            if self.__kcp_client is not None:
+                self.__kcp_client.stop()
+                self.__kcp_client = None
+                log_info("KCP connection closed successfully")
+        except Exception as e:
+            log_err(f"Error closing connection: {e}")
+        finally:
+            if self.__shutdown_event is not None:
+                self.__shutdown_event.set()
 
-    # data getter
+    async def __main_loop(self):
+        self.__shutdown_event = asyncio.Event()
+        log_common("HexDevice Api started.")
+
+        await self.__connect_ws()
+
+        task1 = asyncio.create_task(self.__websocket_data_parser())
+        self.__tasks = [task1]
+        await self.__shutdown_event.wait()
+
+        # Stop all device tasks
+        await self._stop_all_device_tasks()
+
+        # Stop main tasks
+        for task in self.__tasks:
+            task.cancel()
+
+        # Wait for all tasks to complete, handle cancellation exceptions
+        try:
+            await asyncio.gather(*self.__tasks, return_exceptions=True)
+        except Exception as e:
+            log_err(f"Error during task cleanup: {e}")
+
+        log_err("HexDevice api main_loop exited.")
+
+    async def __websocket_data_parser(self):
+        """
+        @brief: Periodic data parsing
+        @return:
+            None
+        """
+        # Check if the protocol version is supported
+        try:
+            api_up = await self.__capture_data_frame_from_websocket()
+            if not self._is_support_version(api_up):
+                self.close()
+                return
+        except Exception as e:
+            log_err(f"__websocket_data_parser error: {e}")
+            self.close()
+            return
+
+        # try to connect kcp connection
+        if self.enable_kcp:
+            kcp_client = KCPClient()
+            client_port = kcp_client.get_local_port()
+            msg = self._construct_enable_kcp_message(client_port)
+            await self._send_down_message(msg)
+
+            kcp_init = False
+            while not kcp_init:
+                try:
+                    # Set raise_on_timeout=True to catch timeout and resend enable_kcp message
+                    api_up = await self.__capture_data_frame_from_websocket(raise_on_timeout=True)
+
+                    if api_up.HasField('kcp_server_status'):
+                        server_port = api_up.kcp_server_status.server_port
+                        session_id = api_up.session_id
+                        kcp_client.config_kcp(self.parsed_url.hostname, server_port, session_id)
+                        kcp_client.set_message_callback(self._process_kcp_data)
+                        kcp_client.start()
+                        # set report frequency to 1Hz
+                        msg = self._construct_tcp_report_frequency_message(ReportFrequency.Rf1Hz)
+                        await self._send_down_message(msg)
+                        kcp_init = True
+                    # If received other messages, just ignore and continue waiting
+                    
+                except asyncio.TimeoutError:
+                    log_debug("Waiting for KCP server status, resending enable_kcp message...")
+                    msg = self._construct_enable_kcp_message(client_port)
+                    await self._send_down_message(msg)
+
+            # kcp init finished
+            self.__kcp_client = kcp_client
+            log_debug(f"kcp client initialized, session_id={session_id}")
+            # send a start message to kcp
+            msg = self._construct_kcp_start_message()
+            await self._send_down_message(msg)
+
+        # Begin to parse the data
+        while True:
+            try:
+                api_up = await self.__capture_data_frame_from_websocket()
+            except Exception as e:
+                log_err(f"__websocket_data_parser error: {e}")
+                continue
+            self._process_api_up(api_up)
+
+    # User api
+    def find_device_by_robot_type(self, robot_type) -> Optional[DeviceBase]:
+        """
+        Find device by robot_type
+        
+        Args:
+            robot_type: Robot type
+            
+        Returns:
+            Matching device or None
+        """
+        for device in self._internal_device_list:
+            if hasattr(device,
+                       'robot_type') and device.robot_type == robot_type:
+                return device
+        return None
+
+    def find_optional_device_by_id(self, device_id: int) -> Optional[OptionalDeviceBase]:
+        """
+        Find optional device by device_id
+        
+        Args:
+            device_id: Device ID from SecondaryDeviceStatus
+            
+        Returns:
+            Matching optional device or None
+        """
+        for device in self._optional_device_list:
+            if hasattr(device, 'device_id') and device.device_id == device_id:
+                return device
+        return None
+
+    def close(self):
+        if self.__loop and self.__loop.is_running():
+            log_warn("HexDevice API is closing...")
+            asyncio.run_coroutine_threadsafe(self.__async_close(), self.__loop)
+
+    def is_api_exit(self) -> bool:
+        """
+        @brief: Check if API is exiting
+        @return:
+            bool: True if API is exiting, False otherwise
+        """
+        if self.__loop is None:
+            return False
+        return self.__loop.is_closed()
+
     def get_raw_data(self) -> Tuple[public_api_up_pb2.APIUp, int]:
         """
         The original data is acquired and stored in the form of a sliding window sequence. 

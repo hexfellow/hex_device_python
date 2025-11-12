@@ -52,7 +52,7 @@ def main():
     print(f"Log level set to: {args.log_level}")
     
     # Init HexDeviceApi
-    api = HexDeviceApi(ws_url=args.url, control_hz=250)
+    api = HexDeviceApi(ws_url=args.url, control_hz=250, enable_kcp=True, local_port=52323)
     first_time = True
 
     time_start = time.time()

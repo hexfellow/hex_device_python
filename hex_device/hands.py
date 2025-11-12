@@ -29,16 +29,17 @@ class Hands(OptionalDeviceBase, MotorBase):
     - HtGp100: GP100 hand type
     """
 
-    SUPPORTED_HAND_TYPES = [
-        public_api_types_pb2.HandType.HtGp100,
+    SUPPORTED_DEVICE_TYPE = [
+        public_api_types_pb2.SecondaryDeviceType.SdtHandGp100,
     ]
 
-    ARM_SERIES_TO_HAND_TYPE = {
-        1: public_api_types_pb2.HandType.HtGp100,
+    DEVICE_ID_TO_DEVICE_TYPE = {
+        1: public_api_types_pb2.SecondaryDeviceType.SdtHandGp100,
     }
 
     def __init__(self,
-                 hand_type,
+                 device_id,
+                 device_type,
                  motor_count,
                  send_message_callback,
                  name: str = "Hands",
@@ -49,20 +50,22 @@ class Hands(OptionalDeviceBase, MotorBase):
         Initialize Hands device
         
         Args:
-            hand_type: Hand type (HandType enum)
+            device_id: Device ID (SecondaryDeviceType enum)
+            device_type: Device type (e.g., 'SdtUnknown', 'SdtHandGp100', 'SdtGamepad', 'SdtImuY200')
             motor_count: Number of motors
             name: Device name
             control_hz: Control frequency
-            read_only: Whether this device is read-only (affects periodic task creation)
+            read_only: Whether this device is read-only (read only will not create periodic task)
             send_message_callback: Callback function for sending messages, used to send downstream messages
         """
-        OptionalDeviceBase.__init__(self, read_only, name, send_message_callback)
+        OptionalDeviceBase.__init__(self, read_only, name, send_message_callback, device_id)
         MotorBase.__init__(self, motor_count, name)
 
         self.name = name or "Hands"
         self._control_hz = control_hz
         self._period = 1.0 / control_hz
-        self._hand_type = hand_type
+        self._device_id = device_id
+        self._device_type = device_type
 
         # hand status
         self._api_control_initialized = False
@@ -73,58 +76,28 @@ class Hands(OptionalDeviceBase, MotorBase):
         self._last_command_time = None
         self._command_timeout = 0.3  # 300ms
         self.__last_warning_time = time.perf_counter()  # last log warning time
+        # the last command sent to the device
+        self._last_command_send = None
 
         ## limit and step
         self._config_lock = threading.Lock()
-        if hand_type == public_api_types_pb2.HandType.HtGp100:
+        if self._device_type == public_api_types_pb2.SecondaryDeviceType.SdtHandGp100:
             self._hands_limit = [0.0, 1.335, -np.inf, np.inf, -np.inf, np.inf]
             self._max_torque = 3.0
             self._positon_step = 0.02
-        self._last_command_send = None
-
-    def _get_supported_message_types(self) -> List[str]:
-        """
-        Get supported message types for Hands device
-        
-        Returns:
-            List[str]: List containing 'hand_status'
-        """
-        return ['hand_status']
 
     @classmethod
-    def get_supported_message_types_static(cls) -> List[str]:
+    def _supports_device_id(cls, device_id):
         """
-        Static method to get supported message types
-        
-        Returns:
-            List[str]: List containing 'hand_status'
-        """
-        return ['hand_status']
-
-    def _set_hand_type(self, hand_type):
-        """
-        Set hand type
+        Check if the specified device_id is supported
         
         Args:
-            hand_type: Hand type
-        """
-        if hand_type in self.SUPPORTED_HAND_TYPES:
-            self._hand_type = hand_type
-        else:
-            raise ValueError(f"Unsupported hand type: {hand_type}")
-
-    @classmethod
-    def _supports_hand_type(cls, hand_type):
-        """
-        Check if the specified hand type is supported
-        
-        Args:
-            hand_type: Hand type
+            device_id: Device ID
             
         Returns:
             bool: Whether it is supported
         """
-        return hand_type in cls.SUPPORTED_HAND_TYPES
+        return device_id in cls.SUPPORTED_DEVICE_TYPE
 
     async def _init(self) -> bool:
         """
@@ -140,23 +113,24 @@ class Hands(OptionalDeviceBase, MotorBase):
             log_err(f"Hands initialization failed: {e}")
             return False
 
-    def _update_optional_data(self, message_type: str, message_data) -> bool:
+    def _update_optional_data(self, device_type, device_status: public_api_types_pb2.SecondaryDeviceStatus) -> bool:
         """
         Update hands device with optional message data
         
         Args:
-            message_type: Should be 'hand_status'
-            message_data: The HandStatus message from APIUp
+            device_type: Should be equal to self._device_type
+            device_status: The SecondaryDeviceStatus from APIUp
             
         Returns:
             bool: Whether update was successful
         """
-        if message_type != 'hand_status':
+        if device_type != self._device_type:
+            log_warn(f"Warning: Hands device type mismatch, expected {self._device_type}, actual {device_type}")
             return False
             
         try:
             # Update motor data
-            self._update_motor_data_from_hands_status(message_data)
+            self._update_motor_data_from_hands_status(device_status.hand_status)
             self._update_timestamp()
             return True
         except Exception as e:
@@ -234,9 +208,11 @@ class Hands(OptionalDeviceBase, MotorBase):
 
             try:
                 # check motor error
-                for i in range(self.motor_count):
-                    if self.get_motor_state(i) == "error":
-                        log_err(f"Warning: Motor {i} error occurred")
+                if start_time - self.__last_warning_time > 1.0:
+                    for i in range(self.motor_count):
+                        if self.get_motor_state(i) == "error":
+                            log_err(f"Error: Motor {i} error occurred")
+                            self.__last_warning_time = start_time
 
                 # prepare sending message
                 # command timeout
@@ -326,6 +302,7 @@ class Hands(OptionalDeviceBase, MotorBase):
         """
         msg = public_api_down_pb2.APIDown()
         hand_command = public_api_types_pb2.HandCommand()
+        secondary_device_command = public_api_types_pb2.SecondaryDeviceCommand()
         # limit the torque of position command
         command = deepcopy(self._target_command)
 
@@ -355,7 +332,9 @@ class Hands(OptionalDeviceBase, MotorBase):
 
         motor_targets = self._construct_target_motor_msg(self._pulse_per_rotation, command)
         hand_command.motor_targets.CopyFrom(motor_targets)
-        msg.hand_command.CopyFrom(hand_command)
+        secondary_device_command.device_id = self._device_id
+        secondary_device_command.hand_command.CopyFrom(hand_command)
+        msg.secondary_device_command.CopyFrom(secondary_device_command)
         return msg
 
     def _construct_custom_joint_command_msg(self, motor_msg: public_api_types_pb2.MotorTargets) -> public_api_down_pb2.APIDown:
@@ -364,8 +343,11 @@ class Hands(OptionalDeviceBase, MotorBase):
         """
         msg = public_api_down_pb2.APIDown()
         hand_command = public_api_types_pb2.HandCommand()
+        secondary_device_command = public_api_types_pb2.SecondaryDeviceCommand()
         hand_command.motor_targets.CopyFrom(motor_msg)
-        msg.hand_command.CopyFrom(hand_command)
+        secondary_device_command.device_id = self._device_id
+        secondary_device_command.hand_command.CopyFrom(hand_command)
+        msg.secondary_device_command.CopyFrom(secondary_device_command)
         return msg
 
     # msg constructor

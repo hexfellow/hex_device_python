@@ -15,18 +15,21 @@ import time
 class OptionalDeviceBase(ABC):
     """
     Optional Device base class
-    Defines common interfaces and basic functionality for processing optional fields in APIUp messages.
-    These devices are matched by message type rather than robot_type.
+    Defines common interfaces and basic functionality for processing SecondaryDeviceStatus in APIUp messages.
+    These devices are matched by device_id from SecondaryDeviceStatus.
     """
 
-    def __init__(self, read_only: bool, name: str = "", send_message_callback=None):
+    def __init__(self, read_only: bool, name: str = "", send_message_callback=None, device_id: int = None):
         """
         Initialize optional device base class
         Args:
+            read_only: Whether this device is read-only
             name: Device name
             send_message_callback: Callback function for sending messages
+            device_id: Device ID from SecondaryDeviceStatus
         """
         self.name = name or "OptionalDevice"
+        self.device_id = device_id
 
         self._send_message_callback = send_message_callback
 
@@ -38,8 +41,6 @@ class OptionalDeviceBase(ABC):
 
         self._read_only = read_only
 
-        # Store supported message types for this device
-        self._supported_message_types = self._get_supported_message_types()
 
     def _set_send_message_callback(self, callback):
         """
@@ -81,47 +82,11 @@ class OptionalDeviceBase(ABC):
         """Get device status summary"""
         return {
             'name': self.name,
+            'device_id': self.device_id,
             'has_new_data': self.has_new_data(),
             'last_update_time': self._last_update_time,
         }
 
-    @abstractmethod
-    def _get_supported_message_types(self) -> List[str]:
-        """
-        Get supported message types for this optional device
-        
-        Subclasses must implement this method to define which optional message types
-        they can process. Message types correspond to the optional fields in APIUp.
-        
-        Examples: ['imu_data', 'gamepad_read', 'hand_status']
-        
-        Returns:
-            List[str]: List of supported message type names
-        """
-        pass
-
-    def supports_message_type(self, message_type: str) -> bool:
-        """
-        Check if this device supports the specified message type
-        
-        Args:
-            message_type: Message type name (e.g., 'imu_data', 'gamepad_read')
-            
-        Returns:
-            bool: Whether this message type is supported
-        """
-        return message_type in self._supported_message_types
-
-    @classmethod
-    @abstractmethod
-    def get_supported_message_types_static(cls) -> List[str]:
-        """
-        Static method to get supported message types without instantiation
-        
-        Returns:
-            List[str]: List of supported message type names
-        """
-        pass
 
     # Abstract methods - subclasses must implement
     @abstractmethod
@@ -135,12 +100,12 @@ class OptionalDeviceBase(ABC):
         pass
 
     @abstractmethod
-    def _update_optional_data(self, message_type: str, message_data) -> bool:
+    def _update_optional_data(self, device_type, device_status) -> bool:
         """
         Update device with optional message data
         
         Args:
-            message_type: Type of the optional message (e.g., 'imu_data', 'gamepad_read')
+            device_type: The device type of the optional message
             message_data: The actual message data from APIUp
             
         Returns:
@@ -175,5 +140,5 @@ class OptionalDeviceBase(ABC):
 
     def __repr__(self) -> str:
         """Detailed string representation"""
-        return f"OptionalDeviceBase(name='{self.name}', has_new_data={self.has_new_data()}, last_update_time={self._last_update_time}, supported_types={self._supported_message_types})"
+        return f"OptionalDeviceBase(name='{self.name}', device_id={self.device_id}, has_new_data={self.has_new_data()}, last_update_time={self._last_update_time})"
 

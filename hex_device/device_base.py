@@ -31,8 +31,12 @@ class DeviceBase(ABC):
         self._last_update_time = None
 
         self._data_lock = threading.Lock()
+        self._status_lock = threading.Lock()
 
         self._has_new_data = False
+
+        # Api_control_initialized
+        self._send_init: Optional[bool] = None
 
     def _set_send_message_callback(self, callback):
         """
@@ -56,6 +60,22 @@ class DeviceBase(ABC):
             else:
                 raise AttributeError(
                     "send_message: send_message_callback is not set")
+
+    def start(self):
+        """
+        Start to control chassis
+        
+        """
+        with self._status_lock:
+            self._send_init = True
+    
+    def stop(self):
+        """
+        Stop to control chassis
+        
+        """
+        with self._status_lock:
+            self._send_init = False
 
     def set_has_new_data(self):
         with self._data_lock:

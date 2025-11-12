@@ -66,113 +66,6 @@ class ArmConfigManager:
 
     def _load_default_configs(self):
         """Load default configurations"""
-        # 0x00 - saber750d_6dof (1-axis)
-        self._configs[0x00] = ArmConfig(
-            name="saber750d_6dof",
-            dof_num=DofType.SIX_AXIS,
-            arm_series=0x00,
-            motor_model=[0x80] * 1,
-            robot_config=JointParams(joints=[
-                JointParam(joint_name="joint_1",
-                           joint_limit=[-3.15, 3.15, -4.5, 4.5, -0.0, 0.0])
-            ]))
-
-        # 0x09 - saber750d_6dof (6-axis)
-        self._configs[0x09] = ArmConfig(
-            name="saber750d_6dof",
-            dof_num=DofType.SIX_AXIS,
-            arm_series=0x09,
-            motor_model=[0x80] * 6,
-            robot_config=JointParams(joints=[
-                JointParam(joint_name="joint_1",
-                           joint_limit=[-2.967, 2.967, -4.5, 4.5, -0.0, 0.0]),
-                JointParam(joint_name="joint_2",
-                           joint_limit=[-1.57, 1.57, -4.5, 4.5, -0.0, 0.0]),
-                JointParam(
-                    joint_name="joint_3",
-                    joint_limit=[-1.047, 3.14159265359, -4.5, 4.5, -0.0, 0.0]),
-                JointParam(
-                    joint_name="joint_4",
-                    joint_limit=[-2.792526, 2.792526, -4.5, 4.5, -0.0, 0.0]),
-                JointParam(joint_name="joint_5",
-                           joint_limit=[-1.57, 1.57, -4.5, 4.5, -0.0, 0.0]),
-                JointParam(joint_name="joint_6",
-                           joint_limit=[-2.967, 2.967, -4.5, 4.5, -0.0, 0.0])
-            ]))
-
-        # 0x0A - saber750d_7dof (7-axis)
-        self._configs[0x0A] = ArmConfig(
-            name="saber750d_7dof",
-            dof_num=DofType.SEVEN_AXIS,
-            arm_series=0x0A,
-            motor_model=[0x80] * 7,
-            robot_config=JointParams(joints=[
-                JointParam(joint_name="joint_1",
-                           joint_limit=[-2.967, 2.967, -4.5, 4.5, -0.0, 0.0]),
-                JointParam(joint_name="joint_2",
-                           joint_limit=[-1.57, 1.57, -4.5, 4.5, -0.0, 0.0]),
-                JointParam(
-                    joint_name="joint_3",
-                    joint_limit=[-2.792526, 2.792526, -4.5, 4.5, -0.0, 0.0]),
-                JointParam(
-                    joint_name="joint_4",
-                    joint_limit=[-1.047, 3.14159265359, -4.5, 4.5, -0.0, 0.0]),
-                JointParam(
-                    joint_name="joint_5",
-                    joint_limit=[-2.792526, 2.792526, -4.5, 4.5, -0.0, 0.0]),
-                JointParam(joint_name="joint_6",
-                           joint_limit=[-1.57, 1.57, -4.5, 4.5, -0.0, 0.0]),
-                JointParam(joint_name="joint_7",
-                           joint_limit=[-2.967, 2.967, -4.5, 4.5, -0.0, 0.0])
-            ]))
-
-        # 0x0B - saber750h_6dof (6-axis)
-        self._configs[0x0B] = ArmConfig(
-            name="saber750h_6dof",
-            dof_num=DofType.SIX_AXIS,
-            arm_series=0x0B,
-            motor_model=[0x80] * 6,
-            robot_config=JointParams(joints=[
-                JointParam(joint_name="joint_1",
-                           joint_limit=[-2.967, 2.967, -4.5, 4.5, -0.0, 0.0]),
-                JointParam(joint_name="joint_2",
-                           joint_limit=[-1.57, 1.57, -4.5, 4.5, -0.0, 0.0]),
-                JointParam(joint_name="joint_3",
-                           joint_limit=[-1.57, 1.57, -4.5, 4.5, -0.0, 0.0]),
-                JointParam(
-                    joint_name="joint_4",
-                    joint_limit=[-2.792526, 2.792526, -4.5, 4.5, -0.0, 0.0]),
-                JointParam(joint_name="joint_5",
-                           joint_limit=[-1.57, 1.57, -4.5, 4.5, -0.0, 0.0]),
-                JointParam(joint_name="joint_6",
-                           joint_limit=[-2.967, 2.967, -4.5, 4.5, -0.0, 0.0])
-            ]))
-
-        # 0x0C - saber750h_7dof (7-axis)
-        self._configs[0x0C] = ArmConfig(
-            name="saber750h_7dof",
-            dof_num=DofType.SEVEN_AXIS,
-            arm_series=0x0C,
-            motor_model=[0x80] * 7,
-            robot_config=JointParams(joints=[
-                JointParam(joint_name="joint_1",
-                           joint_limit=[-2.967, 2.967, -4.5, 4.5, -0.0, 0.0]),
-                JointParam(joint_name="joint_2",
-                           joint_limit=[-1.57, 1.57, -4.5, 4.5, -0.0, 0.0]),
-                JointParam(
-                    joint_name="joint_3",
-                    joint_limit=[-2.792526, 2.792526, -4.5, 4.5, -0.0, 0.0]),
-                JointParam(joint_name="joint_4",
-                           joint_limit=[-1.57, 1.57, -4.5, 4.5, -0.0, 0.0]),
-                JointParam(
-                    joint_name="joint_5",
-                    joint_limit=[-2.792526, 2.792526, -4.5, 4.5, -0.0, 0.0]),
-                JointParam(joint_name="joint_6",
-                           joint_limit=[-1.57, 1.57, -4.5, 4.5, -0.0, 0.0]),
-                JointParam(joint_name="joint_7",
-                           joint_limit=[-2.967, 2.967, -4.5, 4.5, -0.0, 0.0])
-            ]))
-
         # 0x0E - saber_d6x (6-axis)
         self._configs[0x0E] = ArmConfig(
             name="saber_d6x",
@@ -192,6 +85,30 @@ class ArmConfigManager:
                 JointParam(joint_name="joint_5",
                            joint_limit=[-1.6, 1.6, -4.5, 4.5, -0.0, 0.0]),
                 JointParam(joint_name="joint_6",
+                           joint_limit=[-1.57, 1.57, -4.5, 4.5, -0.0, 0.0])
+            ]))
+        
+        # 0x0F - saber_d7x (7-axis)
+        self._configs[0x0F] = ArmConfig(
+            name="saber_d7x",
+            dof_num=DofType.SEVEN_AXIS,
+            arm_series=0x0F,
+            motor_model=[0x80] * 7,
+            robot_config=JointParams(joints=[
+                JointParam(joint_name="joint_1",
+                           joint_limit=[-2.967, 2.967, -4.5, 4.5, -0.0, 0.0]),
+                JointParam(joint_name="joint_2",
+                           joint_limit=[-1.57, -1.57, -4.5, 4.5, -0.0, 0.0]),
+                JointParam(
+                    joint_name="joint_3",
+                    joint_limit=[-2.967, 2.967, -4.5, 4.5, -0.0, 0.0]),
+                JointParam(joint_name="joint_4",
+                           joint_limit=[-0.393, 3.14159265359, -4.5, 4.5, -0.0, 0.0]),
+                JointParam(joint_name="joint_5",
+                           joint_limit=[-1.6, 1.6, -4.5, 4.5, -0.0, 0.0]),
+                JointParam(joint_name="joint_6",
+                           joint_limit=[-1.57, 1.57, -4.5, 4.5, -0.0, 0.0]),
+                JointParam(joint_name="joint_7",
                            joint_limit=[-1.57, 1.57, -4.5, 4.5, -0.0, 0.0])
             ]))
 
@@ -312,6 +229,7 @@ class ArmConfigManager:
                 if not self._validate_config(new_config):
                     # If validation fails, rollback to old configuration
                     self._configs[arm_series] = old_config
+                    log_err(f"Failed to reload configuration: Data is invalid")
                     return False
 
                 return True

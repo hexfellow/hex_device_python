@@ -134,6 +134,29 @@ class ArmConfigManager:
                            joint_limit=[-1.57, 1.57, -12.56, 12.56, -0.0, 0.0])
             ]))
 
+        # 0x11 - archer_l6y (6-axis)
+        self._configs[0x11] = ArmConfig(
+            name="archer_l6y",
+            dof_num=DofType.SIX_AXIS,
+            arm_series=17,
+            motor_model=[0x80] * 6,
+            robot_config=JointParams(joints=[
+                JointParam(joint_name="joint_1",
+                           joint_limit=[-2.7, 3.1, -3.77, 3.77, -0.0, 0.0]),
+                JointParam(joint_name="joint_2",
+                           joint_limit=[-1.57, 2.094, -3.77, 3.77, -0.0, 0.0]),
+                JointParam(
+                    joint_name="joint_3",
+                    joint_limit=[0.0, 3.14159265359, -3.77, 3.77, -0.0, 0.0]),
+                JointParam(joint_name="joint_4",
+                           joint_limit=[-1.56, 1.56, -12.56, 12.56, -0.0, 0.0]),
+                JointParam(joint_name="joint_5",
+                           joint_limit=[-1.56, 1.56, -12.56, 12.56, -0.0, 0.0]),
+                JointParam(joint_name="joint_6",
+                           joint_limit=[-1.57, 1.57, -12.56, 12.56, -0.0, 0.0])
+            ]))
+
+
     def get_config(self, arm_series: int) -> Optional[ArmConfig]:
         """Get robotic arm configuration for specified series"""
         return self._configs.get(arm_series)

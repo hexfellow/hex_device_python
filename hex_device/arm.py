@@ -31,16 +31,14 @@ class Arm(DeviceBase, MotorBase):
         public_api_types_pb2.RobotType.RtArmArcherD6Y,
         public_api_types_pb2.RobotType.RtArmSaberD6X,
         public_api_types_pb2.RobotType.RtArmSaberD7X,
+        public_api_types_pb2.RobotType.RtArmArcherL6Y,
     ]
 
     ARM_SERIES_TO_ROBOT_TYPE = {
-        9: public_api_types_pb2.RobotType.RtArmSaber750d3Lr3DmDriver,
-        10: public_api_types_pb2.RobotType.RtArmSaber750d4Lr3DmDriver,
-        11: public_api_types_pb2.RobotType.RtArmSaber750h3Lr3DmDriver,
-        12: public_api_types_pb2.RobotType.RtArmSaber750h4Lr3DmDriver,
         14: public_api_types_pb2.RobotType.RtArmSaberD6X,
         15: public_api_types_pb2.RobotType.RtArmSaberD7X,
         16: public_api_types_pb2.RobotType.RtArmArcherD6Y,
+        17: public_api_types_pb2.RobotType.RtArmArcherL6Y,
     }
 
     def __init__(self,
@@ -81,6 +79,7 @@ class Arm(DeviceBase, MotorBase):
         self.__last_warning_time = time.perf_counter()  # last log warning time
         self._my_session_id = 0   # my session id, was assigned by server
         self._send_init = self._send_init
+        self._send_clear_parking_stop: Optional[bool] = None
 
     def _set_robot_type(self, robot_type):
         """
@@ -272,6 +271,7 @@ class Arm(DeviceBase, MotorBase):
                     c = self._calibrated
                     sh = self._session_holder
                     mi = self._my_session_id
+                    sp = self._send_clear_parking_stop
 
                 # print(f"api_control_initialized: {a}, calibrated: {c}, session holder: {sh}, my session id: {mi}")
                 
@@ -286,6 +286,12 @@ class Arm(DeviceBase, MotorBase):
                     msg = self._construct_init_message(False)
                     await self._send_message(msg)
                     self._send_init = None
+
+                ## send clear parking stop message
+                if sp == True:
+                    msg = self._construct_clear_parking_stop_message()
+                    await self._send_message(msg)
+                    sp = None
 
                 ## check if is holder:
                 if sh != mi:
@@ -365,6 +371,11 @@ class Arm(DeviceBase, MotorBase):
         
         super().motor_command(command_type, values)
         self._last_command_time = time.perf_counter()
+
+    def clear_parking_stop(self):
+        """Clear parking stop"""
+        with self._status_lock:
+            self._send_clear_parking_stop = True
 
     def _construct_joint_command_msg(self) -> public_api_down_pb2.APIDown:
         """

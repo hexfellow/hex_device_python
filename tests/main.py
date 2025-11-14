@@ -170,6 +170,8 @@ def main():
                             # print(device.get_motor_summary())
 
                             print(f"arm position: {device.get_motor_positions()}")
+                            # print(f"arm encoder position: {device.encoder_positions()}")
+                            # print(f"arm pulse per rotation: {device.pulse_per_rotation()}")
 
                             ## command, Please select one of the following commands.
                             ## warning!!!! Only position command is limit position & speed.Only speed command is limit speed & acc.

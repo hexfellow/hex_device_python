@@ -192,6 +192,7 @@ class MotorBase(ABC):
         self._positions = np.zeros(motor_count)  # Position (rad)
         self._pulse_per_rotation = np.zeros(motor_count)  # Pulses per rotation
         self._wheel_radius = np.zeros(motor_count)  # Wheel radius
+        self._encoder_positions = np.zeros(motor_count)  # Encoder position
 
         # Motor status parameters (optional)
         self._driver_temperature = np.zeros(motor_count)  # Driver temperature (°C)
@@ -265,6 +266,12 @@ class MotorBase(ABC):
         """Get all motor pulses per rotation"""
         with self._data_lock:
             return self._pulse_per_rotation.copy()
+
+    @property
+    def encoder_positions(self) -> np.ndarray:
+        """Get all motor encoder positions"""
+        with self._data_lock:
+            return self._encoder_positions.copy()
 
     @property
     def wheel_radius(self) -> np.ndarray:
@@ -565,6 +572,7 @@ class MotorBase(ABC):
                 self._pulse_per_rotation = np.array(pulse_per_rotation)
 
             # Convert to rad
+            self._encoder_positions = np.array(positions)
             self._positions = (np.array(positions) - 65535.0 /
                                2.0) / self._pulse_per_rotation * 2 * np.pi
 

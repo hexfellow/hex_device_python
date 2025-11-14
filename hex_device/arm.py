@@ -377,37 +377,6 @@ class Arm(DeviceBase, MotorBase):
         with self._status_lock:
             self._send_clear_parking_stop = True
 
-    def _construct_joint_command_msg(self) -> public_api_down_pb2.APIDown:
-        """
-        @brief: For constructing a joint command message.
-        """
-        msg = public_api_down_pb2.APIDown()
-        arm_command = public_api_types_pb2.ArmCommand()
-        arm_exclusive_command = public_api_types_pb2.ArmExclusiveCommand()
-        arm_api_control_command = public_api_types_pb2.ArmApiControlCommand()
-
-        motor_targets = self._construct_target_motor_msg(self._pulse_per_rotation, self._period)
-        arm_api_control_command.motor_targets.CopyFrom(motor_targets)
-        arm_exclusive_command.arm_api_control_command.CopyFrom(arm_api_control_command)
-        arm_command.arm_exclusive_command.CopyFrom(arm_exclusive_command)
-        msg.arm_command.CopyFrom(arm_command)
-        return msg
-
-    def _construct_custom_joint_command_msg(self, motor_msg: public_api_types_pb2.MotorTargets) -> public_api_down_pb2.APIDown:
-        """
-        @brief: For constructing a custom joint command message.
-        """
-        msg = public_api_down_pb2.APIDown()
-        arm_command = public_api_types_pb2.ArmCommand()
-        arm_exclusive_command = public_api_types_pb2.ArmExclusiveCommand()
-        arm_api_control_command = public_api_types_pb2.ArmApiControlCommand()
-        
-        arm_api_control_command.motor_targets.CopyFrom(motor_msg)
-        arm_exclusive_command.arm_api_control_command.CopyFrom(arm_api_control_command)
-        arm_command.arm_exclusive_command.CopyFrom(arm_exclusive_command)
-        msg.arm_command.CopyFrom(arm_command)
-        return msg
-
     def get_parking_stop_detail(
             self) -> public_api_types_pb2.ParkingStopDetail:
         """Get parking stop details"""
@@ -477,6 +446,37 @@ class Arm(DeviceBase, MotorBase):
         motor_targets = super()._construct_target_motor_msg(pulse_per_rotation, validated_command)
         
         return motor_targets
+
+    def _construct_joint_command_msg(self) -> public_api_down_pb2.APIDown:
+        """
+        @brief: For constructing a joint command message.
+        """
+        msg = public_api_down_pb2.APIDown()
+        arm_command = public_api_types_pb2.ArmCommand()
+        arm_exclusive_command = public_api_types_pb2.ArmExclusiveCommand()
+        arm_api_control_command = public_api_types_pb2.ArmApiControlCommand()
+
+        motor_targets = self._construct_target_motor_msg(self._pulse_per_rotation, self._period)
+        arm_api_control_command.motor_targets.CopyFrom(motor_targets)
+        arm_exclusive_command.arm_api_control_command.CopyFrom(arm_api_control_command)
+        arm_command.arm_exclusive_command.CopyFrom(arm_exclusive_command)
+        msg.arm_command.CopyFrom(arm_command)
+        return msg
+
+    def _construct_custom_joint_command_msg(self, motor_msg: public_api_types_pb2.MotorTargets) -> public_api_down_pb2.APIDown:
+        """
+        @brief: For constructing a custom joint command message.
+        """
+        msg = public_api_down_pb2.APIDown()
+        arm_command = public_api_types_pb2.ArmCommand()
+        arm_exclusive_command = public_api_types_pb2.ArmExclusiveCommand()
+        arm_api_control_command = public_api_types_pb2.ArmApiControlCommand()
+        
+        arm_api_control_command.motor_targets.CopyFrom(motor_msg)
+        arm_exclusive_command.arm_api_control_command.CopyFrom(arm_api_control_command)
+        arm_command.arm_exclusive_command.CopyFrom(arm_exclusive_command)
+        msg.arm_command.CopyFrom(arm_command)
+        return msg
 
     # Configuration related methods
     def get_session_holder(self) -> int:

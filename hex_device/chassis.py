@@ -64,7 +64,7 @@ class Chassis(DeviceBase, MotorBase):
         self._target_velocity = (0.0, 0.0, 0.0)  # Initialize target velocity
 
         # Chassis status
-        self._status_lock = super()._status_lock
+        self._status_lock = self._status_lock
         self._base_state = BaseState.BsParked
         self._api_control_initialized = False
         self._simple_control_mode = None

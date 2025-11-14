@@ -36,7 +36,7 @@ git clone --recurse-submodules https://github.com/hexfellow/hex_device_python.gi
 
 ## 前置要求
 
-- **Python 3.8.10 或更高版本**
+- **Python 3.9 或更高版本**
 - Anaconda 发行版（推荐初学者使用）- 包含 Python、NumPy 和常用的科学计算包
 
 ## 快速开始

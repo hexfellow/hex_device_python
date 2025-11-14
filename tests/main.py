@@ -105,6 +105,7 @@ def main():
                                 first_time = False
                                 # Must start device before using it.
                                 device.start()
+                                # 6-axis config
                                 config_dict = {
                                     'name':'Archer_d6y',
                                     'dof_num': 'six_axis',
@@ -129,6 +130,34 @@ def main():
                                         'joint_limit': [-1.57, 1.57, -0.3, 0.3, -0.0, 0.0]
                                     }]
                                 }
+                                # 7-axis config
+                                # config_dict = {
+                                #     'name':'saber_d7x',
+                                #     'dof_num': 'seven_axis',
+                                #     'motor_model': [0x80] * 7,
+                                #     'joints': [{
+                                #         'joint_name': 'joint_1',
+                                #         'joint_limit': [-2.967, 2.967, -0.3, 0.3, -0.0, 0.0]
+                                #     }, {
+                                #         'joint_name': 'joint_2',
+                                #         'joint_limit': [-1.57, 1.57, -0.3, 0.3, -0.0, 0.0]
+                                #     }, {
+                                #         'joint_name': 'joint_3',
+                                #         'joint_limit': [-2.967, 2.967, -0.3, 0.3, -0.0, 0.0]
+                                #     }, {
+                                #         'joint_name': 'joint_4',
+                                #         'joint_limit': [-0.393, 3.14159265359, -0.3, 0.3, -0.0, 0.0]
+                                #     }, {
+                                #         'joint_name': 'joint_5',
+                                #         'joint_limit': [-1.6, 1.6, -0.3, 0.3, -0.0, 0.0]
+                                #     }, {
+                                #         'joint_name': 'joint_6',
+                                #         'joint_limit': [-1.57, 1.57, -0.3, 0.3, -0.0, 0.0]
+                                #     }, {
+                                #         'joint_name': 'joint_7',
+                                #         'joint_limit': [-1.57, 1.57, -0.3, 0.3, -0.0, 0.0]
+                                #     }]
+                                # }
                                 if not device.reload_arm_config_from_dict(config_dict):
                                     exit(1)
 
@@ -136,11 +165,6 @@ def main():
                                 # device.motor_command(
                                 #     CommandType.SPEED,
                                 #     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-
-                                # cmd = np.array([-0.3, -1.55, 3.0, 0.0, 0.0, 0.0])
-                                # device.motor_command(
-                                #     CommandType.POSITION,
-                                #     cmd)
                                 
                             # print(device.get_device_summary())
                             # print(device.get_motor_summary())
@@ -156,15 +180,15 @@ def main():
 
                             # device.motor_command(
                             #     CommandType.TORQUE,
-                            #     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+                            #     [0.0] * device.motor_count)
 
                             # device.motor_command(
                             #     CommandType.SPEED,
-                            #     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+                            #     [0.0] * device.motor_count)
 
                             # device.motor_command(
                             #     CommandType.BRAKE,
-                            #     [True, True, True, True, True, True])
+                            #     [True] * device.motor_count)
 
                             # device.motor_command(
                             #     CommandType.MIT,[

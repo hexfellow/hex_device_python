@@ -1,3 +1,17 @@
+#!/usr/bin/env python3
+# -*- coding:utf-8 -*-
+################################################################
+# Copyright 2025 Jecjune. All rights reserved.
+# Author: Jecjune zejun.chen@hexfellow.com
+# Date  : 2025-11-1
+################################################################
+
+# Warning!!! The test will move your robotic arm. Please ensure that there is enough space in front of and around the robotic arm before performing this test ！！！
+# You can use this test like this command:  python3 tests/saber7dof_traj_test.py --url ws://<Your controller ip>:8439
+
+# For saber, when you disconnect from the robotic arm, the joints will automatically lock. 
+# You can modify the example in main.py to send a torque 0 command to unlock the motors (please ensure proper safety measures to prevent the robotic arm from falling directly).
+
 import sys
 import math
 import numpy as np
@@ -119,18 +133,11 @@ def main():
     hands_first_time = True
 
     arm_position = [
-        [0.0, -0.823598775598, 0.0, 0.0, 0.0, 0.0, 0.0],
-        [1.0, 0.623598775598, 1.5, 1.59439265359, 1.57, -1.0472, 1.0],
-        [0.0, -0.823598775598, 0.0, 0.0, 0.0, 0.0, 0.0],
-        [-1.0, 0.623598775598, -1.5, 1.59439265359, -1.57, 1.0472, -1.0]
+        [0.0,  -0.623598775598,  0.0, 0.5,   0.0,  0.0,     0.0],
+        [0.5,  -0.223598775598,  0.2, 1.599, 0.5,  -0.5472, 0.5],
+        [0.0,  -0.623598775598,  0.0, 0.5,   0.0,  0.0,     0.0],
+        [-0.5, -0.223598775598, -0.2, 1.599, -0.5, 0.5472, -0.5]
     ]
-
-    # arm_position = [
-    #     [0.0, 0.79, 1.81, -1.14, 0.0, 0.0],
-    #     [0.0, -0.91, 2.44, 0.0, 0.0, 0.0],
-    #     [0.0, 0.79, 1.81, -1.14, 0.0, 0.0],
-    #     [0.0, -0.91, 2.44, 0.0, 0.0, 0.0],
-    # ]
     
     trajectory_planner = TrajectoryPlanner(
         waypoints=arm_position,
@@ -226,14 +233,14 @@ def main():
                             # Apply to first motor (or all motors if desired)
                             target_positions = [target_position] + [0.0] * (device.motor_count - 1)
                             
-                            # For hands, only support the position mode or mit mode, also mit mode only read the position data.
+                            # For hands, only support the position mode or mit mode.
                             # example 1:
                             # mit_commands = device.construct_mit_command(
                             #     target_positions, 
                             #     [0.0], 
                             #     [0.0], 
-                            #     [0.0], 
-                            #     [0.0]
+                            #     [20.0], 
+                            #     [1.0]
                             # )
                             # device.motor_command(
                             #     CommandType.MIT,

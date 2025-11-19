@@ -130,7 +130,7 @@ def main():
                                         'joint_limit': [-1.57, 1.57, -0.3, 0.3, -0.0, 0.0]
                                     }]
                                 }
-                                # 7-axis config
+                                # # 7-axis config
                                 # config_dict = {
                                 #     'name':'saber_d7x',
                                 #     'dof_num': 'seven_axis',
@@ -181,6 +181,10 @@ def main():
                             # device.motor_command(
                             #     CommandType.POSITION,
                             #     [-0.3, -1.48, 2.86, 0.0, 0.0, 0.0])
+
+                            # device.motor_command(
+                            #     CommandType.TORQUE,
+                            #     [0.0] * device.motor_count)
 
                             # device.motor_command(
                             #     CommandType.SPEED,

@@ -17,6 +17,7 @@ from .generated.public_api_types_pb2 import (
     BaseStatus, BaseState, BaseCommand, SimpleBaseMoveCommand, XyzSpeed,
     MotorTargets, BaseEstimatedOdometry, WarningCategory)
 import time
+import copy
 
 ROBOT_TYPE_TRIPLE_OMNI_WHEEL_LR_DRIVER = 1
 ROBOT_TYPE_PCW_VEHICLE = 2
@@ -93,6 +94,7 @@ class Chassis(DeviceBase, MotorBase):
         self._command_timeout = 0.1  # 100ms timeout
         self.__last_warning_time = time.perf_counter()  # Add warning time attribute
         self._my_session_id = 0   # my session id, was assigned by server
+        self._is_timeout = False
 
         # Robot type - will be set when matched
         self.robot_type = None
@@ -356,9 +358,11 @@ class Chassis(DeviceBase, MotorBase):
                             await self._send_message(msg)
 
                             if start_time - self._last_command_time > self._command_timeout:
+                                self._is_timeout = True
                                 msg = self._construct_simple_control_message(
                                     (0.0, 0.0, 0.0))
                             else:
+                                self._is_timeout = False
                                 msg = self._construct_simple_control_message(
                                     self._target_velocity)
                             await self._send_message(msg)
@@ -374,11 +378,13 @@ class Chassis(DeviceBase, MotorBase):
                             await self._send_message(msg)
 
                             if start_time - self._last_command_time > self._command_timeout:
+                                self._is_timeout = True
                                 self.motor_command(
                                     CommandType.BRAKE,
                                     [0.0 * self.motor_count])
                                 msg = self._construct_wheel_control_message()
                             else:
+                                self._is_timeout = False
                                 msg = self._construct_wheel_control_message()
                             await self._send_message(msg)
 
@@ -522,6 +528,12 @@ class Chassis(DeviceBase, MotorBase):
         with self._command_lock:
             self._target_velocity = (speed_x, speed_y, speed_z)
             self._last_command_time = time.perf_counter()
+
+    def is_timeout(self) -> bool:
+        """
+        Check if the command is timeout
+        """
+        return copy(self._is_timeout)
 
     # msg constructer
     # construct control message

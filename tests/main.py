@@ -182,6 +182,7 @@ def main():
                             #     CommandType.POSITION,
                             #     [-0.3, -1.48, 2.86, 0.0, 0.0, 0.0])
 
+                            ## If you need to use torque control or mit control, be sure to start with small parameters
                             # device.motor_command(
                             #     CommandType.TORQUE,
                             #     [0.0] * device.motor_count)

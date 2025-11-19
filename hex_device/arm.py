@@ -65,6 +65,10 @@ class Arm(DeviceBase, MotorBase):
         self._period = 1.0 / control_hz
         self._arm_series = robot_type
 
+        self._enable_mit = False
+        if robot_type == 16 or robot_type == 17:
+            self._enable_mit = True
+
         # arm status
         self._api_control_initialized = False
         self._calibrated = False
@@ -368,6 +372,10 @@ class Arm(DeviceBase, MotorBase):
         # Convert numpy array to list if needed
         if isinstance(values, np.ndarray):
             values = values.tolist()
+
+        if (command_type == CommandType.MIT or command_type == CommandType.TORQUE) and not self._enable_mit:
+            raise ValueError("Due to specific configurations, certain robotic arms may require consultation before they can be safely operated. \
+            The MIT command is not enabled by default on this arm. Please contact customer service to inquire about activating MIT support.")
         
         super().motor_command(command_type, values)
         self._last_command_time = time.perf_counter()
@@ -381,6 +389,10 @@ class Arm(DeviceBase, MotorBase):
             self) -> public_api_types_pb2.ParkingStopDetail:
         """Get parking stop details"""
         return copy.deepcopy(self._parking_stop_detail)
+
+    def _enable_mit(self):
+        """Enable MIT"""
+        self._enable_mit = True
 
     # msg constructor
     def _construct_init_message(self, api_control_initialize: bool = True) -> public_api_down_pb2.APIDown:

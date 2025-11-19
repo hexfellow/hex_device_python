@@ -128,7 +128,7 @@ def main():
     args = parser.parse_args()
     
     # Init HexDeviceApi
-    api = HexDeviceApi(ws_url=args.url, control_hz=250, enable_kcp=True, local_port=52323)
+    api = HexDeviceApi(ws_url=args.url, control_hz=250, enable_kcp=True, local_port=0)
     first_time = True
     hands_first_time = True
 

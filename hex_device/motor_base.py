@@ -335,6 +335,12 @@ class MotorBase(ABC):
             self._has_new_data = False
             return self._positions.tolist()
 
+    def get_encoders_to_zero(self) -> List[float]:
+        """Get all motor encoders to zero (rad)"""
+        with self._data_lock:
+            tar = 32767 - self._encoder_positions
+            return tar.tolist()
+
     def get_motor_velocity(self, motor_index: int) -> float:
         """Get specified motor velocity (rad/s)"""
         if not 0 <= motor_index < self.motor_count:

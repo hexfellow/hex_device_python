@@ -170,7 +170,9 @@ def main():
                             # print(device.get_motor_summary())
 
                             print(f"arm position: {device.get_motor_positions()}")
-                            # print(f"arm encoder position: {device.encoder_positions}")
+
+                            ##  print the encoders to zero, you can use this to set the encoders to zero.
+                            # print(f"arm encoders from zero: {device.get_encoders_to_zero()}")
                             # print(f"arm pulse per rotation: {device.pulse_per_rotation()}")
 
                             ## command, Please select one of the following commands.

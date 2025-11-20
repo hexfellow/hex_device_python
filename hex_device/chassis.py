@@ -533,7 +533,7 @@ class Chassis(DeviceBase, MotorBase):
         """
         Check if the command is timeout
         """
-        return copy(self._is_timeout)
+        return copy.copy(self._is_timeout)
 
     # msg constructer
     # construct control message

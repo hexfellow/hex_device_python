@@ -63,7 +63,7 @@ class Arm(DeviceBase, MotorBase):
         self.name = name or "Arm"
         self._control_hz = control_hz
         self._period = 1.0 / control_hz
-        self._arm_series = robot_type
+        self.robot_type = robot_type
 
         self._enable_mit = False
         if robot_type == 16 or robot_type == 17:
@@ -503,11 +503,11 @@ class Arm(DeviceBase, MotorBase):
             
     def get_arm_config(self) -> Optional[ArmConfig]:
         """Get current robotic arm configuration"""
-        return copy.deepcopy(get_arm_config(self._arm_series))
+        return copy.deepcopy(get_arm_config(self.robot_type))
 
     def get_joint_limits(self) -> Optional[List[List[float]]]:
         """Get joint limits"""
-        return copy.deepcopy(arm_config_manager.get_joint_limits(self._arm_series))
+        return copy.deepcopy(arm_config_manager.get_joint_limits(self.robot_type))
 
     def validate_joint_positions(self,
                                  positions: List[float],
@@ -522,18 +522,18 @@ class Arm(DeviceBase, MotorBase):
         Returns:
             List[float]: Corrected position list
         """
-        last_positions = arm_config_manager.get_last_positions(self._arm_series)
+        last_positions = arm_config_manager.get_last_positions(self.robot_type)
         
         if last_positions is None:
             current_positions = self.get_motor_positions()
             if len(current_positions) == len(positions):
-                arm_config_manager.set_last_positions(self._arm_series, current_positions)
+                arm_config_manager.set_last_positions(self.robot_type, current_positions)
                 log_common(f"Arm: Initialize current motor positions: {current_positions}")
             else:
                 log_warn(f"Arm: Current motor positions count({len(current_positions)}) does not match the target positions count({len(positions)})")
         
         return arm_config_manager.validate_joint_positions(
-            self._arm_series, positions, dt)
+            self.robot_type, positions, dt)
 
     def validate_joint_velocities(self,
                                   velocities: List[float],
@@ -542,15 +542,15 @@ class Arm(DeviceBase, MotorBase):
         Validate whether joint velocities are within limit range and return corrected velocity list
         """
         return arm_config_manager.validate_joint_velocities(
-            self._arm_series, velocities, dt)
+            self.robot_type, velocities, dt)
 
     def get_joint_names(self) -> Optional[List[str]]:
         """Get joint names"""
-        return copy.deepcopy(arm_config_manager.get_joint_names(self._arm_series))
+        return copy.deepcopy(arm_config_manager.get_joint_names(self.robot_type))
 
     def get_expected_motor_count(self) -> Optional[int]:
         """Get expected motor count"""
-        return copy.deepcopy(arm_config_manager.get_motor_count(self._arm_series))
+        return copy.deepcopy(arm_config_manager.get_motor_count(self.robot_type))
 
     def check_motor_count_match(self) -> bool:
         """Check if motor count matches configuration"""
@@ -561,7 +561,7 @@ class Arm(DeviceBase, MotorBase):
 
     def get_arm_series(self) -> int:
         """Get robotic arm series"""
-        return copy.deepcopy(self._arm_series)
+        return copy.deepcopy(self.robot_type)
 
     def get_arm_name(self) -> Optional[str]:
         """Get robotic arm name"""
@@ -580,7 +580,7 @@ class Arm(DeviceBase, MotorBase):
         """
         try:
             success = arm_config_manager.reload_from_dict(
-                self._arm_series, config_data)
+                self.robot_type, config_data)
             if success:
                 log_common(f"Arm: reload arm config success: {config_data.get('name', 'unknown')}")
             else:
@@ -597,7 +597,7 @@ class Arm(DeviceBase, MotorBase):
         Args:
             positions: Initial position list (rad)
         """
-        arm_config_manager.set_initial_positions(self._arm_series, positions)
+        arm_config_manager.set_initial_positions(self.robot_type, positions)
 
     def set_initial_velocities(self, velocities: List[float]):
         """
@@ -606,7 +606,7 @@ class Arm(DeviceBase, MotorBase):
         Args:
             velocities: Initial velocity list (rad/s)
         """
-        arm_config_manager.set_initial_velocities(self._arm_series, velocities)
+        arm_config_manager.set_initial_velocities(self.robot_type, velocities)
 
     def get_last_positions(self) -> Optional[List[float]]:
         """
@@ -615,7 +615,7 @@ class Arm(DeviceBase, MotorBase):
         Returns:
             List[float]: Last position list, returns None if no record exists
         """
-        return arm_config_manager.get_last_positions(self._arm_series)
+        return arm_config_manager.get_last_positions(self.robot_type)
 
     def get_last_velocities(self) -> Optional[List[float]]:
         """
@@ -624,16 +624,16 @@ class Arm(DeviceBase, MotorBase):
         Returns:
             List[float]: Last velocity list, returns None if no record exists
         """
-        return arm_config_manager.get_last_velocities(self._arm_series)
+        return arm_config_manager.get_last_velocities(self.robot_type)
 
     def clear_position_history(self):
         """Clear position history records"""
-        arm_config_manager.clear_position_history(self._arm_series)
+        arm_config_manager.clear_position_history(self.robot_type)
 
     def clear_velocity_history(self):
         """Clear velocity history records"""
-        arm_config_manager.clear_velocity_history(self._arm_series)
+        arm_config_manager.clear_velocity_history(self.robot_type)
 
     def clear_motion_history(self):
         """Clear all motion history records (position and velocity)"""
-        arm_config_manager.clear_motion_history(self._arm_series)
+        arm_config_manager.clear_motion_history(self.robot_type)

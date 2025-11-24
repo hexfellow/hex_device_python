@@ -8,7 +8,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, Tuple, List, Dict, Any, Union
+from typing import Optional, Tuple, List, Dict, Any, Union, Callable
 from .generated import public_api_down_pb2, public_api_up_pb2, public_api_types_pb2
 from enum import Enum
 import threading
@@ -173,12 +173,20 @@ class MotorBase(ABC):
     This class corresponds to MotorStatus in proto
     """
 
-    def __init__(self, motor_count: int, name: str = ""):
+    def __init__(self, motor_count: int, name: str = "",
+                 convert_positions_to_rad_func: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None,
+                 convert_rad_to_positions_func: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None):
         """
         Initialize motor base class
         Args:
             motor_count: Number of motors
             name: Motor group name
+            convert_positions_to_rad_func: Optional custom function to convert encoder positions to radians.
+                If None, uses default implementation.
+                Function signature: (positions: np.ndarray, pulse_per_rotation: np.ndarray) -> np.ndarray
+            convert_rad_to_positions_func: Optional custom function to convert radians to encoder positions.
+                If None, uses default implementation.
+                Function signature: (positions: np.ndarray, pulse_per_rotation: np.ndarray) -> np.ndarray
         """
         self.motor_count = motor_count
         self.name = name or f"MotorGroup"
@@ -212,6 +220,10 @@ class MotorBase(ABC):
 
         # Data update flag
         self._has_new_data = False
+
+        # Store custom conversion functions if provided
+        self._custom_convert_positions_to_rad = convert_positions_to_rad_func
+        self._custom_convert_rad_to_positions = convert_rad_to_positions_func
 
     @property
     def states(self) -> List[str]:
@@ -502,6 +514,44 @@ class MotorBase(ABC):
         with self._command_lock:
             self._target_command = command
 
+    def convert_positions_to_rad(self, positions: np.ndarray, pulse_per_rotation: np.ndarray) -> np.ndarray:
+        """
+        Convert encoder positions to radians
+        
+        This method provides a default implementation but can be overridden by providing
+        a custom function during instance initialization.
+        
+        Args:
+            positions: Encoder positions array
+            pulse_per_rotation: Pulses per rotation array
+            
+        Returns:
+            Positions in radians
+        """
+        if self._custom_convert_positions_to_rad is not None:
+            return self._custom_convert_positions_to_rad(positions, pulse_per_rotation)
+        # Default implementation
+        return (positions - 65535.0 / 2.0) / pulse_per_rotation * 2 * np.pi
+    
+    def convert_rad_to_positions(self, positions: np.ndarray, pulse_per_rotation: np.ndarray) -> np.ndarray:
+        """
+        Convert radians to encoder positions
+        
+        This method provides a default implementation but can be overridden by providing
+        a custom function during instance initialization.
+        
+        Args:
+            positions: Positions in radians array
+            pulse_per_rotation: Pulses per rotation array
+            
+        Returns:
+            Encoder positions array
+        """
+        if self._custom_convert_rad_to_positions is not None:
+            return self._custom_convert_rad_to_positions(positions, pulse_per_rotation)
+        # Default implementation
+        return positions / (2 * np.pi) * pulse_per_rotation + 65535.0 / 2.0
+    
     def update_motor_data(self,
                           positions: List[float],
                           velocities: List[float],
@@ -579,8 +629,8 @@ class MotorBase(ABC):
 
             # Convert to rad
             self._encoder_positions = np.array(positions)
-            self._positions = (np.array(positions) - 65535.0 /
-                               2.0) / self._pulse_per_rotation * 2 * np.pi
+            self._positions = self.convert_positions_to_rad(
+                np.array(positions), self._pulse_per_rotation)
 
             if wheel_radius is not None:
                 self._wheel_radius = np.array(wheel_radius)
@@ -727,8 +777,8 @@ class MotorBase(ABC):
                 motor_targets.targets.append(deepcopy(single_motor_target))
         elif command.command_type == CommandType.POSITION:
             # Convert to encoder position
-            trans_positions = np.array(command.position_command) / (
-                2 * np.pi) * pulse_per_rotation + 65535.0 / 2.0
+            trans_positions = self.convert_rad_to_positions(
+                np.array(command.position_command), pulse_per_rotation)
 
             for target in trans_positions:
                 single_motor_target.position = int(target)
@@ -740,7 +790,8 @@ class MotorBase(ABC):
         elif command.command_type == CommandType.MIT:
             # Convert to encoder position
             raw_positions = np.array([cmd.position for cmd in command.mit_command])
-            trans_positions = raw_positions / (2 * np.pi) * pulse_per_rotation + 65535.0 / 2.0
+            trans_positions = self.convert_rad_to_positions(
+                raw_positions, pulse_per_rotation)
 
             for i, mit_cmd in enumerate(command.mit_command):
                 mit_target = public_api_types_pb2.MitMotorTarget()

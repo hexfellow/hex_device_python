@@ -612,7 +612,7 @@ class HexDeviceApi:
         Returns:
             Connected socket with TCP optimizations for fast retransmission
         """
-        if local_port is not None:
+        if local_port is not None and local_port != 0:
             # Create socket manually and bind to specific local port
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:

@@ -45,7 +45,7 @@ async def delay(start_time, ms):
     if sleep_time <= 0:
         # Log warning if delay is significantly negative (> 1ms)
         if sleep_time < -0.001:
-            log_warn(f"HexDevice: Negative delay detected: {sleep_time*1000:.2f}ms - cycle overrun")
+            log_debug(f"HexDevice: Negative delay detected: {sleep_time*1000:.2f}ms - cycle overrun")
         return  # Don't sleep if we're already late
     
     await asyncio.sleep(sleep_time)

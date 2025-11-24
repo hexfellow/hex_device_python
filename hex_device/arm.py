@@ -63,7 +63,7 @@ class Arm(DeviceBase, MotorBase):
         self.name = name or "Arm"
         self._control_hz = control_hz
         self._period = 1.0 / control_hz
-        self.robot_type = robot_type
+        self._set_robot_type(robot_type)
 
         self._enable_mit = False
         if robot_type == 16 or robot_type == 17:
@@ -136,7 +136,7 @@ class Arm(DeviceBase, MotorBase):
         """
         try:
             if api_up_data.HasField('log'):
-                log_warn(f"Arm: Get log from server: {api_up_data.log}")
+                log_info(f"Arm: Get log from server: {api_up_data.log}")
 
             if not api_up_data.HasField('arm_status'):
                 return False
@@ -152,7 +152,7 @@ class Arm(DeviceBase, MotorBase):
 
                 if self._session_holder != self._previous_session_holder:
                     if self._session_holder == self._my_session_id:
-                        log_warn(f"Arm: You can control the arm now! Your session ID: {self._session_holder}")
+                        log_info(f"Arm: You can control the arm now! Your session ID: {self._session_holder}")
                     else:
                         log_warn(f"Arm: Can not control the arm, now holder is ID: {self._session_holder}, waiting...")
                 self._previous_session_holder = self._session_holder
@@ -300,7 +300,7 @@ class Arm(DeviceBase, MotorBase):
                 ## check if is holder:
                 if sh != mi:
                     if start_time - self.__last_warning_time > 3.0:
-                        log_warn(f"Arm: Waiting to get the control of the arm...")
+                        log_info(f"Arm: Waiting to get the control of the arm...")
                         self.__last_warning_time = start_time
                     continue
                 

@@ -186,14 +186,14 @@ class HexDeviceApi:
         try:
             from .chassis import Chassis
             self._register_device_class(Chassis)
-            log_info("Registered Chassis device class")
+            log_debug("Registered Chassis device class")
         except ImportError as e:
             log_warn(f"Unable to import Chassis: {e}")
 
         try:
             from .arm import Arm
             self._register_device_class(Arm)
-            log_info("Registered Arm device class")
+            log_debug("Registered Arm device class")
         except ImportError as e:
             log_warn(f"Unable to import Arm: {e}")
 
@@ -206,7 +206,7 @@ class HexDeviceApi:
                 if device_type not in self._device_factory._optional_device_classes:
                     self._register_optional_device_class(device_type, Hands)
                     registered_count += 1
-            log_info(f"Registered Hands optional device class for {registered_count} new device types out of {len(Hands.SUPPORTED_DEVICE_TYPE)} total: {[dt for dt in Hands.SUPPORTED_DEVICE_TYPE]}")
+            log_debug(f"Registered Hands optional device class for {registered_count} new device types out of {len(Hands.SUPPORTED_DEVICE_TYPE)} total: {[dt for dt in Hands.SUPPORTED_DEVICE_TYPE]}")
         except ImportError as e:
             log_warn(f"Unable to import Hands: {e}")
 
@@ -343,7 +343,7 @@ class HexDeviceApi:
         try:
             await device._periodic()
         except asyncio.CancelledError:
-            log_info(f"Periodic task for device {device.name} was cancelled")
+            log_debug(f"Periodic task for device {device.name} was cancelled")
         except Exception as e:
             log_err(f"Periodic task for device {device.name} encountered error: {e}")
         finally:
@@ -370,7 +370,7 @@ class HexDeviceApi:
         for device_id, task in self._device_tasks.items():
             device = self._device_id_map.get(device_id)
             if device and device not in all_devices:
-                log_warn(f"Found orphaned task: device ID {device_id} ({device.name})")
+                log_debug(f"Found orphaned task: device ID {device_id} ({device.name})")
                 task.cancel()
                 tasks_to_remove.append(device_id)
                 orphaned_count += 1
@@ -380,7 +380,7 @@ class HexDeviceApi:
             del self._device_tasks[device_id]
         
         if orphaned_count > 0:
-            log_info(f"Cleaned up {orphaned_count} orphaned tasks")
+            log_debug(f"Cleaned up {orphaned_count} orphaned tasks")
         
         return orphaned_count
 
@@ -620,7 +620,7 @@ class HexDeviceApi:
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 # Bind to specific local port (0.0.0.0 means any local interface)
                 sock.bind(('0.0.0.0', local_port))
-                log_info(f"Socket bound to local port {local_port}")
+                log_debug(f"Socket bound to local port {local_port}")
                 # Connect to remote host
                 sock.connect((host, port))
             except OSError as e:
@@ -744,7 +744,7 @@ class HexDeviceApi:
                 self._check_counter = 0
                 orphaned_count = self._check_and_cleanup_orphaned_tasks()
                 if orphaned_count > 0:
-                    log_warn(f"found {orphaned_count} orphaned tasks")
+                    log_debug(f"found {orphaned_count} orphaned tasks")
 
             # Get robot_type type information
             robot_type = api_up.robot_type
@@ -758,7 +758,7 @@ class HexDeviceApi:
                 if device:
                     device._update(api_up)
                 else:
-                    log_info(f"create new device: {robot_type_name}")
+                    log_debug(f"create new device: {robot_type_name}")
 
                     try:
                         device = self._create_and_register_device(
@@ -801,10 +801,8 @@ class HexDeviceApi:
                             success = optional_device._update_optional_data(device_type, secondary_device)
                             if not success:
                                 log_err(f"Failed to update optional device data for device_id {device_id}, type {device_type}")
-                            else:
-                                log_info(f"Updated optional device data for device_id {device_id}, type {device_type}")
                         else:
-                            log_info(f"create new optional device: device_id={device_id}, type={device_type}")
+                            log_debug(f"create new optional device: device_id={device_id}, type={device_type}")
                             
                             try:
                                 # Create and register new optional device

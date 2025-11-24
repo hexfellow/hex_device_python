@@ -59,7 +59,7 @@ class Chassis(DeviceBase, MotorBase):
         DeviceBase.__init__(self, name, send_message_callback)
         MotorBase.__init__(self, motor_count, name)
         self.name = name or "Chassis"
-        self.robot_type = robot_type
+        self._set_robot_type(robot_type)
         self._control_hz = control_hz
         self._target_zero_resistance = False
         self._target_velocity = (0.0, 0.0, 0.0)  # Initialize target velocity
@@ -166,7 +166,7 @@ class Chassis(DeviceBase, MotorBase):
 
                 if self._session_holder != self._previous_session_holder:
                     if self._session_holder == self._my_session_id:
-                        log_warn(f"Chassis: You can control the chassis now! Your session ID: {self._session_holder}")
+                        log_info(f"Chassis: You can control the chassis now! Your session ID: {self._session_holder}")
                     else:
                         log_warn(f"Chassis: Can not control the chassis, now holder is ID: {self._session_holder}, waiting...")
                 self._previous_session_holder = self._session_holder

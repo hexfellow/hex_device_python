@@ -276,6 +276,7 @@ class Arm(DeviceBase, MotorBase):
                     sh = self._session_holder
                     mi = self._my_session_id
                     sp = self._send_clear_parking_stop
+                    self._send_clear_parking_stop = None
 
                 # print(f"api_control_initialized: {a}, calibrated: {c}, session holder: {sh}, my session id: {mi}")
                 
@@ -285,17 +286,16 @@ class Arm(DeviceBase, MotorBase):
                 elif s:
                     msg = self._construct_init_message()
                     await self._send_message(msg)
-                    self._send_init = None
+                    self._clear_send_init()
                 elif not s:
                     msg = self._construct_init_message(False)
                     await self._send_message(msg)
-                    self._send_init = None
+                    self._clear_send_init()
 
                 ## send clear parking stop message
                 if sp == True:
                     msg = self._construct_clear_parking_stop_message()
                     await self._send_message(msg)
-                    sp = None
 
                 ## check if is holder:
                 if sh != mi:

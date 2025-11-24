@@ -30,8 +30,8 @@ class DeviceBase(ABC):
 
         self._last_update_time = None
 
-        self._data_lock = threading.Lock()
-        self._status_lock = threading.Lock()
+        self._data_lock = threading.Lock()  # Use for motor data read and write
+        self._status_lock = threading.Lock() # Use for status read and write
 
         self._has_new_data = False
 
@@ -76,6 +76,13 @@ class DeviceBase(ABC):
         """
         with self._status_lock:
             self._send_init = False
+
+    def _clear_send_init(self):
+        """
+        Clear send init
+        """
+        with self._status_lock:
+            self._send_init = None
 
     def set_has_new_data(self):
         with self._data_lock:

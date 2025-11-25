@@ -95,7 +95,9 @@ from .motor_base import (
 )
 
 # Device implementations
+from .arm import Arm
 from .chassis import Chassis
+from .linear_lift import LinearLift
 
 # Optional device implementations
 from .hands import Hands
@@ -139,7 +141,9 @@ __all__ = [
     'MitMotorCommand',
     
     # Device implementations
+    'Arm',
     'Chassis',
+    'LinearLift',
     
     # Optional device implementations
     'Hands',

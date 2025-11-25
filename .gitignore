@@ -7,3 +7,4 @@ __pycache__/
 .idea/
 build/
 .DS_Store
+.venv

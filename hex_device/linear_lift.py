@@ -9,6 +9,7 @@
 import copy
 import time
 import numpy as np
+import asyncio
 from typing import List, Optional, Union, Tuple
 
 from .common_utils import delay, log_err, log_info, log_warn
@@ -35,6 +36,7 @@ class LinearLift(DeviceBase):
         
         self.name = name or "Linear Lift"
         self._control_hz = control_hz
+        self.motor_count = motor_count
         self._period = 1.0 / control_hz
         self._set_robot_type(robot_type)
 
@@ -209,6 +211,7 @@ class LinearLift(DeviceBase):
                     if ts is not None:
                         msg = self._construct_set_speed_msg(ts)
                         await self._send_message(msg)
+                        await asyncio.sleep(0.5)
                     if tp is not None:
                         msg = self._construct_target_pos_msg(tp)
                         await self._send_message(msg)
@@ -221,40 +224,66 @@ class LinearLift(DeviceBase):
         """
         Get parking stop detail
         """
+        if self._parking_stop_detail == public_api_types_pb2.ParkingStopDetail():
+            return None
         return copy.deepcopy(self._parking_stop_detail)
+    
+    def get_state(self):
+        lift_state_descriptor = public_api_types_pb2.LiftState.DESCRIPTOR
+        with self._status_lock:
+            return lift_state_descriptor.values_by_number[self._state].name
 
     def get_pos_range(self) -> Tuple[int, int]:
         """
-        Get position range
+        Get position range, in meters
         """
-        return (0, self._max_pos)
+        with self._status_lock:
+            if self._max_pos is None:
+                return (0, 0)
+            return (0, float(np.abs(self._max_pos)/self._pulse_per_rotation))
 
     def get_motor_positions(self) -> List[float]:
         """Get all motor positions (rad)"""
         with self._data_lock:
             self._has_new_data = False
-            return self._current_pos
+            return np.abs(self._current_pos / self._pulse_per_rotation)
 
     def get_move_speed(self) -> float:
         """Get motor velocity (pulse/s)"""
         with self._data_lock:
             self._has_new_data = False
             return self._move_speed
+        
+    def get_max_move_speed(self) -> float:
+        """Get max move speed (pulse/s)"""
+        with self._data_lock:
+            self._has_new_data = False
+            return self._max_speed
+        
+    def get_pulse_per_meter(self) -> float:
+        """Get pulse per meter"""
+        with self._data_lock:
+            self._has_new_data = False
+            return self._pulse_per_rotation
 
     # support command type: POSITION, BRAKE
     # position unit: rad
-    def motor_command(self, command_type: CommandType, values: Union[bool, float, MitMotorCommand, np.ndarray]):
+    def motor_command(self, command_type: CommandType, values: Union[bool, float, np.ndarray]):
         """
         Set motor command
         """
+        if isinstance(values, float):
+            values = np.array([values] * self.motor_count)
         if command_type == CommandType.POSITION:
             with self._status_lock:
                 values = self.convert_rad_to_positions(values, self._pulse_per_rotation)
-                np.clip(values, 0, self._max_pos, out=values)
+                if values < 0:
+                    raise ValueError("Position command value cannot be negative")
+                np.clip(values, 0, np.abs(self._max_pos), out=values)
                 self._target_pos = values
         elif command_type == CommandType.BRAKE:
             with self._status_lock:
-                self._send_brake = values
+                self._send_brake = True
         else:
             raise ValueError(f"Lift only supports POSITION command type, got {command_type}")
 
@@ -269,6 +298,8 @@ class LinearLift(DeviceBase):
     def calibrate(self):
         """
         Calibrate
+        The lift must be calibrated before moving when powered on
+        It is strictly forbidden to send the calibrate command continuously!!!
         """
         with self._status_lock:
             self._send_calibrate = True
@@ -284,13 +315,15 @@ class LinearLift(DeviceBase):
         msg.linear_lift_command.CopyFrom(lift_command)
         return msg
 
-    def _construct_target_pos_msg(self, target_pos: int) -> public_api_down_pb2.APIDown:
+    def _construct_target_pos_msg(self, target_pos: np.ndarray) -> public_api_down_pb2.APIDown:
         """
         Construct target motor message
         """
         msg = public_api_down_pb2.APIDown()
         lift_command = public_api_types_pb2.LinearLiftCommand()
-        lift_command.target_pos = target_pos
+        with self._status_lock:
+            target_pos = np.sign(self._max_pos) * target_pos
+        lift_command.target_pos = int(target_pos[0])
         msg.linear_lift_command.CopyFrom(lift_command)
         return msg
 

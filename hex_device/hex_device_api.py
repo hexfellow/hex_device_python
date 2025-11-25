@@ -210,6 +210,13 @@ class HexDeviceApi:
         except ImportError as e:
             log_warn(f"Unable to import Hands: {e}")
 
+        try:
+            from .linear_lift import LinearLift
+            self._register_device_class(LinearLift)
+            log_debug("Registered LinearLift device class")
+        except ImportError as e:
+            log_warn(f"Unable to import LinearLift: {e}")
+            
         # TODO: Add registration for more device classes
         # lift、rotate lift...
 

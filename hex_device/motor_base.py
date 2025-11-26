@@ -218,9 +218,6 @@ class MotorBase(ABC):
         self._data_lock = threading.Lock()
         self._command_lock = threading.Lock()
 
-        # Data update flag
-        self._has_new_data = False
-
         # Store custom conversion functions if provided
         self._custom_convert_positions_to_rad = convert_positions_to_rad_func
         self._custom_convert_rad_to_positions = convert_rad_to_positions_func
@@ -315,12 +312,6 @@ class MotorBase(ABC):
                 return np.array(self._target_command.torque_command)
             return np.zeros(self.motor_count)
 
-    @property
-    def has_new_data(self) -> bool:
-        """Check if there is new data"""
-        with self._data_lock:
-            return self._has_new_data
-
     def get_motor_state(self, motor_index: int) -> str:
         """Get specified motor state"""
         if not 0 <= motor_index < self.motor_count:
@@ -328,7 +319,6 @@ class MotorBase(ABC):
                 f"Motor index {motor_index} out of range [0, {self.motor_count})"
             )
         with self._data_lock:
-            self._has_new_data = False
             return self._states[motor_index]
 
     def get_motor_position(self, motor_index: int) -> float:
@@ -338,20 +328,23 @@ class MotorBase(ABC):
                 f"Motor index {motor_index} out of range [0, {self.motor_count})"
             )
         with self._data_lock:
-            self._has_new_data = False
             return self._positions[motor_index]
 
     def get_motor_positions(self) -> List[float]:
         """Get all motor positions (rad)"""
+        # Copy array inside lock (fast operation)
         with self._data_lock:
-            self._has_new_data = False
-            return self._positions.tolist()
+            result_arr = self._positions.copy()
+        # Convert to list outside lock (slower operation, but doesn't block other threads)
+        return result_arr.tolist()
 
     def get_encoders_to_zero(self) -> List[float]:
         """Get all motor encoders to zero (rad)"""
+        # Copy array and compute inside lock (fast operation)
         with self._data_lock:
-            tar = 32767 - self._encoder_positions
-            return tar.tolist()
+            tar_arr = 32767 - self._encoder_positions
+        # Convert to list outside lock (slower operation, but doesn't block other threads)
+        return tar_arr.tolist()
 
     def get_motor_velocity(self, motor_index: int) -> float:
         """Get specified motor velocity (rad/s)"""
@@ -360,14 +353,15 @@ class MotorBase(ABC):
                 f"Motor index {motor_index} out of range [0, {self.motor_count})"
             )
         with self._data_lock:
-            self._has_new_data = False
             return self._velocities[motor_index]
 
     def get_motor_velocities(self) -> List[float]:
         """Get all motor velocities (rad/s)"""
+        # Copy array inside lock (fast operation)
         with self._data_lock:
-            self._has_new_data = False
-            return self._velocities.tolist()
+            result_arr = self._velocities.copy()
+        # Convert to list outside lock (slower operation, but doesn't block other threads)
+        return result_arr.tolist()
 
     def get_motor_torque(self, motor_index: int) -> float:
         """Get specified motor torque (Nm)"""
@@ -376,14 +370,15 @@ class MotorBase(ABC):
                 f"Motor index {motor_index} out of range [0, {self.motor_count})"
             )
         with self._data_lock:
-            self._has_new_data = False
             return self._torques[motor_index]
 
     def get_motor_torques(self) -> List[float]:
         """Get all motor torques (Nm)"""
+        # Copy array inside lock (fast operation)
         with self._data_lock:
-            self._has_new_data = False
-            return self._torques.tolist()
+            result_arr = self._torques.copy()
+        # Convert to list outside lock (slower operation, but doesn't block other threads)
+        return result_arr.tolist()
 
     def get_motor_driver_temperature(self, motor_index: int) -> float:
         """Get specified motor driver temperature (°C)"""
@@ -392,7 +387,6 @@ class MotorBase(ABC):
                 f"Motor index {motor_index} out of range [0, {self.motor_count})"
             )
         with self._data_lock:
-            self._has_new_data = False
             return self._driver_temperature[motor_index]
 
     def get_motor_temperature(self, motor_index: int) -> float:
@@ -402,7 +396,6 @@ class MotorBase(ABC):
                 f"Motor index {motor_index} out of range [0, {self.motor_count})"
             )
         with self._data_lock:
-            self._has_new_data = False
             return self._motor_temperature[motor_index]
 
     def get_motor_voltage(self, motor_index: int) -> float:
@@ -412,7 +405,6 @@ class MotorBase(ABC):
                 f"Motor index {motor_index} out of range [0, {self.motor_count})"
             )
         with self._data_lock:
-            self._has_new_data = False
             return self._voltage[motor_index]
 
     def get_motor_pulse_per_rotation(self, motor_index: int) -> float:
@@ -617,31 +609,55 @@ class MotorBase(ABC):
                 f"Expected {self.motor_count} current_targets, got {len(current_targets)}"
             )
 
+        # Convert to numpy arrays outside the lock to minimize lock holding time
+        # Use asarray instead of array to avoid copying if input is already an array
+        velocities_arr = np.asarray(velocities, dtype=np.float64)
+        torques_arr = np.asarray(torques, dtype=np.float64)
+        driver_temperature_arr = np.asarray(driver_temperature, dtype=np.float64)
+        motor_temperature_arr = np.asarray(motor_temperature, dtype=np.float64)
+        voltage_arr = np.asarray(voltage, dtype=np.float64)
+        positions_arr = np.asarray(positions, dtype=np.float64)
+        
+        # Handle optional parameters
+        pulse_per_rotation_arr = np.asarray(pulse_per_rotation, dtype=np.float64) if pulse_per_rotation is not None else None
+        wheel_radius_arr = np.asarray(wheel_radius, dtype=np.float64) if wheel_radius is not None else None
+
+        # Prepare error code updates outside lock
+        error_codes_copy = error_codes.copy() if error_codes is not None else None
+        current_targets_copy = current_targets.copy() if current_targets is not None else None
+
+        # Get pulse_per_rotation for position conversion
+        # If provided, use it; otherwise read existing value quickly
+        if pulse_per_rotation_arr is not None:
+            pulse_for_conversion = pulse_per_rotation_arr
+        else:
+            # Quick lock to read existing pulse_per_rotation
+            with self._data_lock:
+                pulse_for_conversion = self._pulse_per_rotation.copy()
+        
+        # Convert encoder positions to radians (calculation outside main lock)
+        positions_rad_arr = self.convert_positions_to_rad(
+            positions_arr, pulse_for_conversion)
+
+        # Now update all data within lock (minimal operations, mainly assignments)
         with self._data_lock:
-            self._velocities = np.array(velocities)
-            self._torques = np.array(torques)
-            self._driver_temperature = np.array(driver_temperature)
-            self._motor_temperature = np.array(motor_temperature)
-            self._voltage = np.array(voltage)
+            # Use np.copyto for in-place updates (avoids creating new array objects)
+            np.copyto(self._velocities, velocities_arr)
+            np.copyto(self._torques, torques_arr)
+            np.copyto(self._driver_temperature, driver_temperature_arr)
+            np.copyto(self._motor_temperature, motor_temperature_arr)
+            np.copyto(self._voltage, voltage_arr)
+            np.copyto(self._encoder_positions, positions_arr)
+            np.copyto(self._positions, positions_rad_arr)
 
-            if pulse_per_rotation is not None:
-                self._pulse_per_rotation = np.array(pulse_per_rotation)
+            if pulse_per_rotation_arr is not None:
+                np.copyto(self._pulse_per_rotation, pulse_per_rotation_arr)
 
-            # Convert to rad
-            self._encoder_positions = np.array(positions)
-            self._positions = self.convert_positions_to_rad(
-                np.array(positions), self._pulse_per_rotation)
-
-            if wheel_radius is not None:
-                self._wheel_radius = np.array(wheel_radius)
+            if wheel_radius_arr is not None:
+                np.copyto(self._wheel_radius, wheel_radius_arr)
 
             if error_codes is not None:
-                if len(error_codes) != self.motor_count:
-                    raise ValueError(
-                        f"Expected {self.motor_count} error codes, got {len(error_codes)}"
-                    )
-                self._error_codes = error_codes.copy()
-
+                self._error_codes = error_codes_copy
                 # Update state based on error codes
                 for i, error_code in enumerate(error_codes):
                     if error_code is not None:
@@ -649,16 +665,10 @@ class MotorBase(ABC):
                     elif self._states[i] == "error":
                         self._states[i] = "normal"
 
-            if current_targets is not None:
-                self._current_targets = current_targets.copy()
+            if current_targets_copy is not None:
+                self._current_targets = current_targets_copy
 
             self._last_update_time = time.time_ns()
-            self._has_new_data = True
-
-    def clear_new_data_flag(self):
-        """Clear new data flag"""
-        with self._data_lock:
-            self._has_new_data = False
 
     def get_motor_summary(self) -> Dict[str, Any]:
         """Get status summary"""

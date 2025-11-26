@@ -245,25 +245,21 @@ class LinearLift(DeviceBase):
     def get_motor_positions(self) -> List[float]:
         """Get all motor positions (rad)"""
         with self._data_lock:
-            self._has_new_data = False
             return np.abs(self._current_pos / self._pulse_per_rotation)
 
     def get_move_speed(self) -> float:
         """Get motor velocity (pulse/s)"""
         with self._data_lock:
-            self._has_new_data = False
             return self._move_speed
         
     def get_max_move_speed(self) -> float:
         """Get max move speed (pulse/s)"""
         with self._data_lock:
-            self._has_new_data = False
             return self._max_speed
         
     def get_pulse_per_meter(self) -> float:
         """Get pulse per meter"""
         with self._data_lock:
-            self._has_new_data = False
             return self._pulse_per_rotation
 
     # support command type: POSITION, BRAKE

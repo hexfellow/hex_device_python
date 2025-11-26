@@ -33,7 +33,7 @@ class DeviceBase(ABC):
         self._data_lock = threading.Lock()  # Use for motor data read and write
         self._status_lock = threading.Lock() # Use for status read and write
 
-        self._has_new_data = False
+        self._has_new_data = threading.Event()  # Use Event to avoid lock contention
 
         # Api_control_initialized
         self._send_init: Optional[bool] = None
@@ -85,18 +85,21 @@ class DeviceBase(ABC):
             self._send_init = None
 
     def set_has_new_data(self):
-        with self._data_lock:
-            self._has_new_data = True
+        """Set new data flag"""
+        self._has_new_data.set()
 
     def has_new_data(self) -> bool:
         """Check if there is new data"""
-        with self._data_lock:
-            return self._has_new_data
+        return self._has_new_data.is_set()
 
     def clear_new_data_flag(self):
-        """Clear new data flag"""
-        with self._data_lock:
-            self._has_new_data = False
+        """
+        Clear new data flag
+        
+        Thread operations can incur significant performance overhead. 
+        If you do not rely on has_new_data() to obtain the information update status, it is recommended not to call this method.
+        """
+        self._has_new_data.clear()
 
     def get_device_summary(self) -> Dict[str, Any]:
         """Get device status summary"""
@@ -177,12 +180,12 @@ class DeviceBase(ABC):
         """Update timestamp"""
         with self._data_lock:
             self._last_update_time = time.time_ns()
-            self._has_new_data = True
+        self._has_new_data.set()
 
     def __str__(self) -> str:
         """String representation"""
-        return f"{self.name}, {self.has_new_data}, {self._last_update_time}"
+        return f"{self.name}, {self.has_new_data()}, {self._last_update_time}"
 
     def __repr__(self) -> str:
         """Detailed string representation"""
-        return f"DeviceBase(name='{self.name}', has_new_data={self.has_new_data}, last_update_time={self._last_update_time})"
+        return f"DeviceBase(name='{self.name}', has_new_data={self.has_new_data()}, last_update_time={self._last_update_time})"

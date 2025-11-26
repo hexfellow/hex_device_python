@@ -668,7 +668,7 @@ class MotorBase(ABC):
             if current_targets_copy is not None:
                 self._current_targets = current_targets_copy
 
-            self._last_update_time = time.time_ns()
+            self._last_update_time = time.perf_counter_ns()
 
     def get_motor_summary(self) -> Dict[str, Any]:
         """Get status summary"""

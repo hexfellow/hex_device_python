@@ -48,8 +48,10 @@ def main():
     print(f"Log level set to: {args.log_level}")
     
     # Init HexDeviceApi
-    api = HexDeviceApi(ws_url=args.url, control_hz=250, enable_kcp=True, local_port=0)
+    api = HexDeviceApi(ws_url=args.url, control_hz=1000, enable_kcp=True, local_port=0)
     first_time = True
+
+    time.sleep(1)
     
     # Enable/Disable loop test variable
     enable_disable_start_time = time.time()
@@ -93,6 +95,11 @@ def main():
                             ## command, Please select one of the following commands.
                             device.set_vehicle_speed(0.0, 0.0, 0.1)
                             # device.motor_command(CommandType.SPEED, [0.5] * len(device))
+
+                            # Thread operations can incur significant performance overhead. 
+                            # If you do not rely on _has_new_data to obtain the information update status, 
+                            # it is recommended not to call clear_new_data_flag().
+                            device.clear_new_data_flag()
 
                     # for Arm
                     elif isinstance(device, Arm):
@@ -165,7 +172,8 @@ def main():
                             # print(device.get_device_summary())
                             # print(device.get_motor_summary())
 
-                            print(f"arm position: {device.get_motor_positions()}")
+                            # print(f"arm position: {device.get_motor_positions()}")
+                            print(device.get_simple_motor_status())
 
                             ##  print the encoders to zero, you can use this to set the encoders to zero.
                             # print(f"arm encoders from zero: {device.get_encoders_to_zero()}")
@@ -223,6 +231,11 @@ def main():
                             #     CommandType.MIT,
                             #     mit_commands)
 
+                            # Thread operations can incur significant performance overhead. 
+                            # If you do not rely on _has_new_data to obtain the information update status, 
+                            # it is recommended not to call clear_new_data_flag().
+                            device.clear_new_data_flag()
+
                     elif isinstance(device, LinearLift):
                         if device.has_new_data():
                             if first_time:
@@ -246,6 +259,11 @@ def main():
                             # device.motor_command(
                             #     CommandType.POSITION,
                             #     0.0)
+
+                            # Thread operations can incur significant performance overhead. 
+                            # If you do not rely on _has_new_data to obtain the information update status, 
+                            # it is recommended not to call clear_new_data_flag().
+                            device.clear_new_data_flag()
                             
                 for device in api.optional_device_list:
                     if isinstance(device, Hands):
@@ -256,8 +274,12 @@ def main():
                                 [0.0] * device.motor_count
                             )
 
+                            # Thread operations can incur significant performance overhead. 
+                            # If you do not rely on _has_new_data to obtain the information update status, 
+                            # it is recommended not to call clear_new_data_flag().
+                            device.clear_new_data_flag()
 
-            time.sleep(0.002)
+            time.sleep(0.0001)
 
     except KeyboardInterrupt:
         print("Received Ctrl-C.")

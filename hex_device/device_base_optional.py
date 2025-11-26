@@ -37,7 +37,7 @@ class OptionalDeviceBase(ABC):
 
         self._data_lock = threading.Lock()
 
-        self._has_new_data = False
+        self._has_new_data = threading.Event()  # Use Event to avoid lock contention
 
         self._read_only = read_only
 
@@ -65,18 +65,16 @@ class OptionalDeviceBase(ABC):
                 "send_message: send_message_callback is not set")
 
     def set_has_new_data(self):
-        with self._data_lock:
-            self._has_new_data = True
+        """Set new data flag"""
+        self._has_new_data.set()
 
     def has_new_data(self) -> bool:
         """Check if there is new data"""
-        with self._data_lock:
-            return self._has_new_data
+        return self._has_new_data.is_set()
 
     def clear_new_data_flag(self):
         """Clear new data flag"""
-        with self._data_lock:
-            self._has_new_data = False
+        self._has_new_data.clear()
 
     def get_device_summary(self) -> Dict[str, Any]:
         """Get device status summary"""
@@ -132,7 +130,7 @@ class OptionalDeviceBase(ABC):
         """Update timestamp"""
         with self._data_lock:
             self._last_update_time = time.time_ns()
-            self._has_new_data = True
+        self._has_new_data.set()
 
     def __str__(self) -> str:
         """String representation"""

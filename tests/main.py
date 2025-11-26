@@ -11,7 +11,7 @@
 import sys
 import argparse
 import numpy as np
-import logging
+import time
 
 sys.path.insert(1, '<your project path>/hex_device_python')
 sys.path.insert(
@@ -20,12 +20,8 @@ sys.path.insert(
 
 import hex_device
 from hex_device import HexDeviceApi
-import time
-from hex_device.chassis import Chassis
-from hex_device.motor_base import CommandType
-from hex_device.arm import Arm
-from hex_device.motor_base import MitMotorCommand
-from hex_device.hands import Hands
+from hex_device import Chassis, LinearLift, Arm, Hands
+from hex_device.motor_base import CommandType, MitMotorCommand
 
 def main():
     # Parse command line arguments
@@ -226,7 +222,31 @@ def main():
                             # device.motor_command(
                             #     CommandType.MIT,
                             #     mit_commands)
-                    
+
+                    elif isinstance(device, LinearLift):
+                        if device.has_new_data():
+                            if first_time:
+                                first_time = False
+                                ## You can change speed if you want
+                                # device.set_move_speed(75000)
+
+                                # The lift must be calibrated before moving when powered on. 
+                                # It is strictly forbidden to send the calibrate command continuously!!!
+                                # device.calibrate()
+
+                            print(f"linear lift position: {device.get_motor_positions()}")
+                            # print(f"linear lift pulse_per_meter: {device.get_pulse_per_meter()}")
+                            # print(f"linear lift speed: {device.get_move_speed()}")
+                            # print(f"linear lift range: {device.get_pos_range()}")
+                            # print(f"linear lift max motor speed: {device.get_max_move_speed()}")
+                            # print(f"linear lift state: {device.get_state()}")
+                            # print(f"linear lift parking stop detail: {device.get_parking_stop_detail()}")
+
+                            ## command, support POSITION and BRAKE command type.
+                            # device.motor_command(
+                            #     CommandType.POSITION,
+                            #     0.0)
+                            
                 for device in api.optional_device_list:
                     if isinstance(device, Hands):
                         if device.has_new_data():

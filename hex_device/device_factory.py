@@ -186,6 +186,14 @@ class DeviceFactory:
             if motor_count is not None:
                 params['motor_count'] = motor_count
 
+        elif class_name == 'LinearLift':
+            params['name'] = f"LinearLift_{robot_type}"
+            params['robot_type'] = robot_type
+            # Get motor_count from api_up
+            motor_count = self._get_motor_count_from_api_up(api_up)
+            if motor_count is not None:
+                params['motor_count'] = motor_count
+
         ## TODO: For adding different devices in the future, need to add new additional parameter extraction methods based on the parameters required by new classes.
         ## Error capture using try has been used earlier, if there are problems with parameter capture here, just raise directly.
 
@@ -215,9 +223,7 @@ class DeviceFactory:
                 motor_count = len(api_up.base_status.motor_status)
                 return motor_count
         elif status_field == 'linear_lift_status':
-            if hasattr(api_up.linear_lift_status, 'motor_status'):
-                motor_count = len(api_up.linear_lift_status.motor_status)
-                return motor_count
+            return 1
         elif status_field == 'rotate_lift_status':
             if hasattr(api_up.rotate_lift_status, 'motor_status'):
                 motor_count = len(api_up.rotate_lift_status.motor_status)

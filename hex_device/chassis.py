@@ -59,7 +59,7 @@ class Chassis(DeviceBase, MotorBase):
         DeviceBase.__init__(self, name, send_message_callback)
         MotorBase.__init__(self, motor_count, name)
         self.name = name or "Chassis"
-        self.robot_type = robot_type
+        self._set_robot_type(robot_type)
         self._control_hz = control_hz
         self._target_zero_resistance = False
         self._target_velocity = (0.0, 0.0, 0.0)  # Initialize target velocity
@@ -166,7 +166,7 @@ class Chassis(DeviceBase, MotorBase):
 
                 if self._session_holder != self._previous_session_holder:
                     if self._session_holder == self._my_session_id:
-                        log_warn(f"Chassis: You can control the chassis now! Your session ID: {self._session_holder}")
+                        log_info(f"Chassis: You can control the chassis now! Your session ID: {self._session_holder}")
                     else:
                         log_warn(f"Chassis: Can not control the chassis, now holder is ID: {self._session_holder}, waiting...")
                 self._previous_session_holder = self._session_holder
@@ -305,15 +305,13 @@ class Chassis(DeviceBase, MotorBase):
                     sh = self._session_holder
                     mi = self._my_session_id
                     sps = self._send_clear_parking_stop
+                    self._send_clear_parking_stop = None
 
                 # check if send clear parking stop message
                 if sps is not None:
                     if sps:
                         msg = self._construct_clear_parking_stop_message()
                         await self._send_message(msg)
-                        sps = None
-                    else:
-                        sps = None
 
                 # Check if send init message
                 if s is None:
@@ -321,12 +319,12 @@ class Chassis(DeviceBase, MotorBase):
                 elif s:
                     msg = self._construct_init_message(True)
                     await self._send_message(msg)
-                    self._send_init = None
+                    self._clear_send_init()
                 elif not s:
                     msg = self._construct_init_message(False)
                     await self._send_message(msg)
                     self._simple_control_mode = None
-                    self._send_init = None
+                    self._clear_send_init()
 
                 # check if is holder:
                 if sh != mi:
@@ -469,7 +467,10 @@ class Chassis(DeviceBase, MotorBase):
             return self._my_session_id
 
     def clear_parking_stop(self):
-        """Clear parking stop"""
+        """
+        Clear parking stop
+        Note: If you have clear parking stop, you must call start() again.
+        """
         with self._status_lock:
             self._send_clear_parking_stop = True
 

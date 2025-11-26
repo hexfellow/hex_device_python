@@ -34,9 +34,9 @@ def _setup_default_logging():
         # Add handler to logger
         logger.addHandler(handler)
         
-        # Set default level to WARNING (so INFO and DEBUG are not shown by default)
+        # Set default level to INFO (so DEBUG are not shown by default)
         # Users can change this by calling logging.getLogger('hex_device').setLevel(logging.INFO)
-        logger.setLevel(logging.WARNING)
+        logger.setLevel(logging.INFO)
         
         # Prevent propagation to root logger to avoid duplicate messages
         logger.propagate = False
@@ -95,7 +95,9 @@ from .motor_base import (
 )
 
 # Device implementations
+from .arm import Arm
 from .chassis import Chassis
+from .linear_lift import LinearLift
 
 # Optional device implementations
 from .hands import Hands
@@ -139,7 +141,9 @@ __all__ = [
     'MitMotorCommand',
     
     # Device implementations
+    'Arm',
     'Chassis',
+    'LinearLift',
     
     # Optional device implementations
     'Hands',

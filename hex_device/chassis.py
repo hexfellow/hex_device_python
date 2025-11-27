@@ -9,6 +9,7 @@
 from typing import Optional, List, Dict, Any, Tuple
 import numpy as np
 import threading
+from collections import deque
 from .common_utils import delay, log_common, log_info, log_warn, log_err
 from .device_base import DeviceBase
 from .generated import public_api_down_pb2, public_api_up_pb2, public_api_types_pb2
@@ -83,8 +84,8 @@ class Chassis(DeviceBase, MotorBase):
 
         # Odometry information
         self.__vehicle_origin_position = np.eye(3)  # Used to clear odometry bias
-        self._vehicle_speed = (0.0, 0.0, 0.0)  # (x, y, z) m/s, m/s, rad/s
-        self._vehicle_position = (0.0, 0.0, 0.0)  # (x, y, yaw) m, m, rad
+        self._vehicle_speed = deque(maxlen=10)  # (x, y, z) m/s, m/s, rad/s - FIFO queue
+        self._vehicle_position = deque(maxlen=10)  # (x, y, yaw) m, m, rad - FIFO queue
 
         # Control related
         self._send_init = self._send_init
@@ -181,12 +182,12 @@ class Chassis(DeviceBase, MotorBase):
                 if base_status.HasField('warning'):
                     self._warning = base_status.warning
                 if base_status.HasField('estimated_odometry'):
-                    self._vehicle_speed = (base_status.estimated_odometry.speed_x,
-                                        base_status.estimated_odometry.speed_y,
-                                        base_status.estimated_odometry.speed_z)
-                    self._vehicle_position = (base_status.estimated_odometry.pos_x,
-                                            base_status.estimated_odometry.pos_y,
-                                            base_status.estimated_odometry.pos_z)
+                    self._vehicle_speed.append((base_status.estimated_odometry.speed_x,
+                                                base_status.estimated_odometry.speed_y,
+                                                base_status.estimated_odometry.speed_z))
+                    self._vehicle_position.append((base_status.estimated_odometry.pos_x,
+                                                  base_status.estimated_odometry.pos_y,
+                                                  base_status.estimated_odometry.pos_z))
 
             # Update motor data
             self._update_motor_data_from_base_status(base_status)
@@ -391,8 +392,11 @@ class Chassis(DeviceBase, MotorBase):
 
     def clear_odom_bias(self):
         """ reset odometry position """
-        with self._data_lock:
-            x, y, yaw = self._vehicle_position
+        with self._status_lock:
+            if len(self._vehicle_position) == 0:
+                raise ValueError("Cannot clear odom bias: vehicle position data not available (queue is empty)")
+            # Get latest position without popping
+            x, y, yaw = self._vehicle_position[-1]
             log_common(f"clear odom bias: {x}, {y}, {yaw}")
             # Convert (x, y, yaw) to 2D transformation matrix
             cos_yaw = np.cos(yaw)
@@ -418,19 +422,46 @@ class Chassis(DeviceBase, MotorBase):
             'charging': self._battery_charging
         }
 
-    def get_vehicle_speed(self) -> Tuple[float, float, float]:
-        """Get vehicle speed (m/s, m/s, rad/s)"""
-        return self._vehicle_speed
+    def get_vehicle_speed(self, pop: bool = True) -> Optional[Tuple[float, float, float]]:
+        """Get vehicle speed (m/s, m/s, rad/s)
+        
+        Args:
+            pop: If True, pops from queue (FIFO). If False, reads latest data without popping.
+        
+        Returns:
+            Tuple of (speed_x, speed_y, speed_z) or None if queue is empty
+        """
+        with self._status_lock:
+            if len(self._vehicle_speed) > 0:
+                if pop:
+                    return self._vehicle_speed.popleft()
+                else:
+                    return self._vehicle_speed[-1]
+            return None
 
-    def get_vehicle_position(self) -> Tuple[float, float, float]:
+    def get_vehicle_position(self, pop: bool = True) -> Optional[Tuple[float, float, float]]:
         """ get vehicle position
         Odometry position, unit: m
+        
+        Args:
+            pop: If True, pops from queue (FIFO). If False, reads latest data without popping.
+        
+        Returns:
+            Tuple of (relative_x, relative_y, relative_yaw) or None if queue is empty
         """
-        with self._data_lock:
+        with self._status_lock:
+            if len(self._vehicle_position) == 0:
+                return None
+            
             self.__has_new = False
 
+            # Get position from queue
+            if pop:
+                x, y, yaw = self._vehicle_position.popleft()
+            else:
+                x, y, yaw = self._vehicle_position[-1]
+            
             # Convert current position to transformation matrix
-            x, y, yaw = self._vehicle_position
             cos_yaw = np.cos(yaw)
             sin_yaw = np.sin(yaw)
             current_matrix = np.array([[cos_yaw, -sin_yaw, x],
@@ -656,9 +687,9 @@ class Chassis(DeviceBase, MotorBase):
             'battery_info':
             self.get_battery_info(),
             'vehicle_speed':
-            self._vehicle_speed,
+            self._vehicle_speed[-1] if len(self._vehicle_speed) > 0 else None,
             'vehicle_position':
-            self._vehicle_position,
+            self._vehicle_position[-1] if len(self._vehicle_position) > 0 else None,
             'parking_stop_detail':
             self._parking_stop_detail,
             'warning':

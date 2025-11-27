@@ -12,6 +12,13 @@ A Python library for controlling HexDevice robots and devices.
 """
 
 import logging
+import sys
+
+# Custom filter for separating error logs from other logs
+class NonErrorFilter(logging.Filter):
+    """Filter that only allows non-error level logs (DEBUG, INFO, WARNING)"""
+    def filter(self, record):
+        return record.levelno < logging.ERROR
 
 # Configure default logging for the hex_device package
 # Users can override this configuration if needed
@@ -21,18 +28,27 @@ def _setup_default_logging():
     
     # Only add handler if no handlers exist (avoid duplicate handlers)
     if not logger.handlers:
-        # Create handler
-        handler = logging.StreamHandler()
-        
         # Create formatter
         formatter = logging.Formatter(
             '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'
         )
-        handler.setFormatter(formatter)
         
-        # Add handler to logger
-        logger.addHandler(handler)
+        # Create handler for non-error logs (DEBUG, INFO, WARNING) -> stdout
+        stdout_handler = logging.StreamHandler(stream=sys.stdout)
+        stdout_handler.setFormatter(formatter)
+        stdout_handler.setLevel(logging.DEBUG)  # Capture all levels at handler level
+        # Filter: only allow DEBUG, INFO, WARNING through to stdout
+        stdout_handler.addFilter(NonErrorFilter())
+        
+        # Create handler for error logs (ERROR, CRITICAL) -> stderr
+        stderr_handler = logging.StreamHandler(stream=sys.stderr)
+        stderr_handler.setFormatter(formatter)
+        stderr_handler.setLevel(logging.ERROR)  # Only ERROR and above
+        
+        # Add handlers to logger
+        logger.addHandler(stdout_handler)
+        logger.addHandler(stderr_handler)
         
         # Set default level to INFO (so DEBUG are not shown by default)
         # Users can change this by calling logging.getLogger('hex_device').setLevel(logging.INFO)

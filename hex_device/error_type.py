@@ -5,8 +5,6 @@
 # Author: Jecjune zejun.chen@hexfellow.com
 # Date  : 2025-8-1
 ################################################################
-from enum import Enum
-
 
 class WsError(Exception):
     pass

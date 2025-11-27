@@ -13,7 +13,6 @@ Minimal implementation focusing on KCP protocol communication only
 import socket
 import time
 import threading
-import struct
 from typing import Optional, Callable
 from dataclasses import dataclass
 from .common_utils import log_err, log_info, log_debug, log_warn

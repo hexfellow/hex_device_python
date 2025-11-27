@@ -8,7 +8,6 @@
 
 from typing import Optional, List, Dict, Any, Tuple
 import numpy as np
-import threading
 from collections import deque
 from .common_utils import delay, log_common, log_info, log_warn, log_err
 from .device_base import DeviceBase

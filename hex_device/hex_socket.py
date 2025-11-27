@@ -6,7 +6,6 @@
 # Date  : 2025-8-1
 ################################################################
 
-import socket
 import enum
 from typing import Optional, List, Tuple
 import struct

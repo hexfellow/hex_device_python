@@ -6,6 +6,7 @@
 # Date  : 2025-8-1
 ################################################################
 
+import asyncio
 import time
 import numpy as np
 from typing import Optional, Tuple, List, Dict, Any, Union
@@ -210,7 +211,8 @@ class Hands(OptionalDeviceBase, MotorBase):
                 # check motor error
                 if start_time - self.__last_warning_time > 1.0:
                     for i in range(self.motor_count):
-                        if self.get_motor_state(i) == "error":
+                        motor_state = self.get_motor_state(i)
+                        if motor_state is not None and motor_state == "error":
                             log_err(f"Error: Motor {i} error occurred")
                             self.__last_warning_time = start_time
 
@@ -237,6 +239,7 @@ class Hands(OptionalDeviceBase, MotorBase):
 
             except Exception as e:
                 log_err(f"Hands periodic task exception: {e}")
+                await asyncio.sleep(0.5)
                 continue
         
     # Robotic arm specific methods
@@ -308,8 +311,12 @@ class Hands(OptionalDeviceBase, MotorBase):
 
         if command.command_type == CommandType.POSITION:
             # check the torque if valid
-            torques = self.get_motor_torques()
-            now_pos = self.get_motor_positions()
+            now_pos, _, torques = self.cache_motion_data
+            
+            # Raise exception if no motion data available
+            if torques is None or now_pos is None:
+                raise ValueError("Cannot construct joint command: motor data not available")
+            
             with self._config_lock:
                 positon_step = self._positon_step
                 max_torque = self._max_torque
@@ -317,7 +324,7 @@ class Hands(OptionalDeviceBase, MotorBase):
             if self._last_command_send is not None:
                 last_command = self._last_command_send
             else:
-                last_command = MotorCommand.create_position_command(now_pos)
+                last_command = MotorCommand.create_position_command(now_pos.tolist())
 
             for i in range(self.motor_count):
                 err = np.clip(command.position_command[i] - last_command.position_command[i], -positon_step, positon_step)
@@ -330,12 +337,16 @@ class Hands(OptionalDeviceBase, MotorBase):
                     command.position_command[i] = last_command.position_command[i]
             self._last_command_send = deepcopy(command)
 
-        motor_targets = self._construct_target_motor_msg(self._pulse_per_rotation, command)
-        hand_command.motor_targets.CopyFrom(motor_targets)
-        secondary_device_command.device_id = self._device_id
-        secondary_device_command.hand_command.CopyFrom(hand_command)
-        msg.secondary_device_command.CopyFrom(secondary_device_command)
-        return msg
+        pulse_per_rotation_arr = self.get_motor_pulse_per_rotations()
+        if pulse_per_rotation_arr is not None:
+            motor_targets = self._construct_target_motor_msg(pulse_per_rotation_arr, command)
+            hand_command.motor_targets.CopyFrom(motor_targets)
+            secondary_device_command.device_id = self._device_id
+            secondary_device_command.hand_command.CopyFrom(hand_command)
+            msg.secondary_device_command.CopyFrom(secondary_device_command)
+            return msg
+        else:
+            raise ValueError(f"Cannot construct joint command: pulse_per_rotation data not available (not set yet)")
 
     def _construct_custom_joint_command_msg(self, motor_msg: public_api_types_pb2.MotorTargets) -> public_api_down_pb2.APIDown:
         """
@@ -371,7 +382,7 @@ class Hands(OptionalDeviceBase, MotorBase):
     # Configuration related methods
     def get_hand_type(self) -> int:
         """Get hand type"""
-        return deepcopy(self._hand_type)
+        return deepcopy(self._device_type)
 
     def get_joint_limits(self) -> List[float]:
         """Get hands joint limits"""
@@ -385,15 +396,19 @@ class Hands(OptionalDeviceBase, MotorBase):
             dict: Hands device summary
         """
         summary = self.get_device_summary()
+        motor_positions = self.get_motor_positions(False)
+        motor_velocities = self.get_motor_velocities(False)
+        motor_torques = self.get_motor_torques(False)
+        
         summary.update({
-            'hand_type': self._hand_type,
+            'hand_type': self._device_type,
             'motor_count': self.motor_count,
             'control_hz': self._control_hz,
             'command_timeout_check': self._command_timeout_check,
             'calibrated': self._calibrated,
             'api_control_initialized': self._api_control_initialized,
-            'motor_positions': self.get_motor_positions(),
-            'motor_velocities': self.get_motor_velocities(),
-            'motor_torques': self.get_motor_torques()
+            'motor_positions': motor_positions if motor_positions is not None else [],
+            'motor_velocities': motor_velocities if motor_velocities is not None else [],
+            'motor_torques': motor_torques if motor_torques is not None else []
         })
         return summary

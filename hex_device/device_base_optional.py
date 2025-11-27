@@ -10,6 +10,7 @@ from abc import ABC, abstractmethod
 from typing import Optional, List, Dict, Any, Type
 import threading
 import time
+from collections import deque
 
 
 class OptionalDeviceBase(ABC):
@@ -33,7 +34,7 @@ class OptionalDeviceBase(ABC):
 
         self._send_message_callback = send_message_callback
 
-        self._last_update_time = None
+        self._last_update_time = deque(maxlen=10)
 
         self._data_lock = threading.Lock()
 
@@ -127,9 +128,12 @@ class OptionalDeviceBase(ABC):
         return True
 
     def _update_timestamp(self):
-        """Update timestamp"""
+        """Update timestamp (adds to queue)"""
         with self._data_lock:
-            self._last_update_time = time.time_ns()
+            # Ensure _last_update_time is a deque (may be overridden by child class)
+            if not isinstance(self._last_update_time, deque):
+                self._last_update_time = deque(maxlen=10)
+            self._last_update_time.append(time.time_ns())
         self._has_new_data.set()
 
     def __str__(self) -> str:

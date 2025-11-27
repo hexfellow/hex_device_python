@@ -468,12 +468,16 @@ class Arm(DeviceBase, MotorBase):
         arm_exclusive_command = public_api_types_pb2.ArmExclusiveCommand()
         arm_api_control_command = public_api_types_pb2.ArmApiControlCommand()
 
-        motor_targets = self._construct_target_motor_msg(self._pulse_per_rotation, self._period)
-        arm_api_control_command.motor_targets.CopyFrom(motor_targets)
-        arm_exclusive_command.arm_api_control_command.CopyFrom(arm_api_control_command)
-        arm_command.arm_exclusive_command.CopyFrom(arm_exclusive_command)
-        msg.arm_command.CopyFrom(arm_command)
-        return msg
+        pulse_per_rotation_arr = self.get_motor_pulse_per_rotations()
+        if pulse_per_rotation_arr is not None:
+            motor_targets = self._construct_target_motor_msg(pulse_per_rotation_arr, self._period)
+            arm_api_control_command.motor_targets.CopyFrom(motor_targets)
+            arm_exclusive_command.arm_api_control_command.CopyFrom(arm_api_control_command)
+            arm_command.arm_exclusive_command.CopyFrom(arm_exclusive_command)
+            msg.arm_command.CopyFrom(arm_command)
+            return msg
+        else:
+            raise ValueError(f"Cannot construct joint command message: pulse_per_rotation data not available (not set yet)")
 
     def _construct_custom_joint_command_msg(self, motor_msg: public_api_types_pb2.MotorTargets) -> public_api_down_pb2.APIDown:
         """

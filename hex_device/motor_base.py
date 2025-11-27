@@ -15,7 +15,7 @@ import threading
 import time
 import numpy as np
 from copy import deepcopy
-
+from collections import deque
 
 class CommandType(Enum):
     """Command type enumeration"""
@@ -191,28 +191,33 @@ class MotorBase(ABC):
         self.motor_count = motor_count
         self.name = name or f"MotorGroup"
 
-        self._states = ["normal"] * motor_count  # "normal", "error"
-        self._error_codes = [None] * motor_count  # Use None to indicate no error
+        # Initialize queues for each motor (FIFO, max length 10)
+        self._states = [deque(maxlen=10) for _ in range(motor_count)]  # "normal", "error"
+        self._error_codes = [deque(maxlen=10) for _ in range(motor_count)]  # Use None to indicate no error
 
         # Motor motion data
-        self._torques = np.zeros(motor_count)  # Torque (Nm)
-        self._velocities = np.zeros(motor_count)  # Velocity (rad/s)
-        self._positions = np.zeros(motor_count)  # Position (rad)
-        self._pulse_per_rotation = np.zeros(motor_count)  # Pulses per rotation
-        self._wheel_radius = np.zeros(motor_count)  # Wheel radius
-        self._encoder_positions = np.zeros(motor_count)  # Encoder position
+        self._positions = [deque(maxlen=10) for _ in range(motor_count)]  # Position (rad)
+        self._velocities = [deque(maxlen=10) for _ in range(motor_count)]  # Velocity (rad/s)
+        self._torques = [deque(maxlen=10) for _ in range(motor_count)]  # Torque (Nm)
+        self._encoder_positions = [deque(maxlen=10) for _ in range(motor_count)]  # Encoder position
+        self._pulse_per_rotation: Optional[np.ndarray] = None  # Pulses per rotation (set once, not updated)
+        self._wheel_radius: Optional[np.ndarray] = None  # Wheel radius (set once, not updated)
+        # cache data, use to control the motor command
+        self.__cache_positions = None
+        self.__cache_velocities = None
+        self.__cache_torques = None
 
         # Motor status parameters (optional)
-        self._driver_temperature = np.zeros(motor_count)  # Driver temperature (°C)
-        self._motor_temperature = np.zeros(motor_count)  # Motor temperature (°C)
-        self._voltage = np.zeros(motor_count)  # Voltage (V)
+        self._driver_temperature = [deque(maxlen=10) for _ in range(motor_count)]  # Driver temperature (°C)
+        self._motor_temperature = [deque(maxlen=10) for _ in range(motor_count)]  # Motor temperature (°C)
+        self._voltage = [deque(maxlen=10) for _ in range(motor_count)]  # Voltage (V)
 
         # Target commands
-        self._current_targets = [None] * motor_count  # Commands currently running on the device
+        self._current_targets = [deque(maxlen=10) for _ in range(motor_count)]  # Commands currently running on the device
         self._target_command = None  # The raw command, not converted to the scale in proto comments
 
         # Timestamp
-        self._last_update_time = None
+        self._last_update_time = deque(maxlen=10)
 
         # Thread locks
         self._data_lock = threading.Lock()
@@ -223,70 +228,10 @@ class MotorBase(ABC):
         self._custom_convert_rad_to_positions = convert_rad_to_positions_func
 
     @property
-    def states(self) -> List[str]:
-        """Get all motor states"""
+    def cache_motion_data(self) -> np.ndarray:
+        """Get all motor cache motion data"""
         with self._data_lock:
-            return self._states.copy()
-
-    @property
-    def error_codes(self) -> List[Optional[int]]:
-        """Get all motor error codes"""
-        with self._data_lock:
-            return self._error_codes.copy()
-
-    @property
-    def positions(self) -> np.ndarray:
-        """Get all motor positions (rad)"""
-        with self._data_lock:
-            return self._positions.copy()
-
-    @property
-    def velocities(self) -> np.ndarray:
-        """Get all motor velocities (rad/s)"""
-        with self._data_lock:
-            return self._velocities.copy()
-
-    @property
-    def torques(self) -> np.ndarray:
-        """Get all motor torques (Nm)"""
-        with self._data_lock:
-            return self._torques.copy()
-
-    @property
-    def driver_temperature(self) -> np.ndarray:
-        """Get all motor driver temperatures (°C)"""
-        with self._data_lock:
-            return self._driver_temperature.copy()
-
-    @property
-    def motor_temperature(self) -> np.ndarray:
-        """Get all motor temperatures (°C)"""
-        with self._data_lock:
-            return self._motor_temperature.copy()
-
-    @property
-    def voltage(self) -> np.ndarray:
-        """Get all motor voltages (V)"""
-        with self._data_lock:
-            return self._voltage.copy()
-
-    @property
-    def pulse_per_rotation(self) -> np.ndarray:
-        """Get all motor pulses per rotation"""
-        with self._data_lock:
-            return self._pulse_per_rotation.copy()
-
-    @property
-    def encoder_positions(self) -> np.ndarray:
-        """Get all motor encoder positions"""
-        with self._data_lock:
-            return self._encoder_positions.copy()
-
-    @property
-    def wheel_radius(self) -> np.ndarray:
-        """Get all motor wheel radii (m)"""
-        with self._data_lock:
-            return self._wheel_radius.copy()
+            return self.__cache_positions, self.__cache_velocities, self.__cache_torques
 
     @property
     def target_positions(self) -> np.ndarray:
@@ -312,118 +257,428 @@ class MotorBase(ABC):
                 return np.array(self._target_command.torque_command)
             return np.zeros(self.motor_count)
 
-    def get_motor_state(self, motor_index: int) -> str:
-        """Get specified motor state"""
+    def get_motor_error_codes(self, pop: bool = True) -> Optional[List[Optional[int]]]:
+        """Get all motor error codes
+        
+        Args:
+            pop: If True, pops from queue (FIFO). If False, reads latest data without popping.
+        
+        Returns:
+            List of error codes or None if queue is empty
+        """
+        with self._data_lock:
+            result = []
+            for i in range(self.motor_count):
+                if len(self._error_codes[i]) > 0:
+                    if pop:
+                        result.append(self._error_codes[i].popleft())
+                    else:
+                        result.append(self._error_codes[i][-1])
+                else:
+                    return None
+            return result
+
+    def get_motor_states(self, pop: bool = True) -> Optional[List[str]]:
+        """Get all motor states
+        
+        Args:
+            pop: If True, pops from queue (FIFO). If False, reads latest data without popping.
+        
+        Returns:
+            List of motor states or None if queue is empty
+        """
+        with self._data_lock:
+            result = []
+            for i in range(self.motor_count):
+                if len(self._states[i]) > 0:
+                    if pop:
+                        result.append(self._states[i].popleft())
+                    else:
+                        result.append(self._states[i][-1])
+                else:
+                    return None
+            return result
+
+    def get_motor_state(self, motor_index: int, pop: bool = True) -> Optional[str]:
+        """Get specified motor state
+        
+        Args:
+            motor_index: Motor index
+            pop: If True, pops from queue (FIFO). If False, reads latest data without popping.
+        
+        Returns:
+            Motor state or None if queue is empty
+        """
         if not 0 <= motor_index < self.motor_count:
             raise IndexError(
                 f"Motor index {motor_index} out of range [0, {self.motor_count})"
             )
         with self._data_lock:
-            return self._states[motor_index]
+            if len(self._states[motor_index]) > 0:
+                if pop:
+                    return self._states[motor_index].popleft()
+                else:
+                    return self._states[motor_index][-1]
+            return None
 
-    def get_motor_position(self, motor_index: int) -> float:
-        """Get specified motor position (rad)"""
+    def get_motor_encoder_positions(self, pop: bool = True) -> Optional[np.ndarray]:
+        """Get all motor encoder positions
+        
+        Args:
+            pop: If True, pops from queue (FIFO). If False, reads latest data without popping.
+        
+        Returns:
+            Array of encoder positions or None if queue is empty
+        """
+        with self._data_lock:
+            result = []
+            for i in range(self.motor_count):
+                if len(self._encoder_positions[i]) > 0:
+                    if pop:
+                        result.append(self._encoder_positions[i].popleft())
+                    else:
+                        result.append(self._encoder_positions[i][-1])
+                else:
+                    return None
+            return np.array(result, dtype=np.float64)
+
+    def get_motor_position(self, motor_index: int, pop: bool = True) -> Optional[float]:
+        """Get specified motor position (rad)
+        
+        Args:
+            motor_index: Motor index
+            pop: If True, pops from queue (FIFO). If False, reads latest data without popping.
+        
+        Returns:
+            Motor position or None if queue is empty
+        """
         if not 0 <= motor_index < self.motor_count:
             raise IndexError(
                 f"Motor index {motor_index} out of range [0, {self.motor_count})"
             )
         with self._data_lock:
-            return self._positions[motor_index]
+            if len(self._positions[motor_index]) > 0:
+                if pop:
+                    return self._positions[motor_index].popleft()
+                else:
+                    return self._positions[motor_index][-1]
+            return None
 
-    def get_motor_positions(self) -> List[float]:
-        """Get all motor positions (rad)"""
-        # Copy array inside lock (fast operation)
+    def get_motor_positions(self, pop: bool = True) -> Optional[List[float]]:
+        """Get all motor positions (rad)
+        
+        Args:
+            pop: If True, pops from queue (FIFO). If False, reads latest data without popping.
+        
+        Returns:
+            List of positions or None if queue is empty
+        """
         with self._data_lock:
-            result_arr = self._positions.copy()
-        # Convert to list outside lock (slower operation, but doesn't block other threads)
-        return result_arr.tolist()
+            result = []
+            for i in range(self.motor_count):
+                if len(self._positions[i]) > 0:
+                    if pop:
+                        result.append(self._positions[i].popleft())
+                    else:
+                        result.append(self._positions[i][-1])
+                else:
+                    return None
+            return result
 
-    def get_encoders_to_zero(self) -> List[float]:
-        """Get all motor encoders to zero (rad)"""
-        # Copy array and compute inside lock (fast operation)
+    def get_encoders_to_zero(self, pop: bool = True) -> Optional[List[float]]:
+        """Get all motor encoders to zero (rad)
+        
+        Args:
+            pop: If True, pops from queue (FIFO). If False, reads latest data without popping.
+        
+        Returns:
+            List of encoder positions to zero or None if queue is empty
+        """
         with self._data_lock:
-            tar_arr = 32767 - self._encoder_positions
-        # Convert to list outside lock (slower operation, but doesn't block other threads)
-        return tar_arr.tolist()
+            encoder_positions = []
+            for i in range(self.motor_count):
+                if len(self._encoder_positions[i]) > 0:
+                    if pop:
+                        encoder_positions.append(self._encoder_positions[i].popleft())
+                    else:
+                        encoder_positions.append(self._encoder_positions[i][-1])
+                else:
+                    return None
+            tar_arr = 32767 - np.array(encoder_positions, dtype=np.float64)
+            return tar_arr.tolist()
 
-    def get_motor_velocity(self, motor_index: int) -> float:
-        """Get specified motor velocity (rad/s)"""
+    def get_motor_velocity(self, motor_index: int, pop: bool = True) -> Optional[float]:
+        """Get specified motor velocity (rad/s)
+        
+        Args:
+            motor_index: Motor index
+            pop: If True, pops from queue (FIFO). If False, reads latest data without popping.
+        
+        Returns:
+            Motor velocity or None if queue is empty
+        """
         if not 0 <= motor_index < self.motor_count:
             raise IndexError(
                 f"Motor index {motor_index} out of range [0, {self.motor_count})"
             )
         with self._data_lock:
-            return self._velocities[motor_index]
+            if len(self._velocities[motor_index]) > 0:
+                if pop:
+                    return self._velocities[motor_index].popleft()
+                else:
+                    return self._velocities[motor_index][-1]
+            return None
 
-    def get_motor_velocities(self) -> List[float]:
-        """Get all motor velocities (rad/s)"""
-        # Copy array inside lock (fast operation)
+    def get_motor_velocities(self, pop: bool = True) -> Optional[List[float]]:
+        """Get all motor velocities (rad/s)
+        
+        Args:
+            pop: If True, pops from queue (FIFO). If False, reads latest data without popping.
+        
+        Returns:
+            List of velocities or None if queue is empty
+        """
         with self._data_lock:
-            result_arr = self._velocities.copy()
-        # Convert to list outside lock (slower operation, but doesn't block other threads)
-        return result_arr.tolist()
+            result = []
+            for i in range(self.motor_count):
+                if len(self._velocities[i]) > 0:
+                    if pop:
+                        result.append(self._velocities[i].popleft())
+                    else:
+                        result.append(self._velocities[i][-1])
+                else:
+                    return None
+            return result
 
-    def get_motor_torque(self, motor_index: int) -> float:
-        """Get specified motor torque (Nm)"""
+    def get_motor_torque(self, motor_index: int, pop: bool = True) -> Optional[float]:
+        """Get specified motor torque (Nm)
+        
+        Args:
+            motor_index: Motor index
+            pop: If True, pops from queue (FIFO). If False, reads latest data without popping.
+        
+        Returns:
+            Motor torque or None if queue is empty
+        """
         if not 0 <= motor_index < self.motor_count:
             raise IndexError(
                 f"Motor index {motor_index} out of range [0, {self.motor_count})"
             )
         with self._data_lock:
-            return self._torques[motor_index]
+            if len(self._torques[motor_index]) > 0:
+                if pop:
+                    return self._torques[motor_index].popleft()
+                else:
+                    return self._torques[motor_index][-1]
+            return None
 
-    def get_motor_torques(self) -> List[float]:
-        """Get all motor torques (Nm)"""
-        # Copy array inside lock (fast operation)
+    def get_motor_torques(self, pop: bool = True) -> Optional[List[float]]:
+        """Get all motor torques (Nm)
+        
+        Args:
+            pop: If True, pops from queue (FIFO). If False, reads latest data without popping.
+        
+        Returns:
+            List of torques or None if queue is empty
+        """
         with self._data_lock:
-            result_arr = self._torques.copy()
-        # Convert to list outside lock (slower operation, but doesn't block other threads)
-        return result_arr.tolist()
+            result = []
+            for i in range(self.motor_count):
+                if len(self._torques[i]) > 0:
+                    if pop:
+                        result.append(self._torques[i].popleft())
+                    else:
+                        result.append(self._torques[i][-1])
+                else:
+                    return None
+            return result
 
-    def get_motor_driver_temperature(self, motor_index: int) -> float:
-        """Get specified motor driver temperature (°C)"""
+    def get_motor_driver_temperatures(self, pop: bool = True) -> Optional[np.ndarray]:
+        """Get all motor driver temperatures (°C)
+        
+        Args:
+            pop: If True, pops from queue (FIFO). If False, reads latest data without popping.
+        
+        Returns:
+            Array of driver temperatures or None if queue is empty
+        """
+        with self._data_lock:
+            result = []
+            for i in range(self.motor_count):
+                if len(self._driver_temperature[i]) > 0:
+                    if pop:
+                        result.append(self._driver_temperature[i].popleft())
+                    else:
+                        result.append(self._driver_temperature[i][-1])
+                else:
+                    return None
+            return np.array(result, dtype=np.float64)
+
+    def get_motor_driver_temperature(self, motor_index: int, pop: bool = True) -> Optional[float]:
+        """Get specified motor driver temperature (°C)
+        
+        Args:
+            motor_index: Motor index
+            pop: If True, pops from queue (FIFO). If False, reads latest data without popping.
+        
+        Returns:
+            Driver temperature or None if queue is empty
+        """
         if not 0 <= motor_index < self.motor_count:
             raise IndexError(
                 f"Motor index {motor_index} out of range [0, {self.motor_count})"
             )
         with self._data_lock:
-            return self._driver_temperature[motor_index]
+            if len(self._driver_temperature[motor_index]) > 0:
+                if pop:
+                    return self._driver_temperature[motor_index].popleft()
+                else:
+                    return self._driver_temperature[motor_index][-1]
+            return None
+        
+    def get_motor_temperatures(self, pop: bool = True) -> Optional[np.ndarray]:
+        """Get all motor temperatures (°C)
+        
+        Args:
+            pop: If True, pops from queue (FIFO). If False, reads latest data without popping.
+        
+        Returns:
+            Array of motor temperatures or None if queue is empty
+        """
+        with self._data_lock:
+            result = []
+            for i in range(self.motor_count):
+                if len(self._motor_temperature[i]) > 0:
+                    if pop:
+                        result.append(self._motor_temperature[i].popleft())
+                    else:
+                        result.append(self._motor_temperature[i][-1])
+                else:
+                    return None
+            return np.array(result, dtype=np.float64)
 
-    def get_motor_temperature(self, motor_index: int) -> float:
-        """Get specified motor temperature (°C)"""
+    def get_motor_temperature(self, motor_index: int, pop: bool = True) -> Optional[float]:
+        """Get specified motor temperature (°C)
+        
+        Args:
+            motor_index: Motor index
+            pop: If True, pops from queue (FIFO). If False, reads latest data without popping.
+        
+        Returns:
+            Motor temperature or None if queue is empty
+        """
         if not 0 <= motor_index < self.motor_count:
             raise IndexError(
                 f"Motor index {motor_index} out of range [0, {self.motor_count})"
             )
         with self._data_lock:
-            return self._motor_temperature[motor_index]
+            if len(self._motor_temperature[motor_index]) > 0:
+                if pop:
+                    return self._motor_temperature[motor_index].popleft()
+                else:
+                    return self._motor_temperature[motor_index][-1]
+            return None
 
-    def get_motor_voltage(self, motor_index: int) -> float:
-        """Get specified motor voltage (V)"""
+    def get_motor_voltages(self, pop: bool = True) -> Optional[np.ndarray]:
+        """Get all motor voltages (V)
+        
+        Args:
+            pop: If True, pops from queue (FIFO). If False, reads latest data without popping.
+        
+        Returns:
+            Array of voltages or None if queue is empty
+        """
+        with self._data_lock:
+            result = []
+            for i in range(self.motor_count):
+                if len(self._voltage[i]) > 0:
+                    if pop:
+                        result.append(self._voltage[i].popleft())
+                    else:
+                        result.append(self._voltage[i][-1])
+                else:
+                    return None
+            return np.array(result, dtype=np.float64)
+
+    def get_motor_voltage(self, motor_index: int, pop: bool = True) -> Optional[float]:
+        """Get specified motor voltage (V)
+        
+        Args:
+            motor_index: Motor index
+            pop: If True, pops from queue (FIFO). If False, reads latest data without popping.
+        
+        Returns:
+            Motor voltage or None if queue is empty
+        """
         if not 0 <= motor_index < self.motor_count:
             raise IndexError(
                 f"Motor index {motor_index} out of range [0, {self.motor_count})"
             )
         with self._data_lock:
-            return self._voltage[motor_index]
+            if len(self._voltage[motor_index]) > 0:
+                if pop:
+                    return self._voltage[motor_index].popleft()
+                else:
+                    return self._voltage[motor_index][-1]
+            return None
 
-    def get_motor_pulse_per_rotation(self, motor_index: int) -> float:
-        """Get specified motor pulses per rotation"""
+    def get_motor_pulse_per_rotations(self) -> Optional[np.ndarray]:
+        """Get all motor pulses per rotation
+        
+        Returns:
+            Array of pulse per rotation values or None if not set
+        """
+        with self._data_lock:
+            if self._pulse_per_rotation is None:
+                return None
+            return self._pulse_per_rotation.copy()
+
+    def get_motor_pulse_per_rotation(self, motor_index: int) -> Optional[float]:
+        """Get specified motor pulses per rotation
+        
+        Args:
+            motor_index: Motor index
+        
+        Returns:
+            Pulse per rotation or None if not set
+        """
         if not 0 <= motor_index < self.motor_count:
             raise IndexError(
                 f"Motor index {motor_index} out of range [0, {self.motor_count})"
             )
         with self._data_lock:
-            return self._pulse_per_rotation[motor_index]
+            if self._pulse_per_rotation is None:
+                return None
+            return float(self._pulse_per_rotation[motor_index])
 
-    def get_motor_wheel_radius(self, motor_index: int) -> float:
-        """Get specified motor wheel radius (m)"""
+    def get_motor_wheel_radius(self) -> Optional[np.ndarray]:
+        """Get all motor wheel radii (m)
+        
+        Returns:
+            Array of wheel radii or None if not set
+        """
+        with self._data_lock:
+            if self._wheel_radius is None:
+                return None
+            return self._wheel_radius.copy()
+
+    def get_motor_wheel_radius(self, motor_index: int) -> Optional[float]:
+        """Get specified motor wheel radius (m)
+        
+        Args:
+            motor_index: Motor index
+        
+        Returns:
+            Wheel radius or None if not set
+        """
         if not 0 <= motor_index < self.motor_count:
             raise IndexError(
                 f"Motor index {motor_index} out of range [0, {self.motor_count})"
             )
         with self._data_lock:
-            return self._wheel_radius[motor_index]
+            if self._wheel_radius is None:
+                return None
+            return float(self._wheel_radius[motor_index])
 
     def motor_command(self, command_type: CommandType, values: Union[List[bool], List[float], List[MitMotorCommand], np.ndarray]):
         """
@@ -622,7 +877,7 @@ class MotorBase(ABC):
         pulse_per_rotation_arr = np.asarray(pulse_per_rotation, dtype=np.float64) if pulse_per_rotation is not None else None
         wheel_radius_arr = np.asarray(wheel_radius, dtype=np.float64) if wheel_radius is not None else None
 
-        # Prepare error code updates outside lock
+        # Prepare error code updates
         error_codes_copy = error_codes.copy() if error_codes is not None else None
         current_targets_copy = current_targets.copy() if current_targets is not None else None
 
@@ -631,62 +886,134 @@ class MotorBase(ABC):
         if pulse_per_rotation_arr is not None:
             pulse_for_conversion = pulse_per_rotation_arr
         else:
-            # Quick lock to read existing pulse_per_rotation
             with self._data_lock:
-                pulse_for_conversion = self._pulse_per_rotation.copy()
+                if self._pulse_per_rotation is None:
+                    raise ValueError(f"Cannot update motor data: pulse_per_rotation data not available (not set yet)")
+                pulse_for_conversion = self._pulse_per_rotation
         
-        # Convert encoder positions to radians (calculation outside main lock)
+        # Convert encoder positions to radians
         positions_rad_arr = self.convert_positions_to_rad(
             positions_arr, pulse_for_conversion)
 
-        # Now update all data within lock (minimal operations, mainly assignments)
+        # Now update all data within lock (add to queues)
         with self._data_lock:
-            # Use np.copyto for in-place updates (avoids creating new array objects)
-            np.copyto(self._velocities, velocities_arr)
-            np.copyto(self._torques, torques_arr)
-            np.copyto(self._driver_temperature, driver_temperature_arr)
-            np.copyto(self._motor_temperature, motor_temperature_arr)
-            np.copyto(self._voltage, voltage_arr)
-            np.copyto(self._encoder_positions, positions_arr)
-            np.copyto(self._positions, positions_rad_arr)
+            self.__cache_positions = positions_rad_arr.copy()  # ndarry copy is the same as deepcopy
+            self.__cache_velocities = velocities_arr.copy()
+            self.__cache_torques = torques_arr.copy()
 
-            if pulse_per_rotation_arr is not None:
-                np.copyto(self._pulse_per_rotation, pulse_per_rotation_arr)
+            # Add data to queues (FIFO, max length 10)
+            for i in range(self.motor_count):
+                self._velocities[i].append(velocities_arr[i])
+                self._torques[i].append(torques_arr[i])
+                self._driver_temperature[i].append(driver_temperature_arr[i])
+                self._motor_temperature[i].append(motor_temperature_arr[i])
+                self._voltage[i].append(voltage_arr[i])
+                self._encoder_positions[i].append(positions_arr[i])
+                self._positions[i].append(positions_rad_arr[i])
 
-            if wheel_radius_arr is not None:
-                np.copyto(self._wheel_radius, wheel_radius_arr)
+            # Update pulse_per_rotation and wheel_radius only once (if not already set)
+            if self._pulse_per_rotation is None and pulse_per_rotation_arr is not None:
+                self._pulse_per_rotation = pulse_per_rotation_arr
 
-            if error_codes is not None:
-                self._error_codes = error_codes_copy
-                # Update state based on error codes
-                for i, error_code in enumerate(error_codes):
+            if self._wheel_radius is None and wheel_radius_arr is not None:
+                self._wheel_radius = wheel_radius_arr
+
+            # Update error codes and states
+            if error_codes_copy is not None:
+                for i, error_code in enumerate(error_codes_copy):
+                    self._error_codes[i].append(error_code)
+                    # Update state based on error codes
                     if error_code is not None:
-                        self._states[i] = "error"
-                    elif self._states[i] == "error":
-                        self._states[i] = "normal"
+                        self._states[i].append("error")
+                    else:
+                        # Check if previous state was error, if so change to normal
+                        if len(self._states[i]) > 0 and self._states[i][-1] == "error":
+                            self._states[i].append("normal")
+                        elif len(self._states[i]) == 0:
+                            self._states[i].append("normal")
+            else:
+                # If no error codes provided, maintain previous state or set to normal
+                for i in range(self.motor_count):
+                    if len(self._states[i]) > 0:
+                        # Keep previous state
+                        self._states[i].append(self._states[i][-1])
+                    else:
+                        # No previous state, set to normal
+                        self._states[i].append("normal")
 
             if current_targets_copy is not None:
-                self._current_targets = current_targets_copy
+                for i in range(self.motor_count):
+                    self._current_targets[i].append(current_targets_copy[i])
 
-            self._last_update_time = time.perf_counter_ns()
+            self._last_update_time.append(time.perf_counter_ns())
 
-    def get_motor_summary(self) -> Dict[str, Any]:
-        """Get status summary"""
+    def get_motor_summary(self) -> Optional[Dict[str, Any]]:
+        """Get status summary
+        
+        Args:
+            pop: If True, pops from queue (FIFO). If False, reads latest data without popping.
+        
+        Returns:
+            Dictionary with motor summary or None if queue is empty
+        """
         with self._data_lock:
+            # Get data from queues
+            states = []
+            error_codes = []
+            positions = []
+            velocities = []
+            torques = []
+            driver_temperature = []
+            motor_temperature = []
+            voltage = []
+            pulse_per_rotation = []
+            wheel_radius = []
+            
+            for i in range(self.motor_count):
+                if (len(self._states[i]) > 0 and len(self._error_codes[i]) > 0 and 
+                    len(self._positions[i]) > 0 and len(self._velocities[i]) > 0 and
+                    len(self._torques[i]) > 0 and len(self._driver_temperature[i]) > 0 and
+                    len(self._motor_temperature[i]) > 0 and len(self._voltage[i]) > 0):
+                    states.append(self._states[i][-1])
+                    error_codes.append(self._error_codes[i][-1])
+                    positions.append(self._positions[i][-1])
+                    velocities.append(self._velocities[i][-1])
+                    torques.append(self._torques[i][-1])
+                    driver_temperature.append(self._driver_temperature[i][-1])
+                    motor_temperature.append(self._motor_temperature[i][-1])
+                    voltage.append(self._voltage[i][-1])
+                else:
+                    return None
+            
+            # Get pulse_per_rotation and wheel_radius (not from queues)
+            if self._pulse_per_rotation is not None:
+                pulse_per_rotation = self._pulse_per_rotation.tolist()
+            else:
+                pulse_per_rotation = None
+            
+            if self._wheel_radius is not None:
+                wheel_radius = self._wheel_radius.tolist()
+            else:
+                wheel_radius = None
+            
+            last_update_time = None
+            if len(self._last_update_time) > 0:
+                last_update_time = self._last_update_time[-1]
+            
             summary = {
                 'name': self.name,
                 'motor_count': self.motor_count,
-                'states': self._states.copy(),
-                'error_codes': self._error_codes.copy(),
-                'positions': self._positions.tolist(),
-                'velocities': self._velocities.tolist(),
-                'torques': self._torques.tolist(),
-                'driver_temperature': self._driver_temperature.tolist(),
-                'motor_temperature': self._motor_temperature.tolist(),
-                'voltage': self._voltage.tolist(),
-                'pulse_per_rotation': self._pulse_per_rotation.tolist(),
-                'wheel_radius': self._wheel_radius.tolist(),
-                'last_update_time': self._last_update_time,
+                'states': states,
+                'error_codes': error_codes,
+                'positions': positions,
+                'velocities': velocities,
+                'torques': torques,
+                'driver_temperature': driver_temperature,
+                'motor_temperature': motor_temperature,
+                'voltage': voltage,
+                'pulse_per_rotation': pulse_per_rotation,
+                'wheel_radius': wheel_radius,
+                'last_update_time': last_update_time,
             }
 
             # Add target command information
@@ -703,27 +1030,57 @@ class MotorBase(ABC):
 
             return summary
 
-    def get_motor_status(self, motor_index: int) -> Dict[str, Any]:
-        """Get specified motor state"""
+    def get_motor_status(self, motor_index: int, pop: bool = True) -> Optional[Dict[str, Any]]:
+        """Get specified motor state
+        
+        Args:
+            motor_index: Motor index
+            pop: If True, pops from queue (FIFO). If False, reads latest data without popping.
+        
+        Returns:
+            Dictionary with motor status or None if queue is empty
+        """
         if not 0 <= motor_index < self.motor_count:
             raise IndexError(
                 f"Motor index {motor_index} out of range [0, {self.motor_count})"
             )
 
         with self._data_lock:
-            status = {
-                'index': motor_index,
-                'state': self._states[motor_index],
-                'error_code': self._error_codes[motor_index],
-                'position': self._positions[motor_index],
-                'velocity': self._velocities[motor_index],
-                'torque': self._torques[motor_index],
-                'driver_temperature': self._driver_temperature[motor_index],
-                'motor_temperature': self._motor_temperature[motor_index],
-                'voltage': self._voltage[motor_index],
-                'pulse_per_rotation': self._pulse_per_rotation[motor_index],
-                'wheel_radius': self._wheel_radius[motor_index]
-            }
+            # Check if all queues have data
+            if (len(self._states[motor_index]) == 0 or len(self._error_codes[motor_index]) == 0 or
+                len(self._positions[motor_index]) == 0 or len(self._velocities[motor_index]) == 0 or
+                len(self._torques[motor_index]) == 0 or len(self._driver_temperature[motor_index]) == 0 or
+                len(self._motor_temperature[motor_index]) == 0 or len(self._voltage[motor_index]) == 0):
+                return None
+            
+            if pop:
+                status = {
+                    'index': motor_index,
+                    'state': self._states[motor_index].popleft(),
+                    'error_code': self._error_codes[motor_index].popleft(),
+                    'position': self._positions[motor_index].popleft(),
+                    'velocity': self._velocities[motor_index].popleft(),
+                    'torque': self._torques[motor_index].popleft(),
+                    'driver_temperature': self._driver_temperature[motor_index].popleft(),
+                    'motor_temperature': self._motor_temperature[motor_index].popleft(),
+                    'voltage': self._voltage[motor_index].popleft(),
+                    'pulse_per_rotation': float(self._pulse_per_rotation[motor_index]) if self._pulse_per_rotation is not None else None,
+                    'wheel_radius': float(self._wheel_radius[motor_index]) if self._wheel_radius is not None else None
+                }
+            else:
+                status = {
+                    'index': motor_index,
+                    'state': self._states[motor_index][-1],
+                    'error_code': self._error_codes[motor_index][-1],
+                    'position': self._positions[motor_index][-1],
+                    'velocity': self._velocities[motor_index][-1],
+                    'torque': self._torques[motor_index][-1],
+                    'driver_temperature': self._driver_temperature[motor_index][-1],
+                    'motor_temperature': self._motor_temperature[motor_index][-1],
+                    'voltage': self._voltage[motor_index][-1],
+                    'pulse_per_rotation': float(self._pulse_per_rotation[motor_index]) if self._pulse_per_rotation is not None else None,
+                    'wheel_radius': float(self._wheel_radius[motor_index]) if self._wheel_radius is not None else None
+                }
 
             # Add target command information
             if self._target_command:
@@ -748,17 +1105,82 @@ class MotorBase(ABC):
                 status['target_torque'] = 0.0
 
             return status
-
-    def get_simple_motor_status(self) -> Dict[str, Any]:
-        """Get simple motor status"""
+    
+    def flush_data(self):
+        """
+        Clear all queues in MotorBase
+        
+        This method removes all data from all queues including:
+        - Motor states, error codes, positions, velocities, torques
+        - Temperature and voltage data
+        - Encoder positions, pulse per rotation, wheel radius
+        - Current targets and last update time
+        """
         with self._data_lock:
+            # Clear all motor-specific queues
+            for i in range(self.motor_count):
+                self._states[i].clear()
+                self._error_codes[i].clear()
+                self._torques[i].clear()
+                self._velocities[i].clear()
+                self._positions[i].clear()
+                self._encoder_positions[i].clear()
+                self._driver_temperature[i].clear()
+                self._motor_temperature[i].clear()
+                self._voltage[i].clear()
+                self._current_targets[i].clear()
+            
+            # Clear timestamp queue
+            self._last_update_time.clear()
+            
+            # Note: _pulse_per_rotation and _wheel_radius are not cleared as they are set once
+
+
+    def get_simple_motor_status(self, pop: bool = True) -> Optional[Dict[str, Any]]:
+        """Get simple motor status
+        
+        Args:
+            pop: If True, pops from queue (FIFO). If False, reads latest data without popping.
+        
+        Returns:
+            Dictionary with simple motor status or None if queue is empty
+        """
+        with self._data_lock:
+            positions = []
+            velocities = []
+            torques = []
+            
+            for i in range(self.motor_count):
+                if (len(self._positions[i]) > 0 and len(self._velocities[i]) > 0 and
+                    len(self._torques[i]) > 0):
+                    if pop:
+                        positions.append(self._positions[i].popleft())
+                        velocities.append(self._velocities[i].popleft())
+                        torques.append(self._torques[i].popleft())
+                    else:
+                        positions.append(self._positions[i][-1])
+                        velocities.append(self._velocities[i][-1])
+                        torques.append(self._torques[i][-1])
+                else:
+                    return None
+            
+            last_update_time = None
+            if len(self._last_update_time) > 0:
+                if pop:
+                    last_update_time = self._last_update_time.popleft()
+                else:
+                    last_update_time = self._last_update_time[-1]
+            
+            if last_update_time is None:
+                return None
+            
             return {
-                'pos': self._positions.tolist(),
-                'vel': self._velocities.tolist(),
-                'eff': self._torques.tolist(),
+                'pos': positions,
+                'vel': velocities,
+                'eff': torques,
                 'ts': {
-                        "s": self._last_update_time // 1_000_000_000,
-                        "ns": self._last_update_time % 1_000_000_000,
+                        "s": last_update_time // 1_000_000_000,
+                        "ns": last_update_time % 1_000_000_000,
                     }
             }
 
@@ -865,12 +1287,21 @@ class MotorBase(ABC):
         else:
             raise ValueError(f"Unknown command type: {command_type}")
 
-        return MotorBase._construct_target_motor_msg(self, self._pulse_per_rotation, command)
+        # Get pulse_per_rotation values (not from queue, set once)
+        with self._data_lock:
+            if self._pulse_per_rotation is None:
+                raise ValueError(f"Cannot construct custom motor message: pulse_per_rotation data not available (not set yet)")
+            pulse_per_rotation_arr = self._pulse_per_rotation.copy()
+        
+        return MotorBase._construct_target_motor_msg(self, pulse_per_rotation_arr, command)
 
     def __str__(self) -> str:
         """String representation"""
-        normal_count = sum(1 for state in self.states if state == "normal")
-        error_count = sum(1 for state in self.states if state == "error")
+        states = self.states(pop=False)  # Use pop=False to read latest without removing
+        if states is None:
+            return f"{self.name}(Count:{self.motor_count}, No data available)"
+        normal_count = sum(1 for state in states if state == "normal")
+        error_count = sum(1 for state in states if state == "error")
         return f"{self.name}(Count:{self.motor_count}, Normal:{normal_count}, Errors:{error_count})"
 
     def __repr__(self) -> str:

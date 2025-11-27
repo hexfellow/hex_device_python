@@ -17,6 +17,7 @@ from .hex_socket import HexSocketParser, HexSocketOpcode
 from .kcp_client_core import KCPClient, KCPConfig
 
 import time
+import os
 import asyncio
 import threading
 import websockets
@@ -63,6 +64,10 @@ class HexDeviceApi:
         self.__websocket = None
         self.__raw_data = []  ## raw data buffer
         self.__control_hz = control_hz
+
+        # time synchronization
+        self.__use_ptp = self.__select_time_source()
+        self.__time_bias = None
 
         self._device_factory = DeviceFactory()
         # Register available device classes
@@ -702,6 +707,31 @@ class HexDeviceApi:
                 retry_count += 1
         raise ConnectionError("Maximum reconnect retries exceeded")
 
+    def __select_time_source(self) -> bool:
+        """
+        Select time source
+        """
+        value = os.getenv('HEX_PTP_SYNC')
+        if value is None:
+            return False
+        else:
+            log_info("PTP time synchronization is enabled.")
+            return True
+
+    def __sync_monotonic_time(self, timestamp_ns: int) -> int:
+        """
+        Sync monotonic time
+        """
+        if self.__use_ptp:
+            return
+        else:
+            if self.__time_bias != None:
+                return timestamp_ns + self.__time_bias
+            else:
+                current_time = time.perf_counter_ns()
+                self.__time_bias = current_time - timestamp_ns
+                return current_time
+
     # process manager
     ## sync function
     def __loop_start(self):
@@ -727,14 +757,13 @@ class HexDeviceApi:
                 if opcode == HexSocketOpcode.Binary:
                     api_up = public_api_up_pb2.APIUp()
                     api_up.ParseFromString(payload)
-                    timestamp_ns = time.perf_counter_ns()
-                    self._process_api_up(api_up, timestamp_ns)
+                    self._process_api_up(api_up)
                 elif opcode == HexSocketOpcode.Text:
                     log_common(f"kcp text message: {payload}")
                 else:
                     log_warn(f"unsupported opcode: {opcode} from kcp")
 
-    def _process_api_up(self, api_up, timestamp_ns: int):
+    def _process_api_up(self, api_up):
         """
         Process APIUp message (thread-safe with lock)
         @param api_up: APIUp message to process
@@ -757,6 +786,19 @@ class HexDeviceApi:
 
             if api_up.HasField('log'):
                 log_info(f"Get log from server: {api_up.log}")
+
+            if api_up.HasField('time_stamp'):
+                if self.__use_ptp:
+                    ptp_timestamp = api_up.time_stamp.ptp_time_stamp
+                    if ptp_timestamp.calibrated:
+                        timestamp_ns = ptp_timestamp.nanoseconds
+                    else:
+                        log_debug("PTP time is not calibrated.")
+                        timestamp_ns = self.__sync_monotonic_time(ptp_timestamp.nanoseconds)
+                else:
+                    timestamp_ns = self.__sync_monotonic_time(api_up.time_stamp.monotonic_time_stamp.nanoseconds)
+            else:
+                timestamp_ns = time.perf_counter_ns()
 
             # Get robot_type type information
             robot_type = api_up.robot_type
@@ -946,7 +988,7 @@ class HexDeviceApi:
                 log_err(f"__websocket_data_parser error: {e}")
                 continue
             if not self.enable_kcp:
-                self._process_api_up(api_up, time.perf_counter_ns())
+                self._process_api_up(api_up)
 
     # User api
     def find_device_by_robot_type(self, robot_type) -> Optional[DeviceBase]:

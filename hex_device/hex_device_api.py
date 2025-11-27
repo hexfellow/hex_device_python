@@ -16,6 +16,7 @@ from .device_base_optional import OptionalDeviceBase
 from .hex_socket import HexSocketParser, HexSocketOpcode
 from .kcp_client_core import KCPClient, KCPConfig
 
+import time
 import asyncio
 import threading
 import websockets
@@ -726,13 +727,14 @@ class HexDeviceApi:
                 if opcode == HexSocketOpcode.Binary:
                     api_up = public_api_up_pb2.APIUp()
                     api_up.ParseFromString(payload)
-                    self._process_api_up(api_up)
+                    timestamp_ns = time.perf_counter_ns()
+                    self._process_api_up(api_up, timestamp_ns)
                 elif opcode == HexSocketOpcode.Text:
                     log_common(f"kcp text message: {payload}")
                 else:
                     log_warn(f"unsupported opcode: {opcode} from kcp")
 
-    def _process_api_up(self, api_up):
+    def _process_api_up(self, api_up, timestamp_ns: int):
         """
         Process APIUp message (thread-safe with lock)
         @param api_up: APIUp message to process
@@ -753,6 +755,9 @@ class HexDeviceApi:
                 if orphaned_count > 0:
                     log_debug(f"found {orphaned_count} orphaned tasks")
 
+            if api_up.HasField('log'):
+                log_info(f"Get log from server: {api_up.log}")
+
             # Get robot_type type information
             robot_type = api_up.robot_type
             robot_type_name = public_api_types_pb2.RobotType.Name(robot_type)
@@ -763,7 +768,7 @@ class HexDeviceApi:
                 device = self.find_device_by_robot_type(robot_type)
 
                 if device:
-                    device._update(api_up)
+                    device._update(api_up, timestamp_ns)
                 else:
                     log_debug(f"create new device: {robot_type_name}")
 
@@ -775,7 +780,7 @@ class HexDeviceApi:
                         return
 
                     if device:
-                        device._update(api_up)
+                        device._update(api_up, timestamp_ns)
                     else:
                         log_warn(f"unknown device type: {robot_type_name}")
             else:
@@ -805,7 +810,7 @@ class HexDeviceApi:
                         
                         if optional_device:
                             # Update existing device
-                            success = optional_device._update_optional_data(device_type, secondary_device)
+                            success = optional_device._update_optional_data(device_type, secondary_device, time.perf_counter_ns())
                             if not success:
                                 log_err(f"Failed to update optional device data for device_id {device_id}, type {device_type}")
                         else:
@@ -820,7 +825,7 @@ class HexDeviceApi:
                             
                             if optional_device:
                                 # Update newly created device
-                                success = optional_device._update_optional_data(device_type, secondary_device)
+                                success = optional_device._update_optional_data(device_type, secondary_device, time.perf_counter_ns())
                                 if not success:
                                     log_warn(f"Failed to update new optional device data for device_id {device_id}, type {device_type}")
                             else:
@@ -940,7 +945,8 @@ class HexDeviceApi:
             except Exception as e:
                 log_err(f"__websocket_data_parser error: {e}")
                 continue
-            self._process_api_up(api_up)
+            if not self.enable_kcp:
+                self._process_api_up(api_up, time.perf_counter_ns())
 
     # User api
     def find_device_by_robot_type(self, robot_type) -> Optional[DeviceBase]:

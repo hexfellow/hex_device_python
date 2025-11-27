@@ -14,9 +14,7 @@ from .common_utils import delay, log_common, log_info, log_warn, log_err
 from .device_base import DeviceBase
 from .generated import public_api_down_pb2, public_api_up_pb2, public_api_types_pb2
 from .motor_base import MotorBase, MotorError, MotorCommand, CommandType
-from .generated.public_api_types_pb2 import (
-    BaseStatus, BaseState, BaseCommand, SimpleBaseMoveCommand, XyzSpeed,
-    MotorTargets, BaseEstimatedOdometry, WarningCategory)
+from .generated.public_api_types_pb2 import BaseState
 import time
 import copy
 
@@ -138,7 +136,7 @@ class Chassis(DeviceBase, MotorBase):
             log_err(f"Chassis initialization failed: {e}")
             return False
 
-    def _update(self, api_up_data) -> bool:
+    def _update(self, api_up_data, timestamp_ns: int) -> bool:
         """
         Update chassis data
         
@@ -154,6 +152,8 @@ class Chassis(DeviceBase, MotorBase):
                 return False
 
             base_status = api_up_data.base_status
+            # Update motor data
+            self._push_motor_data(base_status.motor_status, timestamp_ns)
 
             with self._status_lock:
                 # update my session id
@@ -189,79 +189,11 @@ class Chassis(DeviceBase, MotorBase):
                                                   base_status.estimated_odometry.pos_y,
                                                   base_status.estimated_odometry.pos_z))
 
-            # Update motor data
-            self._update_motor_data_from_base_status(base_status)
-            self.set_has_new_data()
+            
             return True
         except Exception as e:
             log_err(f"Chassis data update failed: {e}")
             return False
-
-    def _update_motor_data_from_base_status(self, base_status: BaseStatus):
-        """
-        Update motor data from BaseStatus
-        
-        Args:
-            base_status: BaseStatus object
-        """
-        motor_status_list = base_status.motor_status
-
-        if len(motor_status_list) != self.motor_count:
-            log_warn(
-                f"Warning: Motor count mismatch, expected {self.motor_count}, actual {len(motor_status_list)}")
-            return
-
-        # Parse motor data
-        positions = []
-        velocities = []
-        torques = []
-        driver_temperature = []
-        motor_temperature = []
-        pulse_per_rotation = []
-        wheel_radius = []
-        voltage = []
-        error_codes = []
-
-        for motor_status in motor_status_list:
-            # Position (converted from encoder position)
-            positions.append(float(motor_status.position))
-            # Velocity (converted from speed)
-            velocities.append(motor_status.speed)
-            # Torque
-            torques.append(motor_status.torque)
-            # Additional parameters
-            pulse_per_rotation.append(motor_status.pulse_per_rotation)
-            wheel_radius.append(motor_status.wheel_radius)
-
-            # Temperature
-            driver_temp = motor_status.driver_temperature if motor_status.HasField(
-                'driver_temperature') else 0.0
-            motor_temp = motor_status.motor_temperature if motor_status.HasField(
-                'motor_temperature') else 0.0
-            driver_temperature.append(driver_temp)
-            motor_temperature.append(motor_temp)
-
-            # Voltage
-            volt = motor_status.voltage if motor_status.HasField(
-                'voltage') else 0.0
-            voltage.append(volt)
-
-            # Error code
-            error_code = None
-            if motor_status.error:
-                error_code = motor_status.error[0].value
-            error_codes.append(error_code)
-
-        # Update motor data
-        self.update_motor_data(positions=positions,
-                               velocities=velocities,
-                               torques=torques,
-                               driver_temperature=driver_temperature,
-                               motor_temperature=motor_temperature,
-                               voltage=voltage,
-                               pulse_per_rotation=pulse_per_rotation,
-                               wheel_radius=wheel_radius,
-                               error_codes=error_codes)
 
     async def _periodic(self):
         """
@@ -406,9 +338,11 @@ class Chassis(DeviceBase, MotorBase):
                                                        [0.0, 0.0, 1.0]])
 
     # Chassis-specific methods
-    def get_base_state(self) -> int:
+    def get_base_state(self) -> str:
         """Get chassis status"""
-        return self._base_state
+        base_state_descriptor = public_api_types_pb2.BaseState.DESCRIPTOR
+        with self._status_lock:
+            return base_state_descriptor.values_by_number[self._base_state].name
 
     def is_api_control_initialized(self) -> bool:
         """Check if API control is initialized"""

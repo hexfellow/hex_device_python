@@ -6,7 +6,7 @@
 # Date  : 2025-8-1
 ################################################################
 
-import threading
+import copy
 import time
 import numpy as np
 from typing import Optional, Tuple, List, Dict, Any, Union
@@ -14,9 +14,7 @@ from .common_utils import delay, log_common, log_info, log_warn, log_err
 from .device_base import DeviceBase
 from .motor_base import MitMotorCommand, MotorBase, MotorError, MotorCommand, CommandType
 from .generated import public_api_down_pb2, public_api_up_pb2, public_api_types_pb2
-from .generated.public_api_types_pb2 import (ArmStatus)
 from .arm_config import get_arm_config, ArmConfig, arm_config_manager
-import copy
 
 
 class Arm(DeviceBase, MotorBase):
@@ -124,7 +122,7 @@ class Arm(DeviceBase, MotorBase):
             log_err(f"Arm initialization failed: {e}")
             return False
 
-    def _update(self, api_up_data) -> bool:
+    def _update(self, api_up_data, timestamp_ns: int) -> bool:
         """
         Update robotic arm data
         
@@ -135,12 +133,12 @@ class Arm(DeviceBase, MotorBase):
             bool: Whether update was successful
         """
         try:
-            if api_up_data.HasField('log'):
-                log_info(f"Arm: Get log from server: {api_up_data.log}")
-
             if not api_up_data.HasField('arm_status'):
                 return False
             arm_status = api_up_data.arm_status
+
+            # Update motor data
+            self._push_motor_data(arm_status.motor_status, timestamp_ns)
 
             with self._status_lock:
                 # update my session id
@@ -161,68 +159,11 @@ class Arm(DeviceBase, MotorBase):
                     self._parking_stop_detail = arm_status.parking_stop_detail
                 else:
                     self._parking_stop_detail = public_api_types_pb2.ParkingStopDetail()
-
-            # Update motor data
-            self._update_motor_data_from_arm_status(arm_status)
-            self.set_has_new_data()
             return True
+
         except Exception as e:
-            log_err(f"Arm data update failed: {e}")
+            log_err(f"Arm _update failed: {e}")
             return False
-
-    def _update_motor_data_from_arm_status(self, arm_status: ArmStatus):
-        motor_status_list = arm_status.motor_status
-
-        if len(motor_status_list) != self.motor_count:
-            log_warn(
-                f"Warning: Motor count mismatch, expected {self.motor_count}, actual {len(motor_status_list)}")
-            return
-
-        # Parse motor data
-        positions = []  # encoder position
-        velocities = []  # rad/s
-        torques = []  # Nm
-        driver_temperature = []
-        motor_temperature = []
-        pulse_per_rotation = []
-        wheel_radius = []
-        voltage = []
-        error_codes = []
-        current_targets = []
-
-        for motor_status in motor_status_list:
-            positions.append(motor_status.position)
-            velocities.append(motor_status.speed)
-            torques.append(motor_status.torque)
-            pulse_per_rotation.append(motor_status.pulse_per_rotation)
-            wheel_radius.append(motor_status.wheel_radius)
-            current_targets.append(motor_status.current_target)
-
-            driver_temp = motor_status.driver_temperature if motor_status.HasField(
-                'driver_temperature') else 0.0
-            motor_temp = motor_status.motor_temperature if motor_status.HasField(
-                'motor_temperature') else 0.0
-            volt = motor_status.voltage if motor_status.HasField(
-                'voltage') else 0.0
-            driver_temperature.append(driver_temp)
-            motor_temperature.append(motor_temp)
-            voltage.append(volt)
-
-            error_code = None
-            if motor_status.error:
-                error_code = motor_status.error[0]
-            error_codes.append(error_code)
-
-        self.update_motor_data(positions=positions,
-                               velocities=velocities,
-                               torques=torques,
-                               driver_temperature=driver_temperature,
-                               motor_temperature=motor_temperature,
-                               voltage=voltage,
-                               pulse_per_rotation=pulse_per_rotation,
-                               wheel_radius=wheel_radius,
-                               error_codes=error_codes,
-                               current_targets=current_targets)
 
     async def _periodic(self):
         """

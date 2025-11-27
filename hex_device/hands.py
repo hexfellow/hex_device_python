@@ -114,14 +114,14 @@ class Hands(OptionalDeviceBase, MotorBase):
             log_err(f"Hands initialization failed: {e}")
             return False
 
-    def _update_optional_data(self, device_type, device_status: public_api_types_pb2.SecondaryDeviceStatus) -> bool:
+    def _update_optional_data(self, device_type, device_status: public_api_types_pb2.SecondaryDeviceStatus, timestamp_ns: int) -> bool:
         """
         Update hands device with optional message data
         
         Args:
             device_type: Should be equal to self._device_type
             device_status: The SecondaryDeviceStatus from APIUp
-            
+            timestamp_ns: Timestamp in nanoseconds (from time.perf_counter_ns())
         Returns:
             bool: Whether update was successful
         """
@@ -131,66 +131,11 @@ class Hands(OptionalDeviceBase, MotorBase):
             
         try:
             # Update motor data
-            self._update_motor_data_from_hands_status(device_status.hand_status)
-            self._update_timestamp()
+            self._push_motor_data(device_status.hand_status.motor_status, timestamp_ns)
             return True
         except Exception as e:
             log_err(f"Hands data update failed: {e}")
             return False
-
-    def _update_motor_data_from_hands_status(self, hand_status: HandStatus):
-        motor_status_list = hand_status.motor_status
-
-        if len(motor_status_list) != self.motor_count:
-            log_warn(
-                f"Warning: Motor count mismatch, expected {self.motor_count}, actual {len(motor_status_list)}")
-            return
-
-        # Parse motor data
-        positions = []  # encoder position
-        velocities = []  # rad/s
-        torques = []  # Nm
-        driver_temperature = []
-        motor_temperature = []
-        pulse_per_rotation = []
-        wheel_radius = []
-        voltage = []
-        error_codes = []
-        current_targets = []
-
-        for motor_status in motor_status_list:
-            positions.append(motor_status.position)
-            velocities.append(motor_status.speed)
-            torques.append(motor_status.torque)
-            pulse_per_rotation.append(motor_status.pulse_per_rotation)
-            wheel_radius.append(motor_status.wheel_radius)
-            current_targets.append(motor_status.current_target)
-
-            driver_temp = motor_status.driver_temperature if motor_status.HasField(
-                'driver_temperature') else 0.0
-            motor_temp = motor_status.motor_temperature if motor_status.HasField(
-                'motor_temperature') else 0.0
-            volt = motor_status.voltage if motor_status.HasField(
-                'voltage') else 0.0
-            driver_temperature.append(driver_temp)
-            motor_temperature.append(motor_temp)
-            voltage.append(volt)
-
-            error_code = None
-            if motor_status.error:
-                error_code = motor_status.error[0]
-            error_codes.append(error_code)
-
-        self.update_motor_data(positions=positions,
-                               velocities=velocities,
-                               torques=torques,
-                               driver_temperature=driver_temperature,
-                               motor_temperature=motor_temperature,
-                               voltage=voltage,
-                               pulse_per_rotation=pulse_per_rotation,
-                               wheel_radius=wheel_radius,
-                               error_codes=error_codes,
-                               current_targets=current_targets)
 
     async def _periodic(self):
         """

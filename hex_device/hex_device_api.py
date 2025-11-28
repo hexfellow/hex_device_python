@@ -718,7 +718,7 @@ class HexDeviceApi:
         """
         Select time source
         """
-        value = os.getenv('HEX_PTP_SYNC')
+        value = os.getenv('HEX_PTP_CLOCK')
         if value is None:
             return False
         else:

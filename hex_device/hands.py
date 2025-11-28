@@ -12,7 +12,7 @@ import numpy as np
 from typing import Optional, Tuple, List, Dict, Any, Union
 from .common_utils import delay, log_common, log_info, log_warn, log_err
 from .device_base_optional import OptionalDeviceBase
-from .motor_base import MitMotorCommand, MotorBase, MotorError, MotorCommand, CommandType
+from .motor_base import MitMotorCommand, MotorBase, MotorError, MotorCommand, CommandType, Timestamp
 from .generated import public_api_down_pb2, public_api_up_pb2, public_api_types_pb2
 from copy import deepcopy
 from .generated.public_api_types_pb2 import (HandStatus)
@@ -114,14 +114,14 @@ class Hands(OptionalDeviceBase, MotorBase):
             log_err(f"Hands initialization failed: {e}")
             return False
 
-    def _update_optional_data(self, device_type, device_status: public_api_types_pb2.SecondaryDeviceStatus, timestamp_ns: int) -> bool:
+    def _update_optional_data(self, device_type, device_status: public_api_types_pb2.SecondaryDeviceStatus, timestamp: Timestamp) -> bool:
         """
         Update hands device with optional message data
         
         Args:
             device_type: Should be equal to self._device_type
             device_status: The SecondaryDeviceStatus from APIUp
-            timestamp_ns: Timestamp in nanoseconds (from time.perf_counter_ns())
+            timestamp: Timestamp
         Returns:
             bool: Whether update was successful
         """
@@ -131,7 +131,7 @@ class Hands(OptionalDeviceBase, MotorBase):
             
         try:
             # Update motor data
-            self._push_motor_data(device_status.hand_status.motor_status, timestamp_ns)
+            self._push_motor_data(device_status.hand_status.motor_status, timestamp)
             return True
         except Exception as e:
             log_err(f"Hands data update failed: {e}")

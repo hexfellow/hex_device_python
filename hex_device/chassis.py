@@ -12,7 +12,7 @@ from collections import deque
 from .common_utils import delay, log_common, log_info, log_warn, log_err
 from .device_base import DeviceBase
 from .generated import public_api_down_pb2, public_api_up_pb2, public_api_types_pb2
-from .motor_base import MotorBase, MotorError, MotorCommand, CommandType
+from .motor_base import MotorBase, MotorError, MotorCommand, CommandType, Timestamp
 from .generated.public_api_types_pb2 import BaseState
 import time
 import copy
@@ -135,7 +135,7 @@ class Chassis(DeviceBase, MotorBase):
             log_err(f"Chassis initialization failed: {e}")
             return False
 
-    def _update(self, api_up_data, timestamp_ns: int) -> bool:
+    def _update(self, api_up_data, timestamp: Timestamp) -> bool:
         """
         Update chassis data
         
@@ -152,7 +152,7 @@ class Chassis(DeviceBase, MotorBase):
 
             base_status = api_up_data.base_status
             # Update motor data
-            self._push_motor_data(base_status.motor_status, timestamp_ns)
+            self._push_motor_data(base_status.motor_status, timestamp)
 
             with self._status_lock:
                 # update my session id

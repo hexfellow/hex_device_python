@@ -98,7 +98,7 @@ class DeviceBase(ABC):
         pass
 
     @abstractmethod
-    def _update(self, api_up_data) -> bool:
+    def _update(self, api_up_data, timestamp) -> bool:
         """
         Update device data
         

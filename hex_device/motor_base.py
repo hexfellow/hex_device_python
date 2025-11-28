@@ -19,6 +19,58 @@ import numpy as np
 from copy import deepcopy
 from collections import deque
 
+
+@dataclass
+class Timestamp:
+    """Timestamp structure with seconds and nanoseconds
+    
+    Attributes:
+        s: Seconds part of the timestamp
+        ns: Nanoseconds part of the timestamp (0-999999999)
+    """
+    s: int
+    ns: int
+    
+    @classmethod
+    def from_ns(cls, timestamp_ns: int) -> 'Timestamp':
+        """Create Timestamp from nanoseconds timestamp
+        
+        Args:
+            timestamp_ns: Timestamp in nanoseconds (e.g., from time.perf_counter_ns())
+        
+        Returns:
+            Timestamp object with s and ns components
+        """
+        return cls(
+            s=timestamp_ns // 1_000_000_000,
+            ns=timestamp_ns % 1_000_000_000
+        )
+
+    @classmethod
+    def from_s_ns(cls, seconds: int, nanoseconds: int) -> 'Timestamp':
+        """Create Timestamp from seconds and nanoseconds
+        """
+        return cls(
+            s=seconds,
+            ns=nanoseconds
+        )
+    
+    def to_ns(self) -> int:
+        """Convert Timestamp to nanoseconds
+        
+        Returns:
+            Timestamp in nanoseconds
+        """
+        return self.s * 1_000_000_000 + self.ns
+    
+    def to_dict(self) -> Dict[str, int]:
+        """Convert Timestamp to dictionary
+        
+        Returns:
+            Dictionary with 's' and 'ns' keys
+        """
+        return {"s": self.s, "ns": self.ns}
+
 class CommandType(Enum):
     """Command type enumeration"""
     BRAKE = "brake"
@@ -193,7 +245,7 @@ class MotorBase(ABC):
         self.motor_count = motor_count
         self.name = name or f"MotorGroup"
 
-        # Motor status data: stores tuples of (List[MotorStatus], timestamp_ns)
+        # Motor status data: stores tuples of (List[MotorStatus], timestamp)
         # Each entry contains all motors' status at a given timestamp
         self.__motor_data = deque(maxlen=10)
 
@@ -626,21 +678,21 @@ class MotorBase(ABC):
         # Default implementation
         return positions / (2 * np.pi) * pulse_per_rotation + 65535.0 / 2.0
 
-    def _push_motor_data(self, motor_status_list: List[public_api_types_pb2.MotorStatus], timestamp_ns: int):
+    def _push_motor_data(self, motor_status_list: List[public_api_types_pb2.MotorStatus], timestamp: Timestamp):
         """
         Push motor data for all motors
         
         Args:
             motor_status_list: List of motor status data for each motor
-            timestamp_ns: Timestamp in nanoseconds (from time.perf_counter_ns())
+            timestamp: Timestamp object with s and ns components
         """
         if len(motor_status_list) != self.motor_count:
             log_warn(
                 f"Warning: Motor count mismatch in _push_motor_data, expected {self.motor_count}, got {len(motor_status_list)}")
             return
         
-        # Store tuple (List[MotorStatus], timestamp_ns) as a single entry
-        self.__motor_data.append((motor_status_list, timestamp_ns))
+        # Store tuple (List[MotorStatus], timestamp) as a single entry
+        self.__motor_data.append((motor_status_list, timestamp))
         self._update_motor_status_data()
 
     def has_new_data(self) -> bool:
@@ -652,7 +704,7 @@ class MotorBase(ABC):
         """
         return len(self.__motor_data) > 0
 
-    def _get_motor_data(self, pop: bool = True) -> Optional[Tuple[List[public_api_types_pb2.MotorStatus], int]]:
+    def _get_motor_data(self, pop: bool = True) -> Optional[Tuple[List[public_api_types_pb2.MotorStatus], Timestamp]]:
         """
         Get motor status list from deque
         
@@ -660,25 +712,25 @@ class MotorBase(ABC):
             pop: If True, pops from queue (FIFO). If False, reads latest data without popping.
             
         Returns:
-            Tuple of (List of MotorStatus objects, timestamp_ns) or None if deque is empty
+            Tuple of (List of MotorStatus objects, timestamp) or None if deque is empty
         """
         if not self.has_new_data():
             return None, None
         
         if pop:
             # Get and remove oldest data (FIFO)
-            motor_status_list, timestamp_ns = self.__motor_data.popleft()
-            return motor_status_list, timestamp_ns
+            motor_status_list, timestamp = self.__motor_data.popleft()
+            return motor_status_list, timestamp
         else:
             # Get latest data without removing
-            motor_status_list, timestamp_ns = self.__motor_data[-1]
-            return motor_status_list, timestamp_ns
+            motor_status_list, timestamp = self.__motor_data[-1]
+            return motor_status_list, timestamp
     
     def _update_motor_status_data(self):
         """
         Update motor status data
         """
-        motor_status_list, timestamp_ns = self._get_motor_data(pop=False)
+        motor_status_list, timestamp = self._get_motor_data(pop=False)
         if motor_status_list is None:
             # No data available yet
             return
@@ -759,10 +811,10 @@ class MotorBase(ABC):
             if current_targets is not None:
                 for i in range(self.motor_count):
                     self._current_targets[i].append(current_targets[i])
-            self._last_update_time = timestamp_ns
+            self._last_update_time = timestamp
     
-    def _get_motor_motion_data(self, pop: bool = True) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, int]]:
-        motor_status_list, timestamp_ns = self._get_motor_data(pop=pop)
+    def _get_motor_motion_data(self, pop: bool = True) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, Timestamp]]:
+        motor_status_list, timestamp = self._get_motor_data(pop=pop)
         if motor_status_list is None:
             # No data available yet
             return None, None, None, None, None
@@ -791,7 +843,7 @@ class MotorBase(ABC):
         positions_rad_arr = self.convert_positions_to_rad(
             positions_arr, pulse_per_rotation_arr.copy())
 
-        return positions_arr, positions_rad_arr, velocities_arr, torques_arr, timestamp_ns
+        return positions_arr, positions_rad_arr, velocities_arr, torques_arr, timestamp
 
     def get_motor_summary(self) -> Optional[Dict[str, Any]]:
         """Get status summary
@@ -816,7 +868,6 @@ class MotorBase(ABC):
             motor_temperature = self._motor_temperature.tolist()
             voltage = self._voltage.tolist()
             
-            last_update_time = self._last_update_time
             # Get pulse_per_rotation and wheel_radius (not from queues)
             if self._pulse_per_rotation is not None:
                 pulse_per_rotation = self._pulse_per_rotation.tolist()
@@ -827,6 +878,11 @@ class MotorBase(ABC):
                 wheel_radius = self._wheel_radius.tolist()
             else:
                 wheel_radius = None
+            
+            # Convert Timestamp to dict if available
+            last_update_time = None
+            if self._last_update_time is not None:
+                last_update_time = self._last_update_time.to_dict()
             
             summary = {
                 'name': self.name,
@@ -945,10 +1001,7 @@ class MotorBase(ABC):
             'pos': positions,
             'vel': velocities,
             'eff': torques,
-            'ts': {
-                    "s": last_update_time // 1_000_000_000,
-                    "ns": last_update_time % 1_000_000_000,
-                }
+            'ts': last_update_time.to_dict()
         }
 
     def _construct_target_motor_msg(

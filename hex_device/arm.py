@@ -12,7 +12,7 @@ import numpy as np
 from typing import Optional, Tuple, List, Dict, Any, Union
 from .common_utils import delay, log_common, log_info, log_warn, log_err
 from .device_base import DeviceBase
-from .motor_base import MitMotorCommand, MotorBase, MotorError, MotorCommand, CommandType
+from .motor_base import MitMotorCommand, MotorBase, MotorError, MotorCommand, CommandType, Timestamp
 from .generated import public_api_down_pb2, public_api_up_pb2, public_api_types_pb2
 from .arm_config import get_arm_config, ArmConfig, arm_config_manager
 
@@ -26,17 +26,17 @@ class Arm(DeviceBase, MotorBase):
     """
 
     SUPPORTED_ROBOT_TYPES = [
-        public_api_types_pb2.RobotType.RtArmArcherD6Y,
-        public_api_types_pb2.RobotType.RtArmSaberD6X,
-        public_api_types_pb2.RobotType.RtArmSaberD7X,
-        public_api_types_pb2.RobotType.RtArmArcherL6Y,
+        public_api_types_pb2.RobotType.RtArmSaberD6x,
+        public_api_types_pb2.RobotType.RtArmSaberD7x,
+        public_api_types_pb2.RobotType.RtArmArcherY6D_V1,
+        public_api_types_pb2.RobotType.RtArmArcherY6L_V1,
     ]
 
     ARM_SERIES_TO_ROBOT_TYPE = {
-        14: public_api_types_pb2.RobotType.RtArmSaberD6X,
-        15: public_api_types_pb2.RobotType.RtArmSaberD7X,
-        16: public_api_types_pb2.RobotType.RtArmArcherD6Y,
-        17: public_api_types_pb2.RobotType.RtArmArcherL6Y,
+        14: public_api_types_pb2.RobotType.RtArmSaberD6x,
+        15: public_api_types_pb2.RobotType.RtArmSaberD7x,
+        16: public_api_types_pb2.RobotType.RtArmArcherY6D_V1,
+        17: public_api_types_pb2.RobotType.RtArmArcherY6L_V1,
     }
 
     def __init__(self,
@@ -122,7 +122,7 @@ class Arm(DeviceBase, MotorBase):
             log_err(f"Arm initialization failed: {e}")
             return False
 
-    def _update(self, api_up_data, timestamp_ns: int) -> bool:
+    def _update(self, api_up_data, timestamp: Timestamp) -> bool:
         """
         Update robotic arm data
         
@@ -138,7 +138,7 @@ class Arm(DeviceBase, MotorBase):
             arm_status = api_up_data.arm_status
 
             # Update motor data
-            self._push_motor_data(arm_status.motor_status, timestamp_ns)
+            self._push_motor_data(arm_status.motor_status, timestamp)
 
             with self._status_lock:
                 # update my session id

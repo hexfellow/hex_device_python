@@ -13,6 +13,7 @@ from .error_type import WsError, ProtocolError
 from .device_base import DeviceBase
 from .device_factory import DeviceFactory
 from .device_base_optional import OptionalDeviceBase
+from .motor_base import Timestamp
 from .hex_socket import HexSocketParser, HexSocketOpcode
 from .kcp_client_core import KCPClient, KCPConfig
 
@@ -718,19 +719,28 @@ class HexDeviceApi:
             log_info("PTP time synchronization is enabled.")
             return True
 
-    def __sync_monotonic_time(self, timestamp_ns: int) -> int:
+    def __sync_monotonic_time(self, timestamp: Timestamp) -> Timestamp:
         """
         Sync monotonic time
+        
+        Args:
+            timestamp: Timestamp object to sync
+            
+        Returns:
+            Synced Timestamp object
         """
         if self.__use_ptp:
-            return
+            return timestamp
         else:
-            if self.__time_bias != None:
-                return timestamp_ns + self.__time_bias
+            if self.__time_bias is not None:
+                # Add time bias to timestamp
+                synced_ns = timestamp.to_ns() + self.__time_bias
+                return Timestamp.from_ns(synced_ns)
             else:
-                current_time = time.perf_counter_ns()
-                self.__time_bias = current_time - timestamp_ns
-                return current_time
+                # Calculate time bias and return current time
+                current_time_ns = time.perf_counter_ns()
+                self.__time_bias = current_time_ns - timestamp.to_ns()
+                return Timestamp.from_ns(current_time_ns)
 
     # process manager
     ## sync function
@@ -791,14 +801,17 @@ class HexDeviceApi:
                 if self.__use_ptp:
                     ptp_timestamp = api_up.time_stamp.ptp_time_stamp
                     if ptp_timestamp.calibrated:
-                        timestamp_ns = ptp_timestamp.nanoseconds
+                        timestamp = Timestamp.from_s_ns(ptp_timestamp.seconds, ptp_timestamp.nanoseconds)
                     else:
                         log_debug("PTP time is not calibrated.")
-                        timestamp_ns = self.__sync_monotonic_time(ptp_timestamp.nanoseconds)
+                        input_timestamp = Timestamp.from_s_ns(ptp_timestamp.seconds, ptp_timestamp.nanoseconds)
+                        timestamp = self.__sync_monotonic_time(input_timestamp)
                 else:
-                    timestamp_ns = self.__sync_monotonic_time(api_up.time_stamp.monotonic_time_stamp.nanoseconds)
+                    monotonic_timestamp = api_up.time_stamp.monotonic_time_stamp
+                    input_timestamp = Timestamp.from_s_ns(monotonic_timestamp.seconds, monotonic_timestamp.nanoseconds)
+                    timestamp = self.__sync_monotonic_time(input_timestamp)
             else:
-                timestamp_ns = time.perf_counter_ns()
+                timestamp = Timestamp.from_ns(time.perf_counter_ns())
 
             # Get robot_type type information
             robot_type = api_up.robot_type
@@ -810,7 +823,7 @@ class HexDeviceApi:
                 device = self.find_device_by_robot_type(robot_type)
 
                 if device:
-                    device._update(api_up, timestamp_ns)
+                    device._update(api_up, timestamp)
                 else:
                     log_debug(f"create new device: {robot_type_name}")
 
@@ -822,16 +835,16 @@ class HexDeviceApi:
                         return
 
                     if device:
-                        device._update(api_up, timestamp_ns)
+                        device._update(api_up, timestamp)
                     else:
                         log_warn(f"unknown device type: {robot_type_name}")
             else:
                 return
 
             # Process optional fields
-            self._process_optional_fields(api_up)
+            self._process_optional_fields(api_up, timestamp)
 
-    def _process_optional_fields(self, api_up):
+    def _process_optional_fields(self, api_up, timestamp: Timestamp):
         """
         Process SecondaryDeviceStatus array in APIUp message
         
@@ -852,7 +865,7 @@ class HexDeviceApi:
                         
                         if optional_device:
                             # Update existing device
-                            success = optional_device._update_optional_data(device_type, secondary_device, time.perf_counter_ns())
+                            success = optional_device._update_optional_data(device_type, secondary_device, timestamp)
                             if not success:
                                 log_err(f"Failed to update optional device data for device_id {device_id}, type {device_type}")
                         else:
@@ -867,7 +880,7 @@ class HexDeviceApi:
                             
                             if optional_device:
                                 # Update newly created device
-                                success = optional_device._update_optional_data(device_type, secondary_device, time.perf_counter_ns())
+                                success = optional_device._update_optional_data(device_type, secondary_device, timestamp)
                                 if not success:
                                     log_warn(f"Failed to update new optional device data for device_id {device_id}, type {device_type}")
                             else:

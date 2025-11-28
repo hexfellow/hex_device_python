@@ -89,6 +89,12 @@ class HexDeviceApi:
         # Counter for orphaned task checking
         self._check_counter = 0  # Global counter for tracking function calls
         self._process_lock = threading.Lock()  # Thread lock for _process_api_up
+        
+        # # Frequency tracking for _process_api_up
+        # self._process_api_up_call_count = 0  # Total call count
+        # self._process_api_up_start_time = time.time()  # Start time for frequency calculation
+        # self._process_api_up_last_print_time = time.time()  # Last time we printed frequency
+        # self._process_api_up_print_interval = 5.0  # Print frequency every 5 seconds
 
         self.__shutdown_event = None  # the handle event for shutdown api
         self.__loop = None  ## async loop thread
@@ -782,6 +788,18 @@ class HexDeviceApi:
         """
         # Acquire lock to ensure thread safety
         with self._process_lock:
+            # # Track call frequency
+            # self._process_api_up_call_count += 1
+            # current_time = time.time()
+            # elapsed_time = current_time - self._process_api_up_start_time
+            
+            # # Print frequency periodically
+            # if current_time - self._process_api_up_last_print_time >= self._process_api_up_print_interval:
+            #     if elapsed_time > 0:
+            #         frequency = self._process_api_up_call_count / elapsed_time
+            #         log_info(f"_process_api_up 调用频率: {frequency:.2f} Hz (总调用次数: {self._process_api_up_call_count}, 运行时间: {elapsed_time:.2f}秒)")
+            #     self._process_api_up_last_print_time = current_time
+            
             if len(self.__raw_data) >= RAW_DATA_LEN:
                 self.__raw_data.pop(0)
             self.__raw_data.append(api_up)

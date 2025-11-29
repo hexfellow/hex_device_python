@@ -19,7 +19,7 @@ class OptionalDeviceBase(ABC):
     These devices are matched by device_id from SecondaryDeviceStatus.
     """
 
-    def __init__(self, read_only: bool, name: str = "", send_message_callback=None, device_id: int = None):
+    def __init__(self, read_only: bool, name: str, device_id, device_type, send_message_callback=None):
         """
         Initialize optional device base class
         Args:
@@ -30,6 +30,7 @@ class OptionalDeviceBase(ABC):
         """
         self.name = name or "OptionalDevice"
         self.device_id = device_id
+        self.device_type = device_type
 
         self._send_message_callback = send_message_callback
 

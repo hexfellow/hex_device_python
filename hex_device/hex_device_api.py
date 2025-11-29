@@ -1053,6 +1053,24 @@ class HexDeviceApi:
                 return device
         return None
 
+    def find_optional_device_by_robot_type(self, robot_type) -> Optional[List[OptionalDeviceBase]]:
+        """
+        Find optional device by robot_type
+        
+        Args:
+            robot_type: Robot type
+            
+        Returns:
+            Matching optional device or None
+        """
+        devices = []
+        for device in self._optional_device_list:
+            if hasattr(device, 'device_type') and device.device_type == robot_type:
+                devices.append(device)
+        if len(devices) == 0:
+            return None
+        return devices
+
     def close(self):
         if self.__loop and self.__loop.is_running():
             log_warn("HexDevice API is closing...")

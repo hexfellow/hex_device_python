@@ -109,6 +109,7 @@ class DeviceFactory:
         constructor_params = self._extract_optional_constructor_params_from_msg(device_class, device_type, secondary_device_status)
         all_params = {
             'device_id': device_id,
+            'device_type': device_type,
             'send_message_callback': send_message_callback,
             **constructor_params,
         }
@@ -142,7 +143,6 @@ class DeviceFactory:
                 raise ValueError(f"Hands device hand_status is not set")
             
             params.update({
-                'device_type': device_type,
                 'motor_count': motor_count,
                 'name': f"Hands_{device_type}",
             })

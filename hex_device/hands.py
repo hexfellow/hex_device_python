@@ -59,7 +59,7 @@ class Hands(OptionalDeviceBase, MotorBase):
             read_only: Whether this device is read-only (read only will not create periodic task)
             send_message_callback: Callback function for sending messages, used to send downstream messages
         """
-        OptionalDeviceBase.__init__(self, read_only, name, send_message_callback, device_id)
+        OptionalDeviceBase.__init__(self, read_only, name, device_id, device_type, send_message_callback)
         MotorBase.__init__(self, motor_count, name)
 
         self.name = name or "Hands"

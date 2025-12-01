@@ -98,6 +98,9 @@ def get_logger():
     """
     return logging.getLogger('hex_device')
 
+# Proto types
+from .generated import public_api_types_pb2
+
 # Core classes
 from .device_base import DeviceBase
 from .device_base_optional import OptionalDeviceBase

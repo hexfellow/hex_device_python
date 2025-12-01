@@ -124,11 +124,6 @@ def main():
 
     except KeyboardInterrupt:
         print("Received Ctrl-C.")
-        for device in api.device_list:
-            if isinstance(device, Arm):
-                # Safe stop device
-                device.stop()
-                time.sleep(0.1)
         api.close()
     finally:
         pass

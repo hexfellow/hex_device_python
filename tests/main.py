@@ -19,7 +19,7 @@ sys.path.insert(
     '<your project path>/hex_device_python/hex_device/generated')
 
 import hex_device
-from hex_device import HexDeviceApi
+from hex_device import HexDeviceApi, public_api_types_pb2
 from hex_device import Chassis, LinearLift, Arm, Hands
 from hex_device.motor_base import CommandType, MitMotorCommand
 
@@ -50,8 +50,6 @@ def main():
     # Init HexDeviceApi
     api = HexDeviceApi(ws_url=args.url, control_hz=1000, enable_kcp=True, local_port=0)
     first_time = True
-
-    time.sleep(1)
     
     # Enable/Disable loop test variable
     enable_disable_start_time = time.time()
@@ -247,28 +245,21 @@ def main():
                             # device.motor_command(
                             #     CommandType.POSITION,
                             #     0.0)
-                for device in api.optional_device_list:
-                    if isinstance(device, Hands):
-                        if device.has_new_data():
-                            print(f"hands position: {device.get_motor_positions()}")
-                            device.motor_command(
-                                CommandType.TORQUE,
-                                [0.0] * device.motor_count
-                            )
+
+                optional_devices = api.find_optional_device_by_robot_type(public_api_types_pb2.SecondaryDeviceType.SdtHandGp100)
+                if optional_devices is not None:
+                    device:Hands = optional_devices[0]
+                    if device.has_new_data():
+                        # print(f"hands position: {device.get_motor_positions()}")
+                        device.motor_command(
+                            CommandType.TORQUE,
+                            [0.0] * device.motor_count
+                        )
 
             time.sleep(0.0001)
 
     except KeyboardInterrupt:
         print("Received Ctrl-C.")
-        for device in api.device_list:
-            if isinstance(device, Chassis):
-                # Safe stop device
-                device.stop()
-                time.sleep(0.1)
-            elif isinstance(device, Arm):
-                # Safe stop device
-                device.stop()
-                time.sleep(0.1)
         api.close()
     finally:
         pass

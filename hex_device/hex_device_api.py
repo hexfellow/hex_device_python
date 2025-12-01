@@ -100,6 +100,7 @@ class HexDeviceApi:
         self.__loop = None  ## async loop thread
         self.__loop_thread = threading.Thread(target=self.__loop_start,
                                               daemon=True)
+        self.__is_closing = threading.Event()
         # init api
         self.__loop_thread.start()
         if self.local_port:
@@ -567,7 +568,9 @@ class HexDeviceApi:
             try:
                 # Check if websocket is connected
                 if self.__websocket is None:
-                    log_err("WebSocket is not connected")
+                    if self.__is_closing.is_set():
+                        return None
+                    log_err("WebSocket is disconnected")
                     await asyncio.sleep(1)
                     continue
 
@@ -606,6 +609,8 @@ class HexDeviceApi:
                     continue
 
             except ConnectionClosed as e:
+                if self.__is_closing.is_set():
+                    return
                 log_err(
                     f"Connection closed (code: {e.code}, reason: {e.reason})")
                 try:
@@ -914,23 +919,26 @@ class HexDeviceApi:
         @return:
             None
         """
+        self.__is_closing.set()
+        if self.__shutdown_event is not None:
+                self.__shutdown_event.set()
+
         try:
-            # Close WebSocket connection
-            if self.__websocket:
-                await self.__websocket.close()
-                self.__websocket = None
-                log_info("WebSocket connection closed successfully")
-            
             # Close KCP connection using stop() method
             if self.__kcp_client is not None:
                 self.__kcp_client.stop()
                 self.__kcp_client = None
                 log_info("KCP connection closed successfully")
+
+            # Close WebSocket connection
+            if self.__websocket:
+                ws = self.__websocket
+                self.__websocket = None
+                await ws.close()
+                log_info("WebSocket connection closed successfully")
+            
         except Exception as e:
             log_err(f"Error closing connection: {e}")
-        finally:
-            if self.__shutdown_event is not None:
-                self.__shutdown_event.set()
 
     async def __main_loop(self):
         self.__shutdown_event = asyncio.Event()
@@ -954,8 +962,6 @@ class HexDeviceApi:
             await asyncio.gather(*self.__tasks, return_exceptions=True)
         except Exception as e:
             log_err(f"Error during task cleanup: {e}")
-
-        log_err("HexDevice api main_loop exited.")
 
     async def __websocket_data_parser(self):
         """
@@ -1015,6 +1021,8 @@ class HexDeviceApi:
         while True:
             try:
                 api_up = await self.__capture_data_frame_from_websocket()
+                if api_up is None and self.__is_closing.is_set():
+                    return
             except Exception as e:
                 log_err(f"__websocket_data_parser error: {e}")
                 continue
@@ -1073,8 +1081,33 @@ class HexDeviceApi:
 
     def close(self):
         if self.__loop and self.__loop.is_running():
+            try:
+                # Close all devices
+                for device in self._internal_device_list:
+                    if hasattr(device, 'stop'):
+                        device.stop()
+                for device in self._optional_device_list:
+                    if hasattr(device, 'stop'):
+                        device.stop()
+            except Exception as e:
+                log_warn(f"Error closing devices: {e}")
+            time.sleep(0.3)
+            
             log_warn("HexDevice API is closing...")
-            asyncio.run_coroutine_threadsafe(self.__async_close(), self.__loop)
+            try:
+                # Submit the async close task and wait for it to complete
+                future = asyncio.run_coroutine_threadsafe(self.__async_close(), self.__loop)
+                # Wait for the task to complete with a timeout
+                try:
+                    future.result(timeout=5.0)
+                except TimeoutError:
+                    log_warn("__async_close timed out after 5 seconds")
+                except Exception as e:
+                    log_err(f"Error waiting for __async_close: {e}")
+            except Exception as e:
+                log_err(f"Error submitting __async_close task: {e}")
+                import traceback
+                log_err(f"Traceback: {traceback.format_exc()}")
 
     def is_api_exit(self) -> bool:
         """

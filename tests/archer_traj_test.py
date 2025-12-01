@@ -10,11 +10,8 @@ sys.path.insert(
 
 from hex_device import HexDeviceApi
 import time
-from hex_device.chassis import Chassis
-from hex_device.motor_base import CommandType
-from hex_device.arm import Arm
-from hex_device.motor_base import MitMotorCommand
-from hex_device.hands import Hands
+from hex_device import CommandType, public_api_types_pb2
+from hex_device import Arm,Hands
 
 TRAJ_TIME = 3
 SPEED = 0.5
@@ -238,11 +235,6 @@ def main():
 
     except KeyboardInterrupt:
         print("Received Ctrl-C.")
-        for device in api.device_list:
-            if isinstance(device, Arm):
-                # Safe stop device
-                device.stop()
-                time.sleep(0.1)
         api.close()
     finally:
         pass

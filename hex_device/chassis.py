@@ -8,14 +8,12 @@
 
 from typing import Optional, List, Dict, Any, Tuple
 import numpy as np
-import threading
+from collections import deque
 from .common_utils import delay, log_common, log_info, log_warn, log_err
 from .device_base import DeviceBase
 from .generated import public_api_down_pb2, public_api_up_pb2, public_api_types_pb2
-from .motor_base import MotorBase, MotorError, MotorCommand, CommandType
-from .generated.public_api_types_pb2 import (
-    BaseStatus, BaseState, BaseCommand, SimpleBaseMoveCommand, XyzSpeed,
-    MotorTargets, BaseEstimatedOdometry, WarningCategory)
+from .motor_base import MotorBase, MotorError, MotorCommand, CommandType, Timestamp
+from .generated.public_api_types_pb2 import BaseState
 import time
 import copy
 
@@ -83,8 +81,8 @@ class Chassis(DeviceBase, MotorBase):
 
         # Odometry information
         self.__vehicle_origin_position = np.eye(3)  # Used to clear odometry bias
-        self._vehicle_speed = (0.0, 0.0, 0.0)  # (x, y, z) m/s, m/s, rad/s
-        self._vehicle_position = (0.0, 0.0, 0.0)  # (x, y, yaw) m, m, rad
+        self._vehicle_speed = deque(maxlen=10)  # (x, y, z) m/s, m/s, rad/s - FIFO queue
+        self._vehicle_position = deque(maxlen=10)  # (x, y, yaw) m, m, rad - FIFO queue
 
         # Control related
         self._send_init = self._send_init
@@ -137,7 +135,7 @@ class Chassis(DeviceBase, MotorBase):
             log_err(f"Chassis initialization failed: {e}")
             return False
 
-    def _update(self, api_up_data) -> bool:
+    def _update(self, api_up_data, timestamp: Timestamp) -> bool:
         """
         Update chassis data
         
@@ -153,6 +151,8 @@ class Chassis(DeviceBase, MotorBase):
                 return False
 
             base_status = api_up_data.base_status
+            # Update motor data
+            self._push_motor_data(base_status.motor_status, timestamp)
 
             with self._status_lock:
                 # update my session id
@@ -181,86 +181,18 @@ class Chassis(DeviceBase, MotorBase):
                 if base_status.HasField('warning'):
                     self._warning = base_status.warning
                 if base_status.HasField('estimated_odometry'):
-                    self._vehicle_speed = (base_status.estimated_odometry.speed_x,
-                                        base_status.estimated_odometry.speed_y,
-                                        base_status.estimated_odometry.speed_z)
-                    self._vehicle_position = (base_status.estimated_odometry.pos_x,
-                                            base_status.estimated_odometry.pos_y,
-                                            base_status.estimated_odometry.pos_z)
+                    self._vehicle_speed.append((base_status.estimated_odometry.speed_x,
+                                                base_status.estimated_odometry.speed_y,
+                                                base_status.estimated_odometry.speed_z))
+                    self._vehicle_position.append((base_status.estimated_odometry.pos_x,
+                                                  base_status.estimated_odometry.pos_y,
+                                                  base_status.estimated_odometry.pos_z))
 
-            # Update motor data
-            self._update_motor_data_from_base_status(base_status)
-            self.set_has_new_data()
+            
             return True
         except Exception as e:
             log_err(f"Chassis data update failed: {e}")
             return False
-
-    def _update_motor_data_from_base_status(self, base_status: BaseStatus):
-        """
-        Update motor data from BaseStatus
-        
-        Args:
-            base_status: BaseStatus object
-        """
-        motor_status_list = base_status.motor_status
-
-        if len(motor_status_list) != self.motor_count:
-            log_warn(
-                f"Warning: Motor count mismatch, expected {self.motor_count}, actual {len(motor_status_list)}")
-            return
-
-        # Parse motor data
-        positions = []
-        velocities = []
-        torques = []
-        driver_temperature = []
-        motor_temperature = []
-        pulse_per_rotation = []
-        wheel_radius = []
-        voltage = []
-        error_codes = []
-
-        for motor_status in motor_status_list:
-            # Position (converted from encoder position)
-            positions.append(float(motor_status.position))
-            # Velocity (converted from speed)
-            velocities.append(motor_status.speed)
-            # Torque
-            torques.append(motor_status.torque)
-            # Additional parameters
-            pulse_per_rotation.append(motor_status.pulse_per_rotation)
-            wheel_radius.append(motor_status.wheel_radius)
-
-            # Temperature
-            driver_temp = motor_status.driver_temperature if motor_status.HasField(
-                'driver_temperature') else 0.0
-            motor_temp = motor_status.motor_temperature if motor_status.HasField(
-                'motor_temperature') else 0.0
-            driver_temperature.append(driver_temp)
-            motor_temperature.append(motor_temp)
-
-            # Voltage
-            volt = motor_status.voltage if motor_status.HasField(
-                'voltage') else 0.0
-            voltage.append(volt)
-
-            # Error code
-            error_code = None
-            if motor_status.error:
-                error_code = motor_status.error[0].value
-            error_codes.append(error_code)
-
-        # Update motor data
-        self.update_motor_data(positions=positions,
-                               velocities=velocities,
-                               torques=torques,
-                               driver_temperature=driver_temperature,
-                               motor_temperature=motor_temperature,
-                               voltage=voltage,
-                               pulse_per_rotation=pulse_per_rotation,
-                               wheel_radius=wheel_radius,
-                               error_codes=error_codes)
 
     async def _periodic(self):
         """
@@ -391,8 +323,11 @@ class Chassis(DeviceBase, MotorBase):
 
     def clear_odom_bias(self):
         """ reset odometry position """
-        with self._data_lock:
-            x, y, yaw = self._vehicle_position
+        with self._status_lock:
+            if len(self._vehicle_position) == 0:
+                raise ValueError("Cannot clear odom bias: vehicle position data not available (queue is empty)")
+            # Get latest position without popping
+            x, y, yaw = self._vehicle_position[-1]
             log_common(f"clear odom bias: {x}, {y}, {yaw}")
             # Convert (x, y, yaw) to 2D transformation matrix
             cos_yaw = np.cos(yaw)
@@ -402,9 +337,11 @@ class Chassis(DeviceBase, MotorBase):
                                                        [0.0, 0.0, 1.0]])
 
     # Chassis-specific methods
-    def get_base_state(self) -> int:
+    def get_base_state(self) -> str:
         """Get chassis status"""
-        return self._base_state
+        base_state_descriptor = public_api_types_pb2.BaseState.DESCRIPTOR
+        with self._status_lock:
+            return base_state_descriptor.values_by_number[self._base_state].name
 
     def is_api_control_initialized(self) -> bool:
         """Check if API control is initialized"""
@@ -418,19 +355,46 @@ class Chassis(DeviceBase, MotorBase):
             'charging': self._battery_charging
         }
 
-    def get_vehicle_speed(self) -> Tuple[float, float, float]:
-        """Get vehicle speed (m/s, m/s, rad/s)"""
-        return self._vehicle_speed
+    def get_vehicle_speed(self, pop: bool = True) -> Optional[Tuple[float, float, float]]:
+        """Get vehicle speed (m/s, m/s, rad/s)
+        
+        Args:
+            pop: If True, pops from queue (FIFO). If False, reads latest data without popping.
+        
+        Returns:
+            Tuple of (speed_x, speed_y, speed_z) or None if queue is empty
+        """
+        with self._status_lock:
+            if len(self._vehicle_speed) > 0:
+                if pop:
+                    return self._vehicle_speed.popleft()
+                else:
+                    return self._vehicle_speed[-1]
+            return None
 
-    def get_vehicle_position(self) -> Tuple[float, float, float]:
+    def get_vehicle_position(self, pop: bool = True) -> Optional[Tuple[float, float, float]]:
         """ get vehicle position
         Odometry position, unit: m
+        
+        Args:
+            pop: If True, pops from queue (FIFO). If False, reads latest data without popping.
+        
+        Returns:
+            Tuple of (relative_x, relative_y, relative_yaw) or None if queue is empty
         """
-        with self._data_lock:
+        with self._status_lock:
+            if len(self._vehicle_position) == 0:
+                return None
+            
             self.__has_new = False
 
+            # Get position from queue
+            if pop:
+                x, y, yaw = self._vehicle_position.popleft()
+            else:
+                x, y, yaw = self._vehicle_position[-1]
+            
             # Convert current position to transformation matrix
-            x, y, yaw = self._vehicle_position
             cos_yaw = np.cos(yaw)
             sin_yaw = np.sin(yaw)
             current_matrix = np.array([[cos_yaw, -sin_yaw, x],
@@ -544,10 +508,15 @@ class Chassis(DeviceBase, MotorBase):
         """
         msg = public_api_down_pb2.APIDown()
         base_command = public_api_types_pb2.BaseCommand()
-        motor_targets = self._construct_target_motor_msg(self._pulse_per_rotation)
-        base_command.motor_targets.CopyFrom(motor_targets)
-        msg.base_command.CopyFrom(base_command)
-        return msg
+        
+        pulse_per_rotation_arr = self.get_motor_pulse_per_rotations()
+        if pulse_per_rotation_arr is not None:
+            motor_targets = self._construct_target_motor_msg(pulse_per_rotation_arr)
+            base_command.motor_targets.CopyFrom(motor_targets)
+            msg.base_command.CopyFrom(base_command)
+            return msg
+        else:
+            raise ValueError(f"Cannot construct wheel control message: pulse_per_rotation data not available (not set yet)")
 
     def _construct_simple_control_message(
             self, data: Tuple[float, float,
@@ -651,9 +620,9 @@ class Chassis(DeviceBase, MotorBase):
             'battery_info':
             self.get_battery_info(),
             'vehicle_speed':
-            self._vehicle_speed,
+            self._vehicle_speed[-1] if len(self._vehicle_speed) > 0 else None,
             'vehicle_position':
-            self._vehicle_position,
+            self._vehicle_position[-1] if len(self._vehicle_position) > 0 else None,
             'parking_stop_detail':
             self._parking_stop_detail,
             'warning':

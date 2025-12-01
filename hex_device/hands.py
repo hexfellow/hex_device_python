@@ -6,12 +6,13 @@
 # Date  : 2025-8-1
 ################################################################
 
+import asyncio
 import time
 import numpy as np
 from typing import Optional, Tuple, List, Dict, Any, Union
 from .common_utils import delay, log_common, log_info, log_warn, log_err
 from .device_base_optional import OptionalDeviceBase
-from .motor_base import MitMotorCommand, MotorBase, MotorError, MotorCommand, CommandType
+from .motor_base import MitMotorCommand, MotorBase, MotorError, MotorCommand, CommandType, Timestamp
 from .generated import public_api_down_pb2, public_api_up_pb2, public_api_types_pb2
 from copy import deepcopy
 from .generated.public_api_types_pb2 import (HandStatus)
@@ -58,7 +59,7 @@ class Hands(OptionalDeviceBase, MotorBase):
             read_only: Whether this device is read-only (read only will not create periodic task)
             send_message_callback: Callback function for sending messages, used to send downstream messages
         """
-        OptionalDeviceBase.__init__(self, read_only, name, send_message_callback, device_id)
+        OptionalDeviceBase.__init__(self, read_only, name, device_id, device_type, send_message_callback)
         MotorBase.__init__(self, motor_count, name)
 
         self.name = name or "Hands"
@@ -113,14 +114,14 @@ class Hands(OptionalDeviceBase, MotorBase):
             log_err(f"Hands initialization failed: {e}")
             return False
 
-    def _update_optional_data(self, device_type, device_status: public_api_types_pb2.SecondaryDeviceStatus) -> bool:
+    def _update_optional_data(self, device_type, device_status: public_api_types_pb2.SecondaryDeviceStatus, timestamp: Timestamp) -> bool:
         """
         Update hands device with optional message data
         
         Args:
             device_type: Should be equal to self._device_type
             device_status: The SecondaryDeviceStatus from APIUp
-            
+            timestamp: Timestamp
         Returns:
             bool: Whether update was successful
         """
@@ -130,66 +131,11 @@ class Hands(OptionalDeviceBase, MotorBase):
             
         try:
             # Update motor data
-            self._update_motor_data_from_hands_status(device_status.hand_status)
-            self._update_timestamp()
+            self._push_motor_data(device_status.hand_status.motor_status, timestamp)
             return True
         except Exception as e:
             log_err(f"Hands data update failed: {e}")
             return False
-
-    def _update_motor_data_from_hands_status(self, hand_status: HandStatus):
-        motor_status_list = hand_status.motor_status
-
-        if len(motor_status_list) != self.motor_count:
-            log_warn(
-                f"Warning: Motor count mismatch, expected {self.motor_count}, actual {len(motor_status_list)}")
-            return
-
-        # Parse motor data
-        positions = []  # encoder position
-        velocities = []  # rad/s
-        torques = []  # Nm
-        driver_temperature = []
-        motor_temperature = []
-        pulse_per_rotation = []
-        wheel_radius = []
-        voltage = []
-        error_codes = []
-        current_targets = []
-
-        for motor_status in motor_status_list:
-            positions.append(motor_status.position)
-            velocities.append(motor_status.speed)
-            torques.append(motor_status.torque)
-            pulse_per_rotation.append(motor_status.pulse_per_rotation)
-            wheel_radius.append(motor_status.wheel_radius)
-            current_targets.append(motor_status.current_target)
-
-            driver_temp = motor_status.driver_temperature if motor_status.HasField(
-                'driver_temperature') else 0.0
-            motor_temp = motor_status.motor_temperature if motor_status.HasField(
-                'motor_temperature') else 0.0
-            volt = motor_status.voltage if motor_status.HasField(
-                'voltage') else 0.0
-            driver_temperature.append(driver_temp)
-            motor_temperature.append(motor_temp)
-            voltage.append(volt)
-
-            error_code = None
-            if motor_status.error:
-                error_code = motor_status.error[0]
-            error_codes.append(error_code)
-
-        self.update_motor_data(positions=positions,
-                               velocities=velocities,
-                               torques=torques,
-                               driver_temperature=driver_temperature,
-                               motor_temperature=motor_temperature,
-                               voltage=voltage,
-                               pulse_per_rotation=pulse_per_rotation,
-                               wheel_radius=wheel_radius,
-                               error_codes=error_codes,
-                               current_targets=current_targets)
 
     async def _periodic(self):
         """
@@ -210,7 +156,8 @@ class Hands(OptionalDeviceBase, MotorBase):
                 # check motor error
                 if start_time - self.__last_warning_time > 1.0:
                     for i in range(self.motor_count):
-                        if self.get_motor_state(i) == "error":
+                        motor_state = self.get_motor_state(i)
+                        if motor_state is not None and motor_state == "error":
                             log_err(f"Error: Motor {i} error occurred")
                             self.__last_warning_time = start_time
 
@@ -237,6 +184,7 @@ class Hands(OptionalDeviceBase, MotorBase):
 
             except Exception as e:
                 log_err(f"Hands periodic task exception: {e}")
+                await asyncio.sleep(0.5)
                 continue
         
     # Robotic arm specific methods
@@ -308,8 +256,12 @@ class Hands(OptionalDeviceBase, MotorBase):
 
         if command.command_type == CommandType.POSITION:
             # check the torque if valid
-            torques = self.get_motor_torques()
-            now_pos = self.get_motor_positions()
+            now_pos, _, torques = self.cache_motion_data
+            
+            # Raise exception if no motion data available
+            if torques is None or now_pos is None:
+                raise ValueError("Cannot construct joint command: motor data not available")
+            
             with self._config_lock:
                 positon_step = self._positon_step
                 max_torque = self._max_torque
@@ -317,7 +269,7 @@ class Hands(OptionalDeviceBase, MotorBase):
             if self._last_command_send is not None:
                 last_command = self._last_command_send
             else:
-                last_command = MotorCommand.create_position_command(now_pos)
+                last_command = MotorCommand.create_position_command(now_pos.tolist())
 
             for i in range(self.motor_count):
                 err = np.clip(command.position_command[i] - last_command.position_command[i], -positon_step, positon_step)
@@ -330,12 +282,16 @@ class Hands(OptionalDeviceBase, MotorBase):
                     command.position_command[i] = last_command.position_command[i]
             self._last_command_send = deepcopy(command)
 
-        motor_targets = self._construct_target_motor_msg(self._pulse_per_rotation, command)
-        hand_command.motor_targets.CopyFrom(motor_targets)
-        secondary_device_command.device_id = self._device_id
-        secondary_device_command.hand_command.CopyFrom(hand_command)
-        msg.secondary_device_command.CopyFrom(secondary_device_command)
-        return msg
+        pulse_per_rotation_arr = self.get_motor_pulse_per_rotations()
+        if pulse_per_rotation_arr is not None:
+            motor_targets = self._construct_target_motor_msg(pulse_per_rotation_arr, command)
+            hand_command.motor_targets.CopyFrom(motor_targets)
+            secondary_device_command.device_id = self._device_id
+            secondary_device_command.hand_command.CopyFrom(hand_command)
+            msg.secondary_device_command.CopyFrom(secondary_device_command)
+            return msg
+        else:
+            raise ValueError(f"Cannot construct joint command: pulse_per_rotation data not available (not set yet)")
 
     def _construct_custom_joint_command_msg(self, motor_msg: public_api_types_pb2.MotorTargets) -> public_api_down_pb2.APIDown:
         """
@@ -371,7 +327,7 @@ class Hands(OptionalDeviceBase, MotorBase):
     # Configuration related methods
     def get_hand_type(self) -> int:
         """Get hand type"""
-        return deepcopy(self._hand_type)
+        return deepcopy(self._device_type)
 
     def get_joint_limits(self) -> List[float]:
         """Get hands joint limits"""
@@ -385,15 +341,19 @@ class Hands(OptionalDeviceBase, MotorBase):
             dict: Hands device summary
         """
         summary = self.get_device_summary()
+        motor_positions = self.get_motor_positions(False)
+        motor_velocities = self.get_motor_velocities(False)
+        motor_torques = self.get_motor_torques(False)
+        
         summary.update({
-            'hand_type': self._hand_type,
+            'hand_type': self._device_type,
             'motor_count': self.motor_count,
             'control_hz': self._control_hz,
             'command_timeout_check': self._command_timeout_check,
             'calibrated': self._calibrated,
             'api_control_initialized': self._api_control_initialized,
-            'motor_positions': self.get_motor_positions(),
-            'motor_velocities': self.get_motor_velocities(),
-            'motor_torques': self.get_motor_torques()
+            'motor_positions': motor_positions if motor_positions is not None else [],
+            'motor_velocities': motor_velocities if motor_velocities is not None else [],
+            'motor_torques': motor_torques if motor_torques is not None else []
         })
         return summary

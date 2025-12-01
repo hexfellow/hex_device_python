@@ -9,7 +9,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional, List, Dict, Any, Type
 import threading
-import time
+from collections import deque
 
 
 class OptionalDeviceBase(ABC):
@@ -19,7 +19,7 @@ class OptionalDeviceBase(ABC):
     These devices are matched by device_id from SecondaryDeviceStatus.
     """
 
-    def __init__(self, read_only: bool, name: str = "", send_message_callback=None, device_id: int = None):
+    def __init__(self, read_only: bool, name: str, device_id, device_type, send_message_callback=None):
         """
         Initialize optional device base class
         Args:
@@ -30,14 +30,11 @@ class OptionalDeviceBase(ABC):
         """
         self.name = name or "OptionalDevice"
         self.device_id = device_id
+        self.device_type = device_type
 
         self._send_message_callback = send_message_callback
 
-        self._last_update_time = None
-
         self._data_lock = threading.Lock()
-
-        self._has_new_data = threading.Event()  # Use Event to avoid lock contention
 
         self._read_only = read_only
 
@@ -64,25 +61,11 @@ class OptionalDeviceBase(ABC):
             raise AttributeError(
                 "send_message: send_message_callback is not set")
 
-    def set_has_new_data(self):
-        """Set new data flag"""
-        self._has_new_data.set()
-
-    def has_new_data(self) -> bool:
-        """Check if there is new data"""
-        return self._has_new_data.is_set()
-
-    def clear_new_data_flag(self):
-        """Clear new data flag"""
-        self._has_new_data.clear()
-
     def get_device_summary(self) -> Dict[str, Any]:
         """Get device status summary"""
         return {
             'name': self.name,
             'device_id': self.device_id,
-            'has_new_data': self.has_new_data(),
-            'last_update_time': self._last_update_time,
         }
 
 
@@ -126,17 +109,11 @@ class OptionalDeviceBase(ABC):
         """
         return True
 
-    def _update_timestamp(self):
-        """Update timestamp"""
-        with self._data_lock:
-            self._last_update_time = time.time_ns()
-        self._has_new_data.set()
-
     def __str__(self) -> str:
         """String representation"""
-        return f"{self.name}, {self.has_new_data()}, {self._last_update_time}"
+        return f"{self.name}"
 
     def __repr__(self) -> str:
         """Detailed string representation"""
-        return f"OptionalDeviceBase(name='{self.name}', device_id={self.device_id}, has_new_data={self.has_new_data()}, last_update_time={self._last_update_time})"
+        return f"OptionalDeviceBase(name='{self.name}', device_id={self.device_id})"
 

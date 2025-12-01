@@ -13,9 +13,12 @@ from .error_type import WsError, ProtocolError
 from .device_base import DeviceBase
 from .device_factory import DeviceFactory
 from .device_base_optional import OptionalDeviceBase
+from .motor_base import Timestamp
 from .hex_socket import HexSocketParser, HexSocketOpcode
 from .kcp_client_core import KCPClient, KCPConfig
 
+import time
+import os
 import asyncio
 import threading
 import websockets
@@ -63,6 +66,10 @@ class HexDeviceApi:
         self.__raw_data = []  ## raw data buffer
         self.__control_hz = control_hz
 
+        # time synchronization
+        self.__use_ptp = self.__select_time_source()
+        self.__time_bias = None
+
         self._device_factory = DeviceFactory()
         # Register available device classes
         self._register_available_device_classes()
@@ -82,11 +89,18 @@ class HexDeviceApi:
         # Counter for orphaned task checking
         self._check_counter = 0  # Global counter for tracking function calls
         self._process_lock = threading.Lock()  # Thread lock for _process_api_up
+        
+        # # Frequency tracking for _process_api_up
+        # self._process_api_up_call_count = 0  # Total call count
+        # self._process_api_up_start_time = time.time()  # Start time for frequency calculation
+        # self._process_api_up_last_print_time = time.time()  # Last time we printed frequency
+        # self._process_api_up_print_interval = 5.0  # Print frequency every 5 seconds
 
         self.__shutdown_event = None  # the handle event for shutdown api
         self.__loop = None  ## async loop thread
         self.__loop_thread = threading.Thread(target=self.__loop_start,
                                               daemon=True)
+        self.__is_closing = threading.Event()
         # init api
         self.__loop_thread.start()
         if self.local_port:
@@ -554,7 +568,9 @@ class HexDeviceApi:
             try:
                 # Check if websocket is connected
                 if self.__websocket is None:
-                    log_err("WebSocket is not connected")
+                    if self.__is_closing.is_set():
+                        return None
+                    log_err("WebSocket is disconnected")
                     await asyncio.sleep(1)
                     continue
 
@@ -593,6 +609,8 @@ class HexDeviceApi:
                     continue
 
             except ConnectionClosed as e:
+                if self.__is_closing.is_set():
+                    return
                 log_err(
                     f"Connection closed (code: {e.code}, reason: {e.reason})")
                 try:
@@ -701,6 +719,40 @@ class HexDeviceApi:
                 retry_count += 1
         raise ConnectionError("Maximum reconnect retries exceeded")
 
+    def __select_time_source(self) -> bool:
+        """
+        Select time source
+        """
+        value = os.getenv('HEX_PTP_CLOCK')
+        if value is None:
+            return False
+        else:
+            log_info("PTP time synchronization is enabled.")
+            return True
+
+    def __sync_monotonic_time(self, timestamp: Timestamp) -> Timestamp:
+        """
+        Sync monotonic time
+        
+        Args:
+            timestamp: Timestamp object to sync
+            
+        Returns:
+            Synced Timestamp object
+        """
+        if self.__use_ptp:
+            return timestamp
+        else:
+            if self.__time_bias is not None:
+                # Add time bias to timestamp
+                synced_ns = timestamp.to_ns() + self.__time_bias
+                return Timestamp.from_ns(synced_ns)
+            else:
+                # Calculate time bias and return current time
+                current_time_ns = time.perf_counter_ns()
+                self.__time_bias = current_time_ns - timestamp.to_ns()
+                return Timestamp.from_ns(current_time_ns)
+
     # process manager
     ## sync function
     def __loop_start(self):
@@ -741,6 +793,18 @@ class HexDeviceApi:
         """
         # Acquire lock to ensure thread safety
         with self._process_lock:
+            # # Track call frequency
+            # self._process_api_up_call_count += 1
+            # current_time = time.time()
+            # elapsed_time = current_time - self._process_api_up_start_time
+            
+            # # Print frequency periodically
+            # if current_time - self._process_api_up_last_print_time >= self._process_api_up_print_interval:
+            #     if elapsed_time > 0:
+            #         frequency = self._process_api_up_call_count / elapsed_time
+            #         log_info(f"_process_api_up 调用频率: {frequency:.2f} Hz (总调用次数: {self._process_api_up_call_count}, 运行时间: {elapsed_time:.2f}秒)")
+            #     self._process_api_up_last_print_time = current_time
+            
             if len(self.__raw_data) >= RAW_DATA_LEN:
                 self.__raw_data.pop(0)
             self.__raw_data.append(api_up)
@@ -753,6 +817,25 @@ class HexDeviceApi:
                 if orphaned_count > 0:
                     log_debug(f"found {orphaned_count} orphaned tasks")
 
+            if api_up.HasField('log'):
+                log_info(f"Get log from server: {api_up.log}")
+
+            if api_up.HasField('time_stamp'):
+                if self.__use_ptp:
+                    ptp_timestamp = api_up.time_stamp.ptp_time_stamp
+                    if ptp_timestamp.calibrated:
+                        timestamp = Timestamp.from_s_ns(ptp_timestamp.seconds, ptp_timestamp.nanoseconds)
+                    else:
+                        log_debug("PTP time is not calibrated.")
+                        input_timestamp = Timestamp.from_s_ns(ptp_timestamp.seconds, ptp_timestamp.nanoseconds)
+                        timestamp = self.__sync_monotonic_time(input_timestamp)
+                else:
+                    monotonic_timestamp = api_up.time_stamp.monotonic_time_stamp
+                    input_timestamp = Timestamp.from_s_ns(monotonic_timestamp.seconds, monotonic_timestamp.nanoseconds)
+                    timestamp = self.__sync_monotonic_time(input_timestamp)
+            else:
+                timestamp = Timestamp.from_ns(time.perf_counter_ns())
+
             # Get robot_type type information
             robot_type = api_up.robot_type
             robot_type_name = public_api_types_pb2.RobotType.Name(robot_type)
@@ -763,7 +846,7 @@ class HexDeviceApi:
                 device = self.find_device_by_robot_type(robot_type)
 
                 if device:
-                    device._update(api_up)
+                    device._update(api_up, timestamp)
                 else:
                     log_debug(f"create new device: {robot_type_name}")
 
@@ -775,16 +858,16 @@ class HexDeviceApi:
                         return
 
                     if device:
-                        device._update(api_up)
+                        device._update(api_up, timestamp)
                     else:
                         log_warn(f"unknown device type: {robot_type_name}")
             else:
                 return
 
             # Process optional fields
-            self._process_optional_fields(api_up)
+            self._process_optional_fields(api_up, timestamp)
 
-    def _process_optional_fields(self, api_up):
+    def _process_optional_fields(self, api_up, timestamp: Timestamp):
         """
         Process SecondaryDeviceStatus array in APIUp message
         
@@ -805,7 +888,7 @@ class HexDeviceApi:
                         
                         if optional_device:
                             # Update existing device
-                            success = optional_device._update_optional_data(device_type, secondary_device)
+                            success = optional_device._update_optional_data(device_type, secondary_device, timestamp)
                             if not success:
                                 log_err(f"Failed to update optional device data for device_id {device_id}, type {device_type}")
                         else:
@@ -820,7 +903,7 @@ class HexDeviceApi:
                             
                             if optional_device:
                                 # Update newly created device
-                                success = optional_device._update_optional_data(device_type, secondary_device)
+                                success = optional_device._update_optional_data(device_type, secondary_device, timestamp)
                                 if not success:
                                     log_warn(f"Failed to update new optional device data for device_id {device_id}, type {device_type}")
                             else:
@@ -836,23 +919,26 @@ class HexDeviceApi:
         @return:
             None
         """
+        self.__is_closing.set()
+        if self.__shutdown_event is not None:
+                self.__shutdown_event.set()
+
         try:
-            # Close WebSocket connection
-            if self.__websocket:
-                await self.__websocket.close()
-                self.__websocket = None
-                log_info("WebSocket connection closed successfully")
-            
             # Close KCP connection using stop() method
             if self.__kcp_client is not None:
                 self.__kcp_client.stop()
                 self.__kcp_client = None
                 log_info("KCP connection closed successfully")
+
+            # Close WebSocket connection
+            if self.__websocket:
+                ws = self.__websocket
+                self.__websocket = None
+                await ws.close()
+                log_info("WebSocket connection closed successfully")
+            
         except Exception as e:
             log_err(f"Error closing connection: {e}")
-        finally:
-            if self.__shutdown_event is not None:
-                self.__shutdown_event.set()
 
     async def __main_loop(self):
         self.__shutdown_event = asyncio.Event()
@@ -876,8 +962,6 @@ class HexDeviceApi:
             await asyncio.gather(*self.__tasks, return_exceptions=True)
         except Exception as e:
             log_err(f"Error during task cleanup: {e}")
-
-        log_err("HexDevice api main_loop exited.")
 
     async def __websocket_data_parser(self):
         """
@@ -937,10 +1021,13 @@ class HexDeviceApi:
         while True:
             try:
                 api_up = await self.__capture_data_frame_from_websocket()
+                if api_up is None and self.__is_closing.is_set():
+                    return
             except Exception as e:
                 log_err(f"__websocket_data_parser error: {e}")
                 continue
-            self._process_api_up(api_up)
+            if not self.enable_kcp:
+                self._process_api_up(api_up)
 
     # User api
     def find_device_by_robot_type(self, robot_type) -> Optional[DeviceBase]:
@@ -974,10 +1061,53 @@ class HexDeviceApi:
                 return device
         return None
 
+    def find_optional_device_by_robot_type(self, robot_type) -> Optional[List[OptionalDeviceBase]]:
+        """
+        Find optional device by robot_type
+        
+        Args:
+            robot_type: Robot type
+            
+        Returns:
+            Matching optional device or None
+        """
+        devices = []
+        for device in self._optional_device_list:
+            if hasattr(device, 'device_type') and device.device_type == robot_type:
+                devices.append(device)
+        if len(devices) == 0:
+            return None
+        return devices
+
     def close(self):
         if self.__loop and self.__loop.is_running():
+            try:
+                # Close all devices
+                for device in self._internal_device_list:
+                    if hasattr(device, 'stop'):
+                        device.stop()
+                for device in self._optional_device_list:
+                    if hasattr(device, 'stop'):
+                        device.stop()
+            except Exception as e:
+                log_warn(f"Error closing devices: {e}")
+            time.sleep(0.3)
+            
             log_warn("HexDevice API is closing...")
-            asyncio.run_coroutine_threadsafe(self.__async_close(), self.__loop)
+            try:
+                # Submit the async close task and wait for it to complete
+                future = asyncio.run_coroutine_threadsafe(self.__async_close(), self.__loop)
+                # Wait for the task to complete with a timeout
+                try:
+                    future.result(timeout=5.0)
+                except TimeoutError:
+                    log_warn("__async_close timed out after 5 seconds")
+                except Exception as e:
+                    log_err(f"Error waiting for __async_close: {e}")
+            except Exception as e:
+                log_err(f"Error submitting __async_close task: {e}")
+                import traceback
+                log_err(f"Traceback: {traceback.format_exc()}")
 
     def is_api_exit(self) -> bool:
         """

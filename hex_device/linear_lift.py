@@ -15,7 +15,7 @@ from typing import List, Optional, Union, Tuple
 from .common_utils import delay, log_err, log_info, log_warn
 from .device_base import DeviceBase
 from .generated import public_api_down_pb2, public_api_up_pb2, public_api_types_pb2
-from .motor_base import MitMotorCommand, CommandType
+from .motor_base import MitMotorCommand, CommandType, Timestamp
 
 class LinearLift(DeviceBase):
     """
@@ -25,7 +25,7 @@ class LinearLift(DeviceBase):
     """
 
     SUPPORTED_ROBOT_TYPES = [
-        public_api_types_pb2.RobotType.RtLotaLinearLift,
+        public_api_types_pb2.RobotType.RtLotaLinearLiftV1,
     ]
 
     def __init__(self, motor_count: int, robot_type: int, name: str = "Lift", control_hz: int = 500, send_message_callback=None):
@@ -50,6 +50,7 @@ class LinearLift(DeviceBase):
         self._move_speed = None # pulse / s
         self._parking_stop_detail = public_api_types_pb2.ParkingStopDetail()
         self._custom_button_pressed = False
+        self._last_update_time = None  # update with data lock, only check has now positions
 
         # Control related
         self._last_warning_time = time.perf_counter()
@@ -97,7 +98,7 @@ class LinearLift(DeviceBase):
             log_err(f"Lift initialization failed: {e}")
             return False
 
-    def _update(self, api_up_data) -> bool:
+    def _update(self, api_up_data, timestamp: Timestamp) -> bool:
         """
         Update lift data
         
@@ -108,15 +109,12 @@ class LinearLift(DeviceBase):
             bool: Whether update was successful
         """
         try:
-            if api_up_data.HasField('log'):
-                log_info(f"Lift: Get log from server: {api_up_data.log}")
-
             if not api_up_data.HasField('linear_lift_status'):
                 return False
             lift_status = api_up_data.linear_lift_status
 
-            # TODO：确认最大速度和最大位置是否正确
             with self._data_lock:
+                self._last_update_time = timestamp
                 self._current_pos = lift_status.current_pos
                 self._move_speed = lift_status.speed
                 if lift_status.HasField('custom_button_pressed'):
@@ -136,11 +134,17 @@ class LinearLift(DeviceBase):
                 else:
                     self._parking_stop_detail = public_api_types_pb2.ParkingStopDetail()
 
-            self.set_has_new_data()
             return True
         except Exception as e:
             log_err(f"Lift data update failed: {e}")
             return False
+
+    def has_new_data(self) -> bool:
+        """
+        Check if there is new data
+        """
+        with self._data_lock:
+            return self._last_update_time is not None
 
     def convert_positions_to_rad(self, positions: np.ndarray, pulse_per_rotation: np.ndarray) -> np.ndarray:
         """
@@ -228,7 +232,8 @@ class LinearLift(DeviceBase):
             return None
         return copy.deepcopy(self._parking_stop_detail)
     
-    def get_state(self):
+    def get_state(self) -> str:
+        """Get lift state"""
         lift_state_descriptor = public_api_types_pb2.LiftState.DESCRIPTOR
         with self._status_lock:
             return lift_state_descriptor.values_by_number[self._state].name
@@ -245,6 +250,7 @@ class LinearLift(DeviceBase):
     def get_motor_positions(self) -> List[float]:
         """Get all motor positions (rad)"""
         with self._data_lock:
+            self._last_update_time = None
             return np.abs(self._current_pos / self._pulse_per_rotation)
 
     def get_move_speed(self) -> float:
@@ -345,7 +351,7 @@ class LinearLift(DeviceBase):
 
     def __str__(self) -> str:
         """String representation"""
-        return f"{self.name}(Count:{self.motor_count}, Normal:{self.states.count('normal')}, Errors:{self.states.count('error')})"
+        return f"{self.name}(Count:{self.motor_count})"
 
     def __repr__(self) -> str:
         """Detailed string representation"""

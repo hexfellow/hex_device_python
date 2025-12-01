@@ -19,7 +19,7 @@ sys.path.insert(
     '<your project path>/hex_device_python/hex_device/generated')
 
 import hex_device
-from hex_device import HexDeviceApi
+from hex_device import HexDeviceApi, public_api_types_pb2
 from hex_device import Chassis, LinearLift, Arm, Hands
 from hex_device.motor_base import CommandType, MitMotorCommand
 
@@ -38,7 +38,7 @@ def main():
     parser.add_argument(
         '--log-level',
         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
-        default='WARNING',
+        default='INFO',
         help='Set logging level for hex_device package'
     )
     args = parser.parse_args()
@@ -50,8 +50,6 @@ def main():
     # Init HexDeviceApi
     api = HexDeviceApi(ws_url=args.url, control_hz=1000, enable_kcp=True, local_port=0)
     first_time = True
-
-    time.sleep(1)
     
     # Enable/Disable loop test variable
     enable_disable_start_time = time.time()
@@ -95,11 +93,6 @@ def main():
                             ## command, Please select one of the following commands.
                             device.set_vehicle_speed(0.0, 0.0, 0.1)
                             # device.motor_command(CommandType.SPEED, [0.5] * len(device))
-
-                            # Thread operations can incur significant performance overhead. 
-                            # If you do not rely on _has_new_data to obtain the information update status, 
-                            # it is recommended not to call clear_new_data_flag().
-                            device.clear_new_data_flag()
 
                     # for Arm
                     elif isinstance(device, Arm):
@@ -169,19 +162,17 @@ def main():
                                 #     CommandType.SPEED,
                                 #     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
                                 
-                            # print(device.get_device_summary())
-                            # print(device.get_motor_summary())
+                            # print(f"arm device summary: {device.get_device_summary()}")
+                            # print(f"arm motor summary: {device.get_motor_summary()}")
+                            # print(f"arm pulse per rotation: {device.get_motor_pulse_per_rotations()}")
 
-                            # print(f"arm position: {device.get_motor_positions()}")
-                            print(device.get_simple_motor_status())
+                            print(f"arm position: {device.get_motor_positions(False)}")
+                            # print(f"arm simple motor status: {device.get_simple_motor_status(False)}")
+                            # # print the encoders to zero, you can use this to set the encoders to zero.
+                            # print(f"arm encoders from zero: {device.get_encoders_to_zero(False)}")
 
-                            ##  print the encoders to zero, you can use this to set the encoders to zero.
-                            # print(f"arm encoders from zero: {device.get_encoders_to_zero()}")
-                            # print(f"arm pulse per rotation: {device.pulse_per_rotation()}")
-
-                            ## command, Please select one of the following commands.
-                            ## warning!!!! Only position command is limit position & speed.Only speed command is limit speed & acc.
-
+                            # # command, Please select one of the following commands.
+                            # # warning!!!! Only position command is limit position & speed.Only speed command is limit speed & acc.
                             # device.motor_command(
                             #     CommandType.POSITION,
                             #     [-0.3, -1.48, 2.86, 0.0, 0.0, 0.0])
@@ -231,11 +222,6 @@ def main():
                             #     CommandType.MIT,
                             #     mit_commands)
 
-                            # Thread operations can incur significant performance overhead. 
-                            # If you do not rely on _has_new_data to obtain the information update status, 
-                            # it is recommended not to call clear_new_data_flag().
-                            device.clear_new_data_flag()
-
                     elif isinstance(device, LinearLift):
                         if device.has_new_data():
                             if first_time:
@@ -260,38 +246,20 @@ def main():
                             #     CommandType.POSITION,
                             #     0.0)
 
-                            # Thread operations can incur significant performance overhead. 
-                            # If you do not rely on _has_new_data to obtain the information update status, 
-                            # it is recommended not to call clear_new_data_flag().
-                            device.clear_new_data_flag()
-                            
-                for device in api.optional_device_list:
-                    if isinstance(device, Hands):
-                        if device.has_new_data():
-                            print(f"hands position: {device.get_motor_positions()}")
-                            device.motor_command(
-                                CommandType.TORQUE,
-                                [0.0] * device.motor_count
-                            )
-
-                            # Thread operations can incur significant performance overhead. 
-                            # If you do not rely on _has_new_data to obtain the information update status, 
-                            # it is recommended not to call clear_new_data_flag().
-                            device.clear_new_data_flag()
+                optional_devices = api.find_optional_device_by_robot_type(public_api_types_pb2.SecondaryDeviceType.SdtHandGp100)
+                if optional_devices is not None:
+                    device:Hands = optional_devices[0]
+                    if device.has_new_data():
+                        # print(f"hands position: {device.get_motor_positions()}")
+                        device.motor_command(
+                            CommandType.TORQUE,
+                            [0.0] * device.motor_count
+                        )
 
             time.sleep(0.0001)
 
     except KeyboardInterrupt:
         print("Received Ctrl-C.")
-        for device in api.device_list:
-            if isinstance(device, Chassis):
-                # Safe stop device
-                device.stop()
-                time.sleep(0.1)
-            elif isinstance(device, Arm):
-                # Safe stop device
-                device.stop()
-                time.sleep(0.1)
         api.close()
     finally:
         pass

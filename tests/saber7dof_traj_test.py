@@ -24,11 +24,8 @@ sys.path.insert(
 
 from hex_device import HexDeviceApi
 import time
-from hex_device.chassis import Chassis
-from hex_device.motor_base import CommandType
-from hex_device.arm import Arm
-from hex_device.motor_base import MitMotorCommand
-from hex_device.hands import Hands
+from hex_device import Arm, Hands
+from hex_device import CommandType, public_api_types_pb2
 
 TRAJ_TIME = 3
 SPEED = 0.5
@@ -152,66 +149,66 @@ def main():
                 print("Public API has exited.")
                 break
             else:
-                for device in api.device_list:
-                    if isinstance(device, Arm):
-                        if device.has_new_data():
-                            if first_time:
-                                first_time = False
-                                # Must start device before using it.
-                                device.start()
-                                # 7-axis config
-                                config_dict = {
-                                    'name':'saber_d7x',
-                                    'dof_num': 'seven_axis',
-                                    'motor_model': [0x80] * 7,
-                                    'joints': [{
-                                        'joint_name': 'joint_1',
-                                        'joint_limit': [-2.967, 2.967, -0.5, 0.5, -0.0, 0.0]
-                                    }, {
-                                        'joint_name': 'joint_2',
-                                        'joint_limit': [-1.57, 1.57, -0.7, 0.7, -0.0, 0.0]
-                                    }, {
-                                        'joint_name': 'joint_3',
-                                        'joint_limit': [-2.967, 2.967, -0.5, 0.5, -0.0, 0.0]
-                                    }, {
-                                        'joint_name': 'joint_4',
-                                        'joint_limit': [-0.393, 3.14159265359, -0.5, 0.5, -0.0, 0.0]
-                                    }, {
-                                        'joint_name': 'joint_5',
-                                        'joint_limit': [-1.6, 1.6, -0.5, 0.5, -0.0, 0.0]
-                                    }, {
-                                        'joint_name': 'joint_6',
-                                        'joint_limit': [-1.57, 1.57, -0.5, 0.5, -0.0, 0.0]
-                                    }, {
-                                        'joint_name': 'joint_7',
-                                        'joint_limit': [-1.57, 1.57, -0.5, 0.5, -0.0, 0.0]
-                                    }]
-                                }
-                                if not device.reload_arm_config_from_dict(config_dict):
-                                    exit(1)
+                arm_devices = api.find_device_by_robot_type(public_api_types_pb2.RobotType.RtArmSaberD7x)
+                if arm_devices is not None:
+                    if device.has_new_data():
+                        if first_time:
+                            first_time = False
+                            # Must start device before using it.
+                            device.start()
+                            # 7-axis config
+                            config_dict = {
+                                'name':'saber_d7x',
+                                'dof_num': 'seven_axis',
+                                'motor_model': [0x80] * 7,
+                                'joints': [{
+                                    'joint_name': 'joint_1',
+                                    'joint_limit': [-2.967, 2.967, -0.5, 0.5, -0.0, 0.0]
+                                }, {
+                                    'joint_name': 'joint_2',
+                                    'joint_limit': [-1.57, 1.57, -0.7, 0.7, -0.0, 0.0]
+                                }, {
+                                    'joint_name': 'joint_3',
+                                    'joint_limit': [-2.967, 2.967, -0.5, 0.5, -0.0, 0.0]
+                                }, {
+                                    'joint_name': 'joint_4',
+                                    'joint_limit': [-0.393, 3.14159265359, -0.5, 0.5, -0.0, 0.0]
+                                }, {
+                                    'joint_name': 'joint_5',
+                                    'joint_limit': [-1.6, 1.6, -0.5, 0.5, -0.0, 0.0]
+                                }, {
+                                    'joint_name': 'joint_6',
+                                    'joint_limit': [-1.57, 1.57, -0.5, 0.5, -0.0, 0.0]
+                                }, {
+                                    'joint_name': 'joint_7',
+                                    'joint_limit': [-1.57, 1.57, -0.5, 0.5, -0.0, 0.0]
+                                }]
+                            }
+                            if not device.reload_arm_config_from_dict(config_dict):
+                                exit(1)
 
-                            if not trajectory_initialized:
-                                if trajectory_planner.start_trajectory():
-                                    trajectory_initialized = True
-                                    print("Trajectory planner initialized, starting waypoint planning")
+                        if not trajectory_initialized:
+                            if trajectory_planner.start_trajectory():
+                                trajectory_initialized = True
+                                print("Trajectory planner initialized, starting waypoint planning")
+                        
+                        if trajectory_initialized:
+                            target_positions = trajectory_planner.get_current_target()
                             
-                            if trajectory_initialized:
-                                target_positions = trajectory_planner.get_current_target()
+                            if target_positions is not None:
+                                # Send position command
+                                device.motor_command(CommandType.POSITION, target_positions.tolist())
                                 
-                                if target_positions is not None:
-                                    # Send position command
-                                    device.motor_command(CommandType.POSITION, target_positions.tolist())
+                                segment_info = trajectory_planner.get_current_segment_info()
+                                if int(segment_info['total_elapsed'] * 10) % 5 == 0:  # Print every 0.5 seconds
+                                    print(f"Path segment: {segment_info['segment_index']} -> {(segment_info['segment_index'] + 1) % len(arm_position)}")
+                                    print(f"Segment progress: {segment_info['segment_progress']:.2f}")
+                                    print(f"Target position: {[f'{x:.3f}' for x in target_positions]}")
                                     
-                                    segment_info = trajectory_planner.get_current_segment_info()
-                                    if int(segment_info['total_elapsed'] * 10) % 5 == 0:  # Print every 0.5 seconds
-                                        print(f"Path segment: {segment_info['segment_index']} -> {(segment_info['segment_index'] + 1) % len(arm_position)}")
-                                        print(f"Segment progress: {segment_info['segment_progress']:.2f}")
-                                        print(f"Target position: {[f'{x:.3f}' for x in target_positions]}")
-                                        
-                                        # Check if a complete loop has been completed
-                                        if segment_info['segment_index'] == 0 and segment_info['segment_progress'] < 0.1:
-                                            loop_counter += 1
-                                            print(f"--- Completed trajectory loop {loop_counter} ---")
+                                    # Check if a complete loop has been completed
+                                    if segment_info['segment_index'] == 0 and segment_info['segment_progress'] < 0.1:
+                                        loop_counter += 1
+                                        print(f"--- Completed trajectory loop {loop_counter} ---")
 
                 for device in api.optional_device_list:
                     if isinstance(device, Hands):
@@ -256,11 +253,6 @@ def main():
 
     except KeyboardInterrupt:
         print("Received Ctrl-C.")
-        for device in api.device_list:
-            if isinstance(device, Arm):
-                # Safe stop device
-                device.stop()
-                time.sleep(0.1)
         api.close()
     finally:
         pass

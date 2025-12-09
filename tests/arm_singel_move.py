@@ -13,10 +13,12 @@ import argparse
 import numpy as np
 import logging
 
-sys.path.insert(1, '<your project path>/hex_device_python')
-sys.path.insert(
-    1,
-    '<your project path>/hex_device_python/hex_device/generated')
+## If you want to use the local version of the library, you can uncomment the following lines.
+# PROJECT_PATH = '<your project path>'
+# sys.path.insert(1, f'{PROJECT_PATH}/hex_device_python')
+# sys.path.insert(
+#     1,
+#     f'{PROJECT_PATH}/hex_device_python/hex_device/generated')
 
 import hex_device
 from hex_device import HexDeviceApi

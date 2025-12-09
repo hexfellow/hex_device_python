@@ -15,10 +15,11 @@ import numpy as np
 import time
 
 ## If you want to use the local version of the library, you can uncomment the following lines.
-# sys.path.insert(1, '<your project path>/hex_device_python')
+# PROJECT_PATH = '<your project path>'
+# sys.path.insert(1, f'{PROJECT_PATH}/hex_device_python')
 # sys.path.insert(
 #     1,
-#     '<your project path>/hex_device_python/hex_device/generated')
+#     f'{PROJECT_PATH}/hex_device_python/hex_device/generated')
 
 import hex_device
 from hex_device import HexDeviceApi, public_api_types_pb2

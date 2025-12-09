@@ -21,6 +21,10 @@
 - [✅] **[HandsHtGp100](#hands)**
 - [-] **[hex_lift](#hex_lift)**
 
+## 前置要求
+
+- **Python 3.9 或更高版本**
+- Anaconda 发行版（推荐初学者使用）- 包含 Python、NumPy 和常用的科学计算包
 
 ## 安装
 
@@ -34,13 +38,8 @@ pip install hex_device
 git clone --recurse-submodules https://github.com/hexfellow/hex_device_python.git
 ```
 
-## 前置要求
-
-- **Python 3.9 或更高版本**
-- Anaconda 发行版（推荐初学者使用）- 包含 Python、NumPy 和常用的科学计算包
-
 ## 快速开始
-
+如果你已经通过Pypi安装了该库，请直接查阅[使用方法](#使用方法)
 ### 安装 `protoc`
 1. 从包管理器安装 protoc (仅适用于 Debian13/Ubuntu24.04)
     ```bash
@@ -68,6 +67,13 @@ git clone --recurse-submodules https://github.com/hexfellow/hex_device_python.gi
 
 ### 安装 `hex_device`
 
+**编译 Protocol Buffer 消息：**
+
+   ```bash
+   mkdir ./hex_device/generated
+   protoc --proto_path=proto-public-api --python_out=hex_device/generated proto-public-api/*.proto
+   ```
+
 #### 选项 1：包安装
 
 在您的 Python 环境中安装库：
@@ -80,20 +86,13 @@ python3 -m pip install .
 
 如果您更喜欢在不安装到 Python 环境的情况下运行库：
 
-1. **编译 Protocol Buffer 消息：**
-
-   ```bash
-   mkdir ./hex_device/generated
-   protoc --proto_path=proto-public-api --python_out=hex_device/generated proto-public-api/*.proto
-   ```
-
-2. **安装依赖：**
+1. **安装依赖：**
 
     ```bash
     python3 -m pip install -r requirements.txt
     ```
 
-3. **将库路径添加到您的脚本中：**
+2. **将库路径添加到您的脚本中：**
 
     ```python
     import sys
@@ -107,8 +106,7 @@ python3 -m pip install .
 
 - 所有设备的简单演示：[test/main.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/main.py)
 
-- 机械臂轨迹跟踪示例：[test/archer_traj_test.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/archer_traj_test.py)
-
+- 机械臂轨迹跟踪示例：[test/archer_traj_test.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/archer_traj_test.py) 或者 [test/saber7dof_traj_test.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/saber7dof_traj_test.py) 
 
 ## 常见问题
 

@@ -17,10 +17,11 @@ import math
 import numpy as np
 import argparse
 
-sys.path.insert(1, '<your project path>/hex_device_python')
-sys.path.insert(
-    1,
-    '<your project path>/hex_device_python/hex_device/generated')
+## If you want to use the local version of the library, you can uncomment the following lines.
+# sys.path.insert(1, '<your project path>/hex_device_python')
+# sys.path.insert(
+#     1,
+#     '<your project path>/hex_device_python/hex_device/generated')
 
 from hex_device import HexDeviceApi
 import time

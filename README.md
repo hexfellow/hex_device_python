@@ -21,6 +21,10 @@ This library provides a simple interface for communicating with and controlling 
 - [✅] **[HandsHtGp100](#hands)**
 - [-] **[hex_lift](#hex_lift)**
 
+## Prerequisites
+
+- **Python 3.9 or higher**
+- Anaconda Distribution (recommended for beginners) - includes Python, NumPy, and commonly used scientific computing packages
 
 ## Installation
 
@@ -34,12 +38,9 @@ pip install hex_device
 git clone --recurse-submodules https://github.com/hexfellow/hex_device_python.git
 ```
 
-## Prerequisites
-
-- **Python 3.9 or higher**
-- Anaconda Distribution (recommended for beginners) - includes Python, NumPy, and commonly used scientific computing packages
-
 ## Quickstart
+
+If you have already installed the library from PyPI using pip, please refer to [Usage](#usage)
 
 ### Install `protoc`
 
@@ -69,6 +70,13 @@ git clone --recurse-submodules https://github.com/hexfellow/hex_device_python.gi
 
 ### Install `hex_device`
 
+**Compile Protocol Buffer messages:**
+
+   ```bash
+   mkdir ./hex_device/generated
+   protoc --proto_path=proto-public-api --python_out=hex_device/generated proto-public-api/*.proto
+   ```
+
 #### Option 1: Package Installation
 
 To install the library in your Python environment:
@@ -81,20 +89,13 @@ python3 -m pip install .
 
 If you prefer to run the library without installing it in your Python environment:
 
-1. **Compile Protocol Buffer messages:**
-
-   ```bash
-   mkdir ./hex_device/generated
-   protoc --proto_path=proto-public-api --python_out=hex_device/generated proto-public-api/*.proto
-   ```
-
-2. **Install dependencies:**
+1. **Install dependencies:**
 
     ```bash
     python3 -m pip install -r requirements.txt
     ```
 
-3. **Add the library path to your script:**
+2. **Add the library path to your script:**
 
     ```python
     import sys
@@ -108,7 +109,7 @@ If you prefer to run the library without installing it in your Python environmen
 
 - A simple demo for all device: [test/main.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/main.py)
 
-- Example of robotic arm trajectory tracking: [test/archer_traj_test.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/archer_traj_test.py)
+- Example of robotic arm trajectory tracking: [test/archer_traj_test.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/archer_traj_test.py) or [test/saber7dof_traj_test.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/saber7dof_traj_test.py) 
 
 
 ## Q&A

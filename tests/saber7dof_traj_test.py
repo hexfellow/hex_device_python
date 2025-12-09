@@ -31,6 +31,8 @@ from hex_device import CommandType, public_api_types_pb2
 
 TRAJ_TIME = 3
 SPEED = 0.5
+HOME_POSITION = [0.0, -1.5, 0.0, 3.00, 0.0, 0.0, 0.0]
+RETURN_HOME_DURATION = 10.0  # Duration for returning to home position (seconds)
 
 class TrajectoryPlanner:
     """Trajectory planner that supports smooth acceleration and deceleration planning"""
@@ -47,6 +49,7 @@ class TrajectoryPlanner:
         self.current_waypoint_index = 0
         self.trajectory_started = False
         self.start_time = None
+        self.last_target_position = None  # Store last commanded position
         
     def start_trajectory(self):
         """Start trajectory execution"""
@@ -83,8 +86,13 @@ class TrajectoryPlanner:
         target_position = start_pos + s * (end_pos - start_pos)
         
         self.current_waypoint_index = segment_index
+        self.last_target_position = target_position  # Store for potential return home
         
         return target_position
+    
+    def get_last_position(self):
+        """Get the last commanded position"""
+        return self.last_target_position
         
     def _smooth_step(self, t):
         """S-curve interpolation function that provides smooth acceleration and deceleration"""
@@ -111,6 +119,47 @@ class TrajectoryPlanner:
             'segment_progress': segment_progress,
             'total_elapsed': elapsed_time
         }
+
+
+class ReturnHomeController:
+    """Controller for smooth return to home position"""
+    
+    def __init__(self, start_position, home_position, duration):
+        """
+        Initialize return home controller
+        start_position: Starting position (current position when Ctrl+C is pressed)
+        home_position: Target home position
+        duration: Duration to reach home position (seconds)
+        """
+        self.start_position = np.array(start_position)
+        self.home_position = np.array(home_position)
+        self.duration = duration
+        self.start_time = time.time()
+        
+    def get_target_position(self):
+        """Get the current target position during return home"""
+        current_time = time.time()
+        elapsed_time = current_time - self.start_time
+        
+        if elapsed_time >= self.duration:
+            return self.home_position, True  # Reached home
+        
+        # Calculate normalized time [0, 1]
+        t = elapsed_time / self.duration
+        
+        # Use S-curve interpolation for smooth motion
+        s = self._smooth_step(t)
+        
+        # Interpolate between start and home position
+        target_position = self.start_position + s * (self.home_position - self.start_position)
+        
+        return target_position, False  # Not yet reached home
+    
+    def _smooth_step(self, t):
+        """S-curve interpolation function"""
+        t = max(0.0, min(1.0, t))
+        return 6 * t**5 - 15 * t**4 + 10 * t**3
+
 
 def main():
     # Parse command line arguments
@@ -145,6 +194,7 @@ def main():
     
     trajectory_initialized = False
     loop_counter = 0
+    arm_device = None  # Store reference to arm device
     try:
         while True:
             if api.is_api_exit():
@@ -153,6 +203,8 @@ def main():
             else:
                 arm_devices = api.find_device_by_robot_type(public_api_types_pb2.RobotType.RtArmSaberD7x)
                 if arm_devices is not None:
+                    device = arm_devices  # Use the found device
+                    arm_device = device  # Store reference for return home
                     if device.has_new_data():
                         if first_time:
                             first_time = False
@@ -254,7 +306,44 @@ def main():
             time.sleep(0.002)
 
     except KeyboardInterrupt:
-        print("Received Ctrl-C.")
+        print("\nReceived Ctrl-C. Planning return to home position...")
+        
+        # Get the last commanded position
+        last_position = trajectory_planner.get_last_position()
+        if last_position is None:
+            print("No trajectory data available, using default start position")
+            last_position = arm_position[0]
+        
+        print(f"Current position: {[f'{x:.3f}' for x in last_position]}")
+        print(f"Home position: {HOME_POSITION}")
+        print(f"Return duration: {RETURN_HOME_DURATION} seconds")
+        
+        # Create return home controller
+        return_home = ReturnHomeController(last_position, HOME_POSITION, RETURN_HOME_DURATION)
+        
+        # Execute return home trajectory
+        reached_home = False
+        while not reached_home and arm_device is not None:
+            if api.is_api_exit():
+                print("Public API has exited during return home.")
+                break
+            
+            if arm_device.has_new_data():
+                target_position, reached_home = return_home.get_target_position()
+                arm_device.motor_command(CommandType.POSITION, target_position.tolist())
+                
+                # Print progress
+                current_time = time.time()
+                elapsed = current_time - return_home.start_time
+                if int(elapsed * 10) % 5 == 0:  # Print every 0.5 seconds
+                    progress = min(100, (elapsed / RETURN_HOME_DURATION) * 100)
+                    print(f"Return progress: {progress:.1f}% - Position: {[f'{x:.3f}' for x in target_position]}")
+            
+            time.sleep(0.002)
+        
+        if reached_home:
+            print("Successfully reached home position!")
+        
         api.close()
     finally:
         pass

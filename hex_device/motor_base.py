@@ -283,10 +283,28 @@ class MotorBase(ABC):
         self._custom_convert_rad_to_positions = convert_rad_to_positions_func
 
     @property
-    def cache_motion_data(self) -> np.ndarray:
-        """Get all motor cache motion data"""
+    def cache_motion_data(self) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], Optional[np.ndarray]]:
+        """Get all motor cache motion data (positions radians, velocities rad/s, torques Nm)"""
         with self._data_lock:
-            return self.__cache_positions, self.__cache_velocities, self.__cache_torques
+            return self.__cache_positions.copy(), self.__cache_velocities.copy(), self.__cache_torques.copy()
+
+    @property
+    def cache_positions(self) -> Optional[np.ndarray]:
+        """Get all motor cache positions (rad)"""
+        with self._data_lock:
+            return self.__cache_positions.copy()
+    
+    @property
+    def cache_velocities(self) -> Optional[np.ndarray]:
+        """Get all motor cache velocities (rad/s)"""
+        with self._data_lock:
+            return self.__cache_velocities.copy()
+    
+    @property
+    def cache_torques(self) -> Optional[np.ndarray]:
+        """Get all motor cache torques (Nm)"""
+        with self._data_lock:
+            return self.__cache_torques.copy()
 
     @property
     def target_positions(self) -> np.ndarray:

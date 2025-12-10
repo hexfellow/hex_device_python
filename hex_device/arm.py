@@ -470,10 +470,9 @@ class Arm(DeviceBase, MotorBase):
         last_positions = arm_config_manager.get_last_positions(self.robot_type)
         
         if last_positions is None:
-            current_positions = self.get_motor_positions()
+            current_positions = self.cache_positions.tolist()
             if len(current_positions) == len(positions):
                 arm_config_manager.set_last_positions(self.robot_type, current_positions)
-                log_common(f"Arm: Initialize current motor positions: {current_positions}")
             else:
                 log_warn(f"Arm: Current motor positions count({len(current_positions)}) does not match the target positions count({len(positions)})")
         

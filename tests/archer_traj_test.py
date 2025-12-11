@@ -5,10 +5,10 @@ import argparse
 
 ## If you want to use the local version of the library, you can uncomment the following lines.
 # PROJECT_PATH = '<your project path>'
-# sys.path.insert(1, f'{PROJECT_PATH}/hex_device_python')
+# sys.path.insert(1, f'{PROJECT_PATH}')
 # sys.path.insert(
 #     1,
-#     f'{PROJECT_PATH}/hex_device_python/hex_device/generated')
+#     f'{PROJECT_PATH}/hex_device/generated')
 
 from hex_device import HexDeviceApi
 import time

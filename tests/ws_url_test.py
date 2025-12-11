@@ -1,9 +1,11 @@
 import sys
-PROJECT_PATH = '/home/tl/ssd/docker_link/python'
-sys.path.insert(1, f'{PROJECT_PATH}/hex_device_python')
-sys.path.insert(
-    1,
-    f'{PROJECT_PATH}/hex_device_python/hex_device/generated')
+
+## If you want to use the local version of the library, you can uncomment the following lines.
+# PROJECT_PATH = '<your project path>'
+# sys.path.insert(1, f'{PROJECT_PATH}')
+# sys.path.insert(
+#     1,
+#     f'{PROJECT_PATH}/hex_device/generated')
 
 from hex_device.common_utils import is_valid_ws_url, InvalidWSURLException
 

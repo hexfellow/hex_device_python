@@ -7,7 +7,7 @@
 ################################################################
 
 # A Simple Test for HexDeviceApi
-# Quick Start: python3 tests/main.py --url ws://<Your controller ip>:8439
+# Quick Start: python3 tests/main.py --url ws://<Your controller ip>:8439 or ws://[::1%eth0]:8439
 
 import sys
 import argparse
@@ -16,10 +16,10 @@ import time
 
 ## If you want to use the local version of the library, you can uncomment the following lines.
 # PROJECT_PATH = '<your project path>'
-# sys.path.insert(1, f'{PROJECT_PATH}/hex_device_python')
+# sys.path.insert(1, f'{PROJECT_PATH}')
 # sys.path.insert(
 #     1,
-#     f'{PROJECT_PATH}/hex_device_python/hex_device/generated')
+#     f'{PROJECT_PATH}/hex_device/generated')
 
 import hex_device
 from hex_device import HexDeviceApi, public_api_types_pb2
@@ -36,13 +36,13 @@ def main():
         '--url', 
         metavar='URL',
         default="ws://0.0.0.0:8439",
-        help='WebSocket URL for HEX device connection'
+        help='WebSocket URL for HEX device connection, example: ws://0.0.0.0:8439 or ws://[::1%eth0]:8439'
     )
     parser.add_argument(
         '--log-level',
         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
         default='INFO',
-        help='Set logging level for hex_device package'
+        help='Set logging level for hex_device package, example: DEBUG, INFO, WARNING, ERROR'
     )
     args = parser.parse_args()
     
@@ -51,7 +51,7 @@ def main():
     print(f"Log level set to: {args.log_level}")
     
     # Init HexDeviceApi
-    api = HexDeviceApi(ws_url=args.url, control_hz=1000, enable_kcp=True, local_port=0)
+    api = HexDeviceApi(ws_url=args.url, control_hz=500, enable_kcp=True, local_port=0)
     first_time = True
     
     # Enable/Disable loop test variable

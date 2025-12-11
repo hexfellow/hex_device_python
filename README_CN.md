@@ -104,9 +104,18 @@ python3 -m pip install .
 
 > **完整的功能接口可以在我们的 [wiki](https://github.com/hexfellow/hex_device_python/wiki/API-List) 中找到。**
 
-- 所有设备的简单演示：[test/main.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/main.py)
+- 所有设备的简单演示：[tests/main.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/main.py)
 
-- 机械臂轨迹跟踪示例：[test/archer_traj_test.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/archer_traj_test.py) 或者 [test/saber7dof_traj_test.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/saber7dof_traj_test.py) 
+- 机械臂轨迹跟踪示例：[tests/archer_traj_test.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/archer_traj_test.py) 或者 [tests/saber7dof_traj_test.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/saber7dof_traj_test.py) 
+
+Example:
+```python
+python3 tests/main.py --url ws://0.0.0.0:8439
+```
+or use ipv6:
+```python
+python3 tests/main.py --url ws://[fe80::500d:96ff:fee1:d60b%3]:8439
+```
 
 ## 常见问题
 

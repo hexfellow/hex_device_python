@@ -107,10 +107,18 @@ If you prefer to run the library without installing it in your Python environmen
 
 > **The complete function interfaces can be found in our [wiki](https://github.com/hexfellow/hex_device_python/wiki/API-List).**
 
-- A simple demo for all device: [test/main.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/main.py)
+- A simple demo for all device: [tests/main.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/main.py)
 
-- Example of robotic arm trajectory tracking: [test/archer_traj_test.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/archer_traj_test.py) or [test/saber7dof_traj_test.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/saber7dof_traj_test.py) 
+- Example of robotic arm trajectory tracking: [tests/archer_traj_test.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/archer_traj_test.py) or [tests/saber7dof_traj_test.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/saber7dof_traj_test.py) 
 
+Example:
+```python
+python3 tests/main.py --url ws://0.0.0.0:8439
+```
+or use ipv6:
+```python
+python3 tests/main.py --url ws://[fe80::500d:96ff:fee1:d60b%3]:8439
+```
 
 ## Q&A
 Why did a previously working software package stop working after a redeployment?

@@ -53,7 +53,7 @@ class HexDeviceApi:
         # variables init
         self.ws_url = ws_url
         try:
-            self.__ws_url: str = is_valid_ws_url(ws_url)
+            self.__ws_url, _ = is_valid_ws_url(ws_url)
         except InvalidWSURLException as e:
             log_err("Invalid WebSocket URL: " + str(e))
         self.parsed_url = urlparse(self.__ws_url)
@@ -267,6 +267,7 @@ class HexDeviceApi:
         """
         device = self._device_factory.create_device_for_robot_type(
             robot_type,
+            self.__control_hz,
             send_message_callback=self._send_down_message,
             api_up=api_up)
 
@@ -301,6 +302,7 @@ class HexDeviceApi:
             device_id,
             device_type,
             secondary_device_status=secondary_device_status,
+            control_hz=self.__control_hz,
             send_message_callback=self._send_down_message,
         )
 
@@ -644,7 +646,7 @@ class HexDeviceApi:
                 # Allow reuse of local address to avoid "Address already in use" errors
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 # Bind to specific local port (0.0.0.0 means any local interface)
-                sock.bind(('0.0.0.0', local_port))
+                sock.bind(('::', local_port))
                 log_debug(f"Socket bound to local port {local_port}")
                 # Connect to remote host
                 sock.connect((host, port))

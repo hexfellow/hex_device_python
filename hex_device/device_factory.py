@@ -55,6 +55,7 @@ class DeviceFactory:
     def create_device_for_robot_type(
         self,
         robot_type,
+        control_hz,
         send_message_callback=None,
         api_up=None,
     ):
@@ -77,6 +78,7 @@ class DeviceFactory:
                     device_class, robot_type, api_up)
 
                 all_params = {
+                    'control_hz': control_hz,
                     'send_message_callback': send_message_callback,
                     **constructor_params,
                 }
@@ -87,7 +89,7 @@ class DeviceFactory:
 
         return None
 
-    def create_optional_device(self, device_id: int, device_type, secondary_device_status, send_message_callback=None) -> Optional[OptionalDeviceBase]:
+    def create_optional_device(self, device_id: int, device_type, secondary_device_status, control_hz, send_message_callback=None) -> Optional[OptionalDeviceBase]:
         """
         Create an optional device instance for the specified device_id and message type
         
@@ -110,6 +112,7 @@ class DeviceFactory:
         all_params = {
             'device_id': device_id,
             'device_type': device_type,
+            'control_hz' : control_hz,
             'send_message_callback': send_message_callback,
             **constructor_params,
         }

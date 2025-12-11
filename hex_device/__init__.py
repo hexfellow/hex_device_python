@@ -142,7 +142,7 @@ from .arm_config import (
 )
 
 # Error types
-from .error_type import WsError, ProtocolError
+from .error_type import WsError, ProtocolError, InvalidWSURLException
 
 # API utilities  
 from .hex_device_api import HexDeviceApi
@@ -188,6 +188,8 @@ __all__ = [
     # Error types
     'WsError',
     'ProtocolError',
+    'InvalidWSURLException',
+
 
     # API utilities
     'HexDeviceApi',

@@ -62,10 +62,20 @@ class KCPClient:
         # Store configuration
         self._config = config if config is not None else DEFAULT_KCP_CONFIG
         
-        # Create UDP socket
-        self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, 0)
+        # Create UDP socket with IPv6 support (dual-stack mode)
+        # AF_INET6 with IPV6_V6ONLY=0 allows both IPv4 and IPv6
+        self._sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM, 0)
+        try:
+            # Enable dual-stack mode (allows IPv4 and IPv6)
+            # On some systems, this may not be supported, so we catch the error
+            self._sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+        except (OSError, AttributeError):
+            # If dual-stack is not supported, continue with IPv6-only
+            log_debug("[KCP Client] Dual-stack mode not supported, using IPv6-only")
+        
         self._sock.settimeout(0.5)
-        self._sock.bind(('0.0.0.0', 0))
+        # Bind to IPv6 wildcard address (::) which also accepts IPv4 in dual-stack mode
+        self._sock.bind(('::', 0))
         
         # Get actual bound port
         self.local_port = self._sock.getsockname()[1]
@@ -88,7 +98,7 @@ class KCPClient:
         Configure KCP connection with server address and parameters
         
         Args:
-            address: Server IP address
+            address: Server IP address (IPv4, IPv6, or IPv6 with zone identifier)
             port: Server port
             conv_id: KCP conversation ID
         """
@@ -106,9 +116,11 @@ class KCPClient:
         # Set KCP outbound handler
         self._kcp.include_outbound_handler(self._on_kcp_output)
 
+        # Store original address for filtering
         self.server_address = address
         self.server_port = port
         self._set_filter(address, port)
+        log_debug(f"[KCP Client] Configured: address={address}, port={port}, conv_id={conv_id}")
 
     def get_local_port(self) -> int:
         """
@@ -140,7 +152,16 @@ class KCPClient:
             if len(data) > self._config.max_message_length:
                 log_err(f"[KCP Client] Message length exceeds {self._config.max_message_length} bytes: {len(data)}, skip")
                 return
-            self._sock.sendto(data, (self.server_address, self.server_port))
+            
+            # Remove zone identifier from IPv6 address if present (socket doesn't support it)
+            # Format: [2001:db8::1%eth0] -> 2001:db8::1
+            # Optimized: only process if zone identifier exists
+            send_address = self.server_address
+            idx = send_address.find('%')
+            if idx != -1:
+                send_address = send_address[:idx]
+            
+            self._sock.sendto(data, (send_address, self.server_port))
         except Exception as e:
             log_err(f"[KCP Client] Socket send error: {e}")
     
@@ -163,7 +184,11 @@ class KCPClient:
         """
         try:
             data, addr = self._sock.recvfrom(self._config.max_message_length)
-            if self.filter_address is not None and addr != self.filter_address:
+            # For IPv6 socket, recvfrom returns (address, port, flowinfo, scope_id) - 4-tuple
+            # For IPv4 (in dual-stack mode), it returns (address, port) - 2-tuple
+            # filter_address is always (address, port) - 2-tuple
+            # Use tuple slicing for efficient comparison (avoids multiple index accesses)
+            if self.filter_address is not None and addr[:2] != self.filter_address:
                 return None
             return data
         except socket.timeout:
@@ -178,10 +203,15 @@ class KCPClient:
         Set filter function for received messages
         
         Args:
-            address: Server IP address
+            address: Server IP address (may contain zone identifier)
             port: Server port
         """
-        self.filter_address = (address, port)
+        # Remove zone identifier for filtering (recvfrom returns address without zone identifier)
+        # Format: [2001:db8::1%eth0] -> 2001:db8::1
+        # Optimized: only process if zone identifier exists
+        idx = address.find('%')
+        filter_addr = address[:idx] if idx != -1 else address
+        self.filter_address = (filter_addr, port)
 
     def _process_received_data(self, raw_data: bytes) -> None:
         """

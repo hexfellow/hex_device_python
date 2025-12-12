@@ -23,7 +23,7 @@ import time
 
 import hex_device
 from hex_device import HexDeviceApi, public_api_types_pb2
-from hex_device import Chassis, LinearLift, Arm, Hands
+from hex_device import Chassis, LinearLift, Arm, Hands, Imu, Gamepad
 from hex_device.motor_base import CommandType, MitMotorCommand
 
 def main():
@@ -259,6 +259,16 @@ def main():
                             [0.0] * device.motor_count
                         )
 
+                optional_devices = api.find_optional_device_by_robot_type(public_api_types_pb2.SecondaryDeviceType.SdtImuY200)
+                if optional_devices is not None:
+                    device:Imu = optional_devices[0]
+                    print(f"imu summary: {device.get_imu_summary()}")
+
+                optional_devices = api.find_optional_device_by_robot_type(public_api_types_pb2.SecondaryDeviceType.SdtGamepad)
+                if optional_devices is not None:
+                    device:Gamepad = optional_devices[0]
+                    print(f"gamepad summary: {device.get_gamepad_summary()}")
+                        
             time.sleep(0.0001)
 
     except KeyboardInterrupt:

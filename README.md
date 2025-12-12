@@ -107,25 +107,53 @@ If you prefer to run the library without installing it in your Python environmen
 
 > **The complete function interfaces can be found in our [wiki](https://github.com/hexfellow/hex_device_python/wiki/API-List).**
 
-- A simple demo for all device: [tests/main.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/main.py)
+### Examples
 
-- Example of robotic arm trajectory tracking: [tests/archer_traj_test.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/archer_traj_test.py) or [tests/saber7dof_traj_test.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/saber7dof_traj_test.py) 
+- **Simple demo for all devices**: [tests/main.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/main.py)
+- **Robotic arm trajectory tracking**: [tests/archer_traj_test.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/archer_traj_test.py) or [tests/saber7dof_traj_test.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/saber7dof_traj_test.py)
 
-Example:
-```python
+### Basic Usage
+
+**IPv4 connection:**
+```bash
 python3 tests/main.py --url ws://0.0.0.0:8439
 ```
-or use ipv6:
-```python
+
+**IPv6 connection:**
+```bash
 python3 tests/main.py --url ws://[fe80::500d:96ff:fee1:d60b%3]:8439
 ```
 
 ## Q&A
-Why did a previously working software package stop working after a redeployment?
-- Please check the [Change log](https://github.com/hexfellow/hex_device_python/wiki/Change-Log) to see if you are using cross-version software packages
 
-If I want to use newer software packages, how do I perform hardware upgrades?
-- Please contact our after-sales service, and we will provide hardware upgrade instructions based on the equipment you purchased
+### How do I connect using IPv6?
+
+You can connect to our devices using IPv6, which enables direct connection without a router (e.g., using a single cable to connect the robot and PC). 
+
+**Note:** We assume you have basic knowledge about IPv6. If you don't, please use IPv4 instead. We will not explain IPv6 in detail.
+
+**Key points:**
+- Without DHCP6, devices can still have a link-local address
+- To use link-local addresses, you must specify the zone ID of the interface using the `%` symbol
+- You can find the zone ID of the interface by running `ip a`
+
+**Example:**
+```bash
+# Find the interface and zone ID
+ip a
+
+# Use the zone ID in the connection URL
+ws://[fe80::500d:96ff:fee1:d60b%3]:8439
+```
+
+### Why did a previously working software package stop working after a redeployment?
+
+Please check the [Change log](https://github.com/hexfellow/hex_device_python/wiki/Change-Log) to see if you are using cross-version software packages. Additionally, we recommend that you use a fixed software version after successful deployment to avoid code failures due to incompatible updates.
+
+### If I want to use newer software packages, how do I perform hardware upgrades?
+
+Please contact our after-sales service, and we will provide hardware upgrade instructions based on the equipment you purchased.
+
 --- 
 
 <p align="center">

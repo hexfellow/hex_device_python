@@ -104,26 +104,53 @@ python3 -m pip install .
 
 > **完整的功能接口可以在我们的 [wiki](https://github.com/hexfellow/hex_device_python/wiki/API-List) 中找到。**
 
-- 所有设备的简单演示：[tests/main.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/main.py)
+### 示例
 
-- 机械臂轨迹跟踪示例：[tests/archer_traj_test.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/archer_traj_test.py) 或者 [tests/saber7dof_traj_test.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/saber7dof_traj_test.py) 
+- **所有设备的简单演示**：[tests/main.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/main.py)
+- **机械臂轨迹跟踪示例**：[tests/archer_traj_test.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/archer_traj_test.py) 或 [tests/saber7dof_traj_test.py](https://github.com/hexfellow/hex_device_python/blob/main/tests/saber7dof_traj_test.py)
 
-Example:
-```python
+### 基本用法
+
+**IPv4 连接：**
+```bash
 python3 tests/main.py --url ws://0.0.0.0:8439
 ```
-or use ipv6:
-```python
+
+**IPv6 连接：**
+```bash
 python3 tests/main.py --url ws://[fe80::500d:96ff:fee1:d60b%3]:8439
 ```
 
 ## 常见问题
 
-为什么之前一直能使用的软件包，在某次重新部署后就无法正常使用了？
-- 请查看[Change log](https://github.com/hexfellow/hex_device_python/wiki/Change-Log)，查看是否使用了跨版本的软件包
+### 如何使用 IPv6 进行连接？
 
-如果我想使用更新的软件包，如何进行硬件升级？
-- 请联系我们的售后服务，我们将根据您所购买的设备另外提供硬件升级的说明
+您可以使用 IPv6 连接我们的设备，这样可以实现无需路由器的直接连接（例如，使用单根网线连接机器人和 PC）。
+
+**注意：** 我们假设您对 IPv6 有基本了解。如果您不了解，请使用 IPv4。我们不会详细解释 IPv6。
+
+**要点：**
+- 即使没有 DHCP6，设备仍然可以拥有链路本地地址
+- 要使用链路本地地址，必须使用 `%` 符号指定接口的区域 ID
+- 您可以通过运行 `ip a` 来查找接口的区域 ID
+
+**示例：**
+```bash
+# 查找接口和区域 ID
+ip a
+
+# 在连接 URL 中使用区域 ID
+ws://[fe80::500d:96ff:fee1:d60b%3]:8439
+```
+
+### 为什么之前一直能使用的软件包，在某次重新部署后就无法正常使用了？
+
+请查看 [Change log](https://github.com/hexfellow/hex_device_python/wiki/Change-Log)，检查是否使用了跨版本的软件包。同时，我们建议您在成功部署之后就使用固定的软件版本，以避免由于非兼容性更新导致您的代码失效。
+
+### 如果我想使用更新的软件包，如何进行硬件升级？
+
+请联系我们的售后服务，我们将根据您所购买的设备提供硬件升级说明。
+
 --- 
 
 <p align="center">

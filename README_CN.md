@@ -102,7 +102,8 @@ python3 -m pip install .
 
 ## 使用方法
 
-> **完整的功能接口可以在我们的 [wiki](https://github.com/hexfellow/hex_device_python/wiki/API-List) 中找到。**
+> - **完整的函数说明可以在我们的 [wiki](https://github.com/hexfellow/hex_device_python/wiki/API-List) 中找到。**
+> - **如果您使用的是机械臂，相关控制器的端口说明可以查看[docs](https://docs.hexfellow.com/hex-arm/controller.common_en/)。**
 
 ### 示例
 

@@ -105,7 +105,8 @@ If you prefer to run the library without installing it in your Python environmen
 
 ## Usage
 
-> **The complete function interfaces can be found in our [wiki](https://github.com/hexfellow/hex_device_python/wiki/API-List).**
+> - **The complete function interfaces can be found in our [wiki](https://github.com/hexfellow/hex_device_python/wiki/API-List).**
+> - **If you are using a robotic arm, you can refer to the [docs](https://docs.hexfellow.com/hex-arm/controller.common_en/) for the controller port instructions.**
 
 ### Examples
 

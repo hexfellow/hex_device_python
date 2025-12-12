@@ -391,6 +391,8 @@ class Chassis(DeviceBase, MotorBase):
             # Get position from queue
             if pop:
                 x, y, yaw = self._vehicle_position.popleft()
+                # get once in order to sync deque length.
+                self._get_motor_motion_data()
             else:
                 x, y, yaw = self._vehicle_position[-1]
             

@@ -212,6 +212,13 @@ class HexDeviceApi:
             log_warn(f"Unable to import Arm: {e}")
 
         try:
+            from .linear_lift import LinearLift
+            self._register_device_class(LinearLift)
+            log_debug("Registered LinearLift device class")
+        except ImportError as e:
+            log_warn(f"Unable to import LinearLift: {e}")
+
+        try:
             from .hands import Hands
             # Register Hands for all supported device types (with duplicate check)
             registered_count = 0
@@ -225,12 +232,21 @@ class HexDeviceApi:
             log_warn(f"Unable to import Hands: {e}")
 
         try:
-            from .linear_lift import LinearLift
-            self._register_device_class(LinearLift)
-            log_debug("Registered LinearLift device class")
+            from .imu import Imu
+            for device_type in Imu.SUPPORTED_DEVICE_TYPE:
+                self._register_optional_device_class(device_type, Imu)
+            log_debug("Registered Imu optional device class")
         except ImportError as e:
-            log_warn(f"Unable to import LinearLift: {e}")
+            log_warn(f"Unable to import Imu: {e}")
             
+        try:
+            from .gamepad import Gamepad
+            for device_type in Gamepad.SUPPORTED_DEVICE_TYPE:
+                self._register_optional_device_class(device_type, Gamepad)
+            log_debug("Registered Gamepad optional device class")
+        except ImportError as e:
+            log_warn(f"Unable to import Gamepad: {e}")
+
         # TODO: Add registration for more device classes
         # lift、rotate lift...
 
@@ -909,7 +925,7 @@ class HexDeviceApi:
                                 if not success:
                                     log_warn(f"Failed to update new optional device data for device_id {device_id}, type {device_type}")
                             else:
-                                log_warn(f"unknown optional device type: device_id={device_id}, type={device_type}")
+                                log_debug(f"unknown optional device type: device_id={device_id}, type={device_type}")
                     
                 except Exception as e:
                     log_err(f"Error processing secondary device {getattr(secondary_device, 'device_id', 'unknown')}: {e}")

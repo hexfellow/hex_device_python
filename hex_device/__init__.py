@@ -120,6 +120,8 @@ from .linear_lift import LinearLift
 
 # Optional device implementations
 from .hands import Hands
+from .imu import Imu
+from .gamepad import Gamepad
 
 # Arm configuration system
 from .arm_config import (
@@ -166,6 +168,8 @@ __all__ = [
     
     # Optional device implementations
     'Hands',
+    'Imu',
+    'Gamepad',
 
     # Arm configuration system
     'ArmConfig',

@@ -149,6 +149,16 @@ class DeviceFactory:
                 'motor_count': motor_count,
                 'name': f"Hands_{device_type}",
             })
+        
+        elif class_name == 'Imu':
+            params.update({
+                'name': f"Imu_{device_type}",
+            })
+        
+        elif class_name == 'Gamepad':
+            params.update({
+                'name': f"Gamepad_{device_type}",
+            })
 
         #TODO: Add more optional device parameter extraction logic here as needed
         return params

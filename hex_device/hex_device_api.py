@@ -49,6 +49,31 @@ class HexDeviceApi:
         control_hz: the frequency of the control loop
     """
 
+    @staticmethod
+    def _get_report_frequency_from_control_hz(control_hz: int) -> int:
+        """
+        Get report frequency based on control_hz (round down to nearest available frequency)
+        
+        Args:
+            control_hz: Control frequency in Hz
+            
+        Returns:
+            Report frequency enum value
+        """
+        # Available frequencies from high to low: 1000, 500, 250, 100, 50, 1
+        if control_hz >= 1000:
+            return ReportFrequency.Rf1000Hz
+        elif control_hz >= 500:
+            return ReportFrequency.Rf500Hz
+        elif control_hz >= 250:
+            return ReportFrequency.Rf250Hz
+        elif control_hz >= 100:
+            return ReportFrequency.Rf100Hz
+        elif control_hz >= 50:
+            return ReportFrequency.Rf50Hz
+        else:
+            return ReportFrequency.Rf1Hz
+
     def __init__(self, ws_url: str, control_hz: int = 500, enable_kcp: bool = True, local_port: int = None):
         # variables init
         self.ws_url = ws_url
@@ -65,6 +90,8 @@ class HexDeviceApi:
         self.__websocket = None
         self.__raw_data = []  ## raw data buffer
         self.__control_hz = control_hz
+        self.__report_frequency = self._get_report_frequency_from_control_hz(control_hz)
+        log_info(f"Your control frequency is {control_hz}Hz, the report frequency is {public_api_types_pb2.ReportFrequency.Name(self.__report_frequency)}Hz now.")
 
         # time synchronization
         self.__use_ptp = self.__select_time_source()
@@ -1034,6 +1061,10 @@ class HexDeviceApi:
             # send a start message to kcp
             msg = self._construct_kcp_start_message()
             await self._send_down_message(msg)
+            
+        # set report frequency to target frequency
+        msg = self._construct_tcp_report_frequency_message(self.__report_frequency)
+        await self._send_down_message(msg)
 
         # Begin to parse the data
         while True:
@@ -1048,6 +1079,13 @@ class HexDeviceApi:
                 self._process_api_up(api_up)
 
     # User api
+    async def reset_report_frequency(self, report_frequency: int):
+        """
+        Reset report frequency to target frequency
+        """
+        msg = self._construct_tcp_report_frequency_message(report_frequency)
+        await self._send_down_message(msg)
+
     def find_device_by_robot_type(self, robot_type) -> Optional[DeviceBase]:
         """
         Find device by robot_type

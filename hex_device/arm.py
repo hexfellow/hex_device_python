@@ -28,15 +28,17 @@ class Arm(DeviceBase, MotorBase):
     SUPPORTED_ROBOT_TYPES = [
         public_api_types_pb2.RobotType.RtArmSaberD6x,
         public_api_types_pb2.RobotType.RtArmSaberD7x,
-        public_api_types_pb2.RobotType.RtArmArcherY6D_V1,
+        public_api_types_pb2.RobotType.RtArmArcherD6Y_P1,
         public_api_types_pb2.RobotType.RtArmArcherY6L_V1,
+        public_api_types_pb2.RobotType.RtArmArcherY6_H1,
     ]
 
     ARM_SERIES_TO_ROBOT_TYPE = {
         14: public_api_types_pb2.RobotType.RtArmSaberD6x,
         15: public_api_types_pb2.RobotType.RtArmSaberD7x,
-        16: public_api_types_pb2.RobotType.RtArmArcherY6D_V1,
+        16: public_api_types_pb2.RobotType.RtArmArcherD6Y_P1,
         17: public_api_types_pb2.RobotType.RtArmArcherY6L_V1,
+        25: public_api_types_pb2.RobotType.RtArmArcherY6_H1,
     }
 
     def __init__(self,
@@ -331,7 +333,8 @@ class Arm(DeviceBase, MotorBase):
         """Get parking stop details"""
         return copy.deepcopy(self._parking_stop_detail)
 
-    def _enable_mit(self):
+    # A soft lock for saber arm, will move on soon.
+    def enable_mit(self):
         """Enable MIT"""
         self._enable_mit = True
 

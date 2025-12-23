@@ -19,7 +19,7 @@
 - [✅] **[ArmArcher](#arm_archer)**
 - [✅] **[ArmSaber](#arm_saber)**
 - [✅] **[HandsHtGp100](#hands)**
-- [-] **[hex_lift](#hex_lift)**
+- [✅] **[LiftLotaP1](#LiftLotaP1)**
 
 ## 前置要求
 

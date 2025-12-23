@@ -28,15 +28,17 @@ class Arm(DeviceBase, MotorBase):
     SUPPORTED_ROBOT_TYPES = [
         public_api_types_pb2.RobotType.RtArmSaberD6x,
         public_api_types_pb2.RobotType.RtArmSaberD7x,
-        public_api_types_pb2.RobotType.RtArmArcherY6D_V1,
+        public_api_types_pb2.RobotType.RtArmArcherD6Y_P1,
         public_api_types_pb2.RobotType.RtArmArcherY6L_V1,
+        public_api_types_pb2.RobotType.RtArmArcherY6_H1,
     ]
 
     ARM_SERIES_TO_ROBOT_TYPE = {
         14: public_api_types_pb2.RobotType.RtArmSaberD6x,
         15: public_api_types_pb2.RobotType.RtArmSaberD7x,
-        16: public_api_types_pb2.RobotType.RtArmArcherY6D_V1,
+        16: public_api_types_pb2.RobotType.RtArmArcherD6Y_P1,
         17: public_api_types_pb2.RobotType.RtArmArcherY6L_V1,
+        25: public_api_types_pb2.RobotType.RtArmArcherY6_H1,
     }
 
     def __init__(self,
@@ -56,16 +58,27 @@ class Arm(DeviceBase, MotorBase):
             send_message_callback: Callback function for sending messages, used to send downstream messages
         """
         DeviceBase.__init__(self, name, send_message_callback)
-        MotorBase.__init__(self, motor_count, name)
+
+        # Convert function for old revert function
+        if robot_type in [public_api_types_pb2.RobotType.RtArmSaberD6x,
+                            public_api_types_pb2.RobotType.RtArmSaberD7x,
+                            public_api_types_pb2.RobotType.RtArmArcherD6Y_P1,
+                            public_api_types_pb2.RobotType.RtArmArcherY6L_V1]:
+            MotorBase.__init__(self, motor_count, name, 
+            convert_positions_to_rad_func=self.convert_positions_to_rad_func, 
+            convert_rad_to_positions_func=self.convert_rad_to_positions_func)
+        else:
+            MotorBase.__init__(self, motor_count, name)
 
         self.name = name or "Arm"
         self._control_hz = control_hz
         self._period = 1.0 / control_hz
         self._set_robot_type(robot_type)
 
-        self._enable_mit = False
-        if robot_type == 16 or robot_type == 17:
-            self._enable_mit = True
+        # saber arm close MIT command by default
+        self._enable_mit = True
+        if robot_type == 14 or robot_type == 15:
+            self._enable_mit = False
 
         # arm status
         self._api_control_initialized = False
@@ -331,9 +344,31 @@ class Arm(DeviceBase, MotorBase):
         """Get parking stop details"""
         return copy.deepcopy(self._parking_stop_detail)
 
-    def _enable_mit(self):
+    # A soft lock for saber arm, will move on soon.
+    def enable_mit(self):
         """Enable MIT"""
         self._enable_mit = True
+
+    # old revert function, will be removed soon
+    def convert_positions_to_rad_func(self, positions: np.ndarray, pulse_per_rotation: np.ndarray) -> np.ndarray:
+        """
+        Convert positions to radians
+
+        Args:
+            positions: Positions
+            pulse_per_rotation: Pulse per rotation
+        """
+        return (positions - 65535.0 / 2.0) / pulse_per_rotation * 2 * np.pi
+
+    def convert_rad_to_positions_func(self, positions: np.ndarray, pulse_per_rotation: np.ndarray) -> np.ndarray:
+        """
+        Convert radians to positions
+        
+        Args:
+            positions: Positions
+            pulse_per_rotation: Pulse per rotation
+        """
+        return positions / (2 * np.pi) * pulse_per_rotation + 65535.0 / 2.0
 
     # msg constructor
     def _construct_init_message(self, api_control_initialize: bool = True) -> public_api_down_pb2.APIDown:

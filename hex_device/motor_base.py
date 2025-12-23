@@ -675,7 +675,7 @@ class MotorBase(ABC):
         if self._custom_convert_positions_to_rad is not None:
             return self._custom_convert_positions_to_rad(positions, pulse_per_rotation)
         # Default implementation
-        return (positions - 65535.0 / 2.0) / pulse_per_rotation * 2 * np.pi
+        return positions / pulse_per_rotation * 2 * np.pi
     
     def convert_rad_to_positions(self, positions: np.ndarray, pulse_per_rotation: np.ndarray) -> np.ndarray:
         """
@@ -694,7 +694,7 @@ class MotorBase(ABC):
         if self._custom_convert_rad_to_positions is not None:
             return self._custom_convert_rad_to_positions(positions, pulse_per_rotation)
         # Default implementation
-        return positions / (2 * np.pi) * pulse_per_rotation + 65535.0 / 2.0
+        return positions / (2 * np.pi) * pulse_per_rotation
 
     def _push_motor_data(self, motor_status_list: List[public_api_types_pb2.MotorStatus], timestamp: Timestamp):
         """

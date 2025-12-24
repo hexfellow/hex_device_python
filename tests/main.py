@@ -30,13 +30,13 @@ def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(
         description='Hexapod robotic arm trajectory planning and execution test',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        formatter_class=argparse.RawTextHelpFormatter
     )
     parser.add_argument(
         '--url', 
         metavar='URL',
         default="ws://0.0.0.0:8439",
-        help='WebSocket URL for HEX device connection, example: ws://0.0.0.0:8439 or ws://[::1%eth0]:8439'
+        help='WebSocket URL for HEX device connection, example: ws://0.0.0.0:8439 or ws://[::1%%eth0]:8439'
     )
     parser.add_argument(
         '--log-level',
@@ -169,7 +169,7 @@ def main():
                             # print(f"arm motor summary: {device.get_motor_summary()}")
                             # print(f"arm pulse per rotation: {device.get_motor_pulse_per_rotations()}")
 
-                            print(f"arm position: {device.get_motor_positions(False)}")
+                            print(f"arm position: {device.get_motor_positions(False).tolist()}")
                             # print(f"arm simple motor status: {device.get_simple_motor_status(False)}")
                             # # print the encoders to zero, you can use this to set the encoders to zero.
                             # print(f"arm encoders from zero: {device.get_encoders_to_zero(False)}")

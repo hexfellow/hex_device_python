@@ -154,13 +154,24 @@ class KCPClient:
                 )
                 return
 
-            # Remove zone identifier from IPv6 address if present (socket doesn't support it)
-            # Format: [2001:db8::1%eth0] -> 2001:db8::1
-            # Optimized: only process if zone identifier exists
+            # Parse IPv6 zone identifier (scope_id) if present
+            # Format: fe80::1%eth0 or fe80::1%11
             send_address = self.server_address
+            scope_id = 0
             idx = send_address.find('%')
             if idx != -1:
+                zone_str = send_address[idx+1:]
                 send_address = send_address[:idx]
+                # Try to parse as integer first (e.g., %11), otherwise try interface name
+                try:
+                    scope_id = int(zone_str)
+                except ValueError:
+                    # Try to convert interface name to index
+                    try:
+                        scope_id = socket.if_nametoindex(zone_str)
+                    except (OSError, AttributeError):
+                        log_warn(f"[KCP Client] Invalid zone identifier: {zone_str}, ignoring")
+                        scope_id = 0
 
             # For IPv6 socket (AF_INET6), IPv4 addresses need to be converted to IPv4-mapped IPv6 format
             # This is required for dual-stack sockets to properly send to IPv4 addresses
@@ -170,6 +181,8 @@ class KCPClient:
                 if isinstance(ip_addr, ipaddress.IPv4Address):
                     # Convert IPv4 to IPv4-mapped IPv6 format (::ffff:x.x.x.x)
                     send_address = f"::ffff:{send_address}"
+                    # IPv4-mapped addresses don't use scope_id
+                    scope_id = 0
             except ValueError:
                 # If not a valid IP address (e.g., hostname), use getaddrinfo to resolve
                 # This ensures proper address resolution for the IPv6 socket
@@ -181,7 +194,11 @@ class KCPClient:
                                                   socket.IPPROTO_UDP)
                     if addrinfo:
                         # Use the first resolved address (already in correct format)
-                        send_address = addrinfo[0][4][0]
+                        # addrinfo[0][4] is a tuple of (host, port, flowinfo, scope_id)
+                        addr_tuple = addrinfo[0][4]
+                        send_address = addr_tuple[0]
+                        if len(addr_tuple) >= 4 and addr_tuple[3] != 0:
+                            scope_id = addr_tuple[3]
                 except (socket.gaierror, OSError) as e:
                     log_debug(
                         f"[KCP Client] Address resolution for {send_address} failed: {e}"
@@ -189,7 +206,12 @@ class KCPClient:
                     # If resolution fails, the original sendto will raise an error
                     # which will be caught by the outer exception handler
 
-            self._sock.sendto(data, (send_address, self.server_port))
+            # Use 4-tuple format for IPv6 with scope_id if needed
+            # Format: (host, port, flowinfo, scope_id)
+            if scope_id != 0:
+                self._sock.sendto(data, (send_address, self.server_port, 0, scope_id))
+            else:
+                self._sock.sendto(data, (send_address, self.server_port))
         except Exception as e:
             log_err(f"[KCP Client] Socket send error: {e}")
 
@@ -251,8 +273,8 @@ class KCPClient:
             address: Server IP address (may contain zone identifier)
             port: Server port
         """
-        # Remove zone identifier for filtering (recvfrom returns address without zone identifier)
-        # Format: [2001:db8::1%eth0] -> 2001:db8::1
+        # Remove zone identifier for filtering (recvfrom returns address without zone identifier in the host field)
+        # Format: [2001:db8::1%eth0] -> 2001:db8::1 or fe80::1%11 -> fe80::1
         # Optimized: only process if zone identifier exists
         idx = address.find('%')
         filter_addr = address[:idx] if idx != -1 else address

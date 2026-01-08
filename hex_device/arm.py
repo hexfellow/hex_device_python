@@ -261,8 +261,8 @@ class Arm(DeviceBase, MotorBase):
                 if a == True and c == True:
                     ### no command
                     if self._last_command_time is None:
-                        msg = self._construct_init_message()
-                        await self._send_message(msg)
+                        empty_msg = self._construct_empty_message()
+                        await self._send_message(empty_msg)
                     ### command timeout
                     elif self._command_timeout_check and (start_time -
                           self._last_command_time) > self._command_timeout:
@@ -371,6 +371,22 @@ class Arm(DeviceBase, MotorBase):
         return positions / (2 * np.pi) * pulse_per_rotation + 65535.0 / 2.0
 
     # msg constructor
+    def _construct_empty_message(self) -> public_api_down_pb2.APIDown:
+        """
+        @brief: For constructing a empty message.
+        """
+        msg = public_api_down_pb2.APIDown()
+        arm_command = public_api_types_pb2.ArmCommand()
+        arm_exclusive_command = public_api_types_pb2.ArmExclusiveCommand()
+        arm_api_control_command = public_api_types_pb2.ArmApiControlCommand()
+        motor_targets = public_api_types_pb2.MotorTargets()
+        # Create empty motor_targets with length 0 (no targets)
+        arm_api_control_command.motor_targets.CopyFrom(motor_targets)
+        arm_exclusive_command.arm_api_control_command.CopyFrom(arm_api_control_command)
+        arm_command.arm_exclusive_command.CopyFrom(arm_exclusive_command)
+        msg.arm_command.CopyFrom(arm_command)
+        return msg
+
     def _construct_init_message(self, api_control_initialize: bool = True) -> public_api_down_pb2.APIDown:
         """
         @brief: For constructing a init message.

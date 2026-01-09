@@ -60,7 +60,14 @@ class Hands(OptionalDeviceBase, MotorBase):
             send_message_callback: Callback function for sending messages, used to send downstream messages
         """
         OptionalDeviceBase.__init__(self, read_only, name, device_id, device_type, send_message_callback)
-        MotorBase.__init__(self, motor_count, name)
+
+        # Convert function for old revert function
+        if device_type in [public_api_types_pb2.SecondaryDeviceType.SdtHandGp100]:
+            MotorBase.__init__(self, motor_count, name,
+                convert_positions_to_rad_func=self.convert_positions_to_rad_func, 
+                convert_rad_to_positions_func=self.convert_rad_to_positions_func)
+        else:
+            MotorBase.__init__(self, motor_count, name)
 
         self.name = name or "Hands"
         self._control_hz = control_hz
@@ -188,6 +195,27 @@ class Hands(OptionalDeviceBase, MotorBase):
                 continue
         
     # Robotic arm specific methods
+    # old revert function, will be removed soon
+    def convert_positions_to_rad_func(self, positions: np.ndarray, pulse_per_rotation: np.ndarray) -> np.ndarray:
+        """
+        Convert positions to radians
+
+        Args:
+            positions: Positions
+            pulse_per_rotation: Pulse per rotation
+        """
+        return (positions - 65535.0 / 2.0) / pulse_per_rotation * 2 * np.pi
+
+    def convert_rad_to_positions_func(self, positions: np.ndarray, pulse_per_rotation: np.ndarray) -> np.ndarray:
+        """
+        Convert radians to positions
+        
+        Args:
+            positions: Positions
+            pulse_per_rotation: Pulse per rotation
+        """
+        return positions / (2 * np.pi) * pulse_per_rotation + 65535.0 / 2.0
+
     def command_timeout_check(self, check_or_not: bool = True):
         """
         Set whether to check command timeout

@@ -249,15 +249,18 @@ def main():
                             #     CommandType.POSITION,
                             #     0.0)
 
-                optional_devices = api.find_optional_device_by_robot_type(public_api_types_pb2.SecondaryDeviceType.SdtHandGp100)
+                optional_devices = api.find_optional_device_by_robot_type(public_api_types_pb2.SecondaryDeviceType.SdtHandGp80G1)
                 if optional_devices is not None:
-                    device:Hands = optional_devices[0]
+                    device: Hands = optional_devices[0]
                     if device.has_new_data():
-                        # print(f"hands position: {device.get_motor_positions()}")
-                        device.motor_command(
-                            CommandType.TORQUE,
-                            [0.0] * device.motor_count
-                        )
+                        # device.set_positon_step(0.02)
+                        # device.set_pos_torque(3.0)
+
+                        print(f"hands position: {device.get_motor_positions()}")
+                        # device.motor_command(
+                        #     CommandType.TORQUE,
+                        #     [0.0] * device.motor_count
+                        # )
 
                 optional_devices = api.find_optional_device_by_robot_type(public_api_types_pb2.SecondaryDeviceType.SdtImuY200)
                 if optional_devices is not None:

@@ -32,10 +32,12 @@ class Hands(OptionalDeviceBase, MotorBase):
 
     SUPPORTED_DEVICE_TYPE = [
         public_api_types_pb2.SecondaryDeviceType.SdtHandGp100,
+        public_api_types_pb2.SecondaryDeviceType.SdtHandGp80G1,
     ]
 
     DEVICE_ID_TO_DEVICE_TYPE = {
         1: public_api_types_pb2.SecondaryDeviceType.SdtHandGp100,
+        4: public_api_types_pb2.SecondaryDeviceType.SdtHandGp80G1,
     }
 
     def __init__(self,
@@ -93,6 +95,12 @@ class Hands(OptionalDeviceBase, MotorBase):
             self._hands_limit = [0.0, 1.335, -np.inf, np.inf, -np.inf, np.inf]
             self._max_torque = 3.0
             self._positon_step = 0.02
+        elif self._device_type == public_api_types_pb2.SecondaryDeviceType.SdtHandGp80G1:
+            self._hands_limit = [0.0, 5.65, -np.inf, np.inf, -np.inf, np.inf]
+            self._max_torque = 3.0
+            self._positon_step = 0.02
+        else:
+            raise ValueError(f"Unsupported device type: {self._device_type}")
 
     @classmethod
     def _supports_device_id(cls, device_id):

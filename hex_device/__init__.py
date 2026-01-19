@@ -100,6 +100,7 @@ def get_logger():
 
 # Proto types
 from .generated import public_api_types_pb2
+from .generated.version import CURRENT_PROTOCOL_MAJOR_VERSION, CURRENT_PROTOCOL_MINOR_VERSION
 
 # Core classes
 from .device_base import DeviceBase
@@ -205,7 +206,11 @@ __all__ = [
     # Version information
     '__version__',
     '__author__',
-    '__email__'
+    '__email__',
+
+    # Protocol version information
+    'CURRENT_PROTOCOL_MAJOR_VERSION',
+    'CURRENT_PROTOCOL_MINOR_VERSION',
 ]
 
 # Version information

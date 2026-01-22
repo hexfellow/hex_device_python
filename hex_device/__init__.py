@@ -118,6 +118,7 @@ from .motor_base import (
 from .arm import Arm
 from .chassis import Chassis
 from .linear_lift import LinearLift
+from .zeta_lift import ZetaLift
 
 # Optional device implementations
 from .hands import Hands
@@ -166,7 +167,7 @@ __all__ = [
     'Arm',
     'Chassis',
     'LinearLift',
-    
+    'ZetaLift',
     # Optional device implementations
     'Hands',
     'Imu',

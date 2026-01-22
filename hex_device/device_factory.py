@@ -207,6 +207,14 @@ class DeviceFactory:
             if motor_count is not None:
                 params['motor_count'] = motor_count
 
+        elif class_name == 'ZetaLift':
+            params['name'] = f"ZetaLift_{robot_type}"
+            params['robot_type'] = robot_type
+            # Get motor_count from api_up
+            motor_count = self._get_motor_count_from_api_up(api_up)
+            if motor_count is not None:
+                params['motor_count'] = motor_count
+
         ## TODO: For adding different devices in the future, need to add new additional parameter extraction methods based on the parameters required by new classes.
         ## Error capture using try has been used earlier, if there are problems with parameter capture here, just raise directly.
 

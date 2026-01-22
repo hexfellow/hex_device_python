@@ -246,6 +246,13 @@ class HexDeviceApi:
             log_warn(f"Unable to import LinearLift: {e}")
 
         try:
+            from .zeta_lift import ZetaLift
+            self._register_device_class(ZetaLift)
+            log_debug("Registered ZetaLift device class")
+        except ImportError as e:
+            log_warn(f"Unable to import ZetaLift: {e}")
+
+        try:
             from .hands import Hands
             # Register Hands for all supported device types (with duplicate check)
             registered_count = 0

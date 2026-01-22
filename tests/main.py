@@ -23,7 +23,7 @@ import time
 
 import hex_device
 from hex_device import HexDeviceApi, public_api_types_pb2
-from hex_device import Chassis, LinearLift, Arm, Hands, Imu, Gamepad
+from hex_device import Chassis, LinearLift, Arm, Hands, Imu, Gamepad, ZetaLift
 from hex_device.motor_base import CommandType, MitMotorCommand
 
 def main():
@@ -248,8 +248,26 @@ def main():
                             # device.motor_command(
                             #     CommandType.POSITION,
                             #     0.0)
+                    
+                    elif isinstance(device, ZetaLift):
+                        if device.has_new_data():
+                            if first_time:
+                                first_time = False
+                                ## setting the max move speed of pos mode
+                                # device.set_move_speed([0.1, 0.1, 0.1])
 
-                optional_devices = api.find_optional_device_by_robot_type(public_api_types_pb2.SecondaryDeviceType.SdtHandGp80G1)
+                            ## please select one of the following commands.
+                            # device.motor_command(
+                            #     CommandType.SPEED,
+                            #     [0.0, -0.72, 0.0])
+
+                            # device.motor_command(
+                            #     CommandType.POSITION,
+                            #     [0.0, 0.2, 0.0])
+
+                            print(f"zeta lift position: {device.get_motor_positions()}")
+
+                optional_devices = api.find_optional_device_by_robot_type(public_api_types_pb2.SecondaryDeviceType.SdtHandGp100)
                 if optional_devices is not None:
                     device: Hands = optional_devices[0]
                     if device.has_new_data():

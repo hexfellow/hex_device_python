@@ -160,6 +160,11 @@ class DeviceFactory:
                 'name': f"Gamepad_{device_type}",
             })
 
+        elif class_name == 'SdtHello':
+            params.update({
+                'name': f"SdtHello_{device_type}",
+            })
+
         #TODO: Add more optional device parameter extraction logic here as needed
         return params
 

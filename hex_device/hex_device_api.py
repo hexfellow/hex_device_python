@@ -281,6 +281,14 @@ class HexDeviceApi:
         except ImportError as e:
             log_warn(f"Unable to import Gamepad: {e}")
 
+        try:
+            from .sdt_hello import SdtHello
+            for device_type in SdtHello.SUPPORTED_DEVICE_TYPE:
+                self._register_optional_device_class(device_type, SdtHello)
+            log_debug("Registered SdtHello optional device class")
+        except ImportError as e:
+            log_warn(f"Unable to import SdtHello: {e}")
+
         # TODO: Add registration for more device classes
         # lift、rotate lift...
 

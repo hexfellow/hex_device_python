@@ -124,6 +124,7 @@ from .zeta_lift import ZetaLift
 from .hands import Hands
 from .imu import Imu
 from .gamepad import Gamepad
+from .sdt_hello import SdtHello
 
 # Arm configuration system
 from .arm_config import (
@@ -172,6 +173,7 @@ __all__ = [
     'Hands',
     'Imu',
     'Gamepad',
+    'SdtHello',
 
     # Arm configuration system
     'ArmConfig',

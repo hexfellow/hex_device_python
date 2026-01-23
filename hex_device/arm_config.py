@@ -71,7 +71,7 @@ class ArmConfigManager:
             name="saber_d6x",
             dof_num=DofType.SIX_AXIS,
             arm_series=0x0E,
-            motor_model=[0x80] * 6,
+            motor_model=[0x80, 0x80, 0x81, 0x82, 0x82, 0x82],
             robot_config=JointParams(joints=[
                 JointParam(joint_name="joint_1",
                            joint_limit=[-2.967, 2.967, -4.5, 4.5, -0.0, 0.0]),
@@ -93,7 +93,7 @@ class ArmConfigManager:
             name="saber_d7x",
             dof_num=DofType.SEVEN_AXIS,
             arm_series=0x0F,
-            motor_model=[0x80] * 7,
+            motor_model=[0x80, 0x80, 0x80, 0x81, 0x82, 0x82, 0x82],
             robot_config=JointParams(joints=[
                 JointParam(joint_name="joint_1",
                            joint_limit=[-2.967, 2.967, -4.5, 4.5, -0.0, 0.0]),
@@ -117,7 +117,7 @@ class ArmConfigManager:
             name="archer_d6y",
             dof_num=DofType.SIX_AXIS,
             arm_series=16,
-            motor_model=[0x80] * 6,
+            motor_model=[0x83, 0x83, 0x83, 0x83, 0x82, 0x82],
             robot_config=JointParams(joints=[
                 JointParam(joint_name="joint_1",
                            joint_limit=[-2.7, 3.1, -3.77, 3.77, -0.0, 0.0]),
@@ -139,7 +139,7 @@ class ArmConfigManager:
             name="archer_l6y",
             dof_num=DofType.SIX_AXIS,
             arm_series=17,
-            motor_model=[0x80] * 6,
+            motor_model=[0x83, 0x83, 0x83, 0x83, 0x82, 0x82],
             robot_config=JointParams(joints=[
                 JointParam(joint_name="joint_1",
                            joint_limit=[-2.7, 3.1, -3.77, 3.77, -0.0, 0.0]),
@@ -161,7 +161,29 @@ class ArmConfigManager:
             name="archer_y6_h1",
             dof_num=DofType.SIX_AXIS,
             arm_series=25,
-            motor_model=[0x80] * 6,
+            motor_model=[0x85, 0x85, 0x85, 0x85, 0x84, 0x84],
+            robot_config=JointParams(joints=[
+                JointParam(joint_name="joint_1",
+                           joint_limit=[-2.7, 3.1, -3.77, 3.77, -0.0, 0.0]),
+                JointParam(joint_name="joint_2",
+                           joint_limit=[-1.57, 2.094, -3.77, 3.77, -0.0, 0.0]),
+                JointParam(
+                    joint_name="joint_3",
+                    joint_limit=[0.0, 3.14159265359, -3.77, 3.77, -0.0, 0.0]),
+                JointParam(joint_name="joint_4",
+                           joint_limit=[-1.56, 1.56, -12.56, 12.56, -0.0, 0.0]),
+                JointParam(joint_name="joint_5",
+                           joint_limit=[-1.56, 1.56, -12.56, 12.56, -0.0, 0.0]),
+                JointParam(joint_name="joint_6",
+                           joint_limit=[-1.57, 1.57, -12.56, 12.56, -0.0, 0.0])
+            ]))
+
+        # 0x1B - hello_y6_h1 (6-axis)
+        self._configs[26] = ArmConfig(
+            name="hello_archer_y6_h1",
+            dof_num=DofType.SIX_AXIS,
+            arm_series=26,
+            motor_model=[0x86] * 6,
             robot_config=JointParams(joints=[
                 JointParam(joint_name="joint_1",
                            joint_limit=[-2.7, 3.1, -3.77, 3.77, -0.0, 0.0]),
@@ -183,7 +205,29 @@ class ArmConfigManager:
             name="firefly_y6_h1",
             dof_num=DofType.SIX_AXIS,
             arm_series=27,
-            motor_model=[0x80] * 6,
+            motor_model=[0x85, 0x85, 0x85, 0x85, 0x84, 0x84],
+            robot_config=JointParams(joints=[
+                JointParam(joint_name="joint_1",
+                           joint_limit=[-2.7, 3.1, -3.77, 3.77, -0.0, 0.0]),
+                JointParam(joint_name="joint_2",
+                           joint_limit=[-1.57, 2.094, -3.77, 3.77, -0.0, 0.0]),
+                JointParam(
+                    joint_name="joint_3",
+                    joint_limit=[0.0, 3.14159265359, -3.77, 3.77, -0.0, 0.0]),
+                JointParam(joint_name="joint_4",
+                           joint_limit=[-1.56, 1.56, -12.56, 12.56, -0.0, 0.0]),
+                JointParam(joint_name="joint_5",
+                           joint_limit=[-1.56, 1.56, -12.56, 12.56, -0.0, 0.0]),
+                JointParam(joint_name="joint_6",
+                           joint_limit=[-1.57, 1.57, -12.56, 12.56, -0.0, 0.0])
+            ]))
+
+        # 0x1C - hello_firefly_y6_h1 (6-axis)
+        self._configs[28] = ArmConfig(
+            name="hello_firefly_y6_h1",
+            dof_num=DofType.SIX_AXIS,
+            arm_series=28,
+            motor_model=[0x86] * 6,
             robot_config=JointParams(joints=[
                 JointParam(joint_name="joint_1",
                            joint_limit=[-2.7, 3.1, -3.77, 3.77, -0.0, 0.0]),

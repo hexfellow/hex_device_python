@@ -13,9 +13,10 @@ import sys
 import argparse
 import numpy as np
 import time
+import colorsys
 
-## If you want to use the local version of the library, you can uncomment the following lines.
-# PROJECT_PATH = '<your project path>'
+# # If you want to use the local version of the library, you can uncomment the following lines.
+# PROJECT_PATH = '/Users/jecjune/Downloads/python/hex_device/hex_device_python'
 # sys.path.insert(1, f'{PROJECT_PATH}')
 # sys.path.insert(
 #     1,
@@ -23,7 +24,7 @@ import time
 
 import hex_device
 from hex_device import HexDeviceApi, public_api_types_pb2
-from hex_device import Chassis, LinearLift, Arm, Hands, Imu, Gamepad
+from hex_device import Chassis, LinearLift, Arm, Hands, Imu, Gamepad, ZetaLift, SdtHello
 from hex_device.motor_base import CommandType, MitMotorCommand
 
 def main():
@@ -57,6 +58,10 @@ def main():
     # Enable/Disable loop test variable
     enable_disable_start_time = time.time()
     is_enabled = True
+
+    # RGB stripe color cycling variables
+    rgb_hue = 0.0  # hue value 0.0 ~ 1.0
+    rgb_last_update_time = time.time()
 
     try:
         while True:
@@ -248,26 +253,68 @@ def main():
                             # device.motor_command(
                             #     CommandType.POSITION,
                             #     0.0)
+                    
+                    elif isinstance(device, ZetaLift):
+                        if device.has_new_data():
+                            if first_time:
+                                first_time = False
+                                ## setting the max move speed of pos mode
+                                # device.set_move_speed([0.1, 0.1, 0.1])
+
+                            ## please select one of the following commands.
+                            # device.motor_command(
+                            #     CommandType.SPEED,
+                            #     [0.0, -0.72, 0.0])
+
+                            # device.motor_command(
+                            #     CommandType.POSITION,
+                            #     [0.0, 0.2, 0.0])
+
+                            print(f"zeta lift position: {device.get_motor_positions()}")
 
                 optional_devices = api.find_optional_device_by_robot_type(public_api_types_pb2.SecondaryDeviceType.SdtHandGp100)
                 if optional_devices is not None:
-                    device:Hands = optional_devices[0]
+                    device: Hands = optional_devices[0]
                     if device.has_new_data():
-                        # print(f"hands position: {device.get_motor_positions()}")
-                        device.motor_command(
-                            CommandType.TORQUE,
-                            [0.0] * device.motor_count
-                        )
+                        # device.set_positon_step(0.02)
+                        # device.set_pos_torque(3.0)
+
+                        print(f"hands position: {device.get_motor_positions()}")
+                        # device.motor_command(
+                        #     CommandType.TORQUE,
+                        #     [0.0] * device.motor_count
+                        # )
 
                 optional_devices = api.find_optional_device_by_robot_type(public_api_types_pb2.SecondaryDeviceType.SdtImuY200)
                 if optional_devices is not None:
                     device:Imu = optional_devices[0]
-                    print(f"imu summary: {device.get_imu_summary()}")
+                    # print(f"imu summary: {device.get_imu_summary()}")
 
                 optional_devices = api.find_optional_device_by_robot_type(public_api_types_pb2.SecondaryDeviceType.SdtGamepad)
                 if optional_devices is not None:
                     device:Gamepad = optional_devices[0]
-                    print(f"gamepad summary: {device.get_gamepad_summary()}")
+                    # print(f"gamepad summary: {device.get_gamepad_summary()}")
+
+                optional_devices = api.find_optional_device_by_robot_type(public_api_types_pb2.SecondaryDeviceType.SdtHello1J1T4BV1)
+                if optional_devices is not None:
+                    device:SdtHello = optional_devices[0]
+                    if device.has_new_data():
+                        current_time = time.time()
+                        if current_time - rgb_last_update_time >= 0.01:  # 10ms
+                            rgb_last_update_time = current_time
+                            rgb_hue = (rgb_hue + 0.005) % 1.0  # increase 0.5% hue value
+                            r_list, g_list, b_list = [], [], []
+                            for i in range(6):
+                                hue = (rgb_hue + i / 6.0) % 1.0  # each light offset 60°
+                                r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+                                r_list.append(int(r * 255))
+                                g_list.append(int(g * 255))
+                                b_list.append(int(b * 255))
+                            
+                            # set rgb stripe command
+                            device.set_rgb_stripe_command(r_list, g_list, b_list)
+                        
+                        print(f"sdt hello position: {device.get_simple_motor_status()}")
                         
             time.sleep(0.0001)
 

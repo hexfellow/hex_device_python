@@ -160,6 +160,11 @@ class DeviceFactory:
                 'name': f"Gamepad_{device_type}",
             })
 
+        elif class_name == 'SdtHello':
+            params.update({
+                'name': f"SdtHello_{device_type}",
+            })
+
         #TODO: Add more optional device parameter extraction logic here as needed
         return params
 
@@ -201,6 +206,14 @@ class DeviceFactory:
 
         elif class_name == 'LinearLift':
             params['name'] = f"LinearLift_{robot_type}"
+            params['robot_type'] = robot_type
+            # Get motor_count from api_up
+            motor_count = self._get_motor_count_from_api_up(api_up)
+            if motor_count is not None:
+                params['motor_count'] = motor_count
+
+        elif class_name == 'ZetaLift':
+            params['name'] = f"ZetaLift_{robot_type}"
             params['robot_type'] = robot_type
             # Get motor_count from api_up
             motor_count = self._get_motor_count_from_api_up(api_up)

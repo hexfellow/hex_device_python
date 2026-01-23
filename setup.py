@@ -1,5 +1,6 @@
 import os
 import re
+import shutil
 from setuptools import setup, find_packages, find_namespace_packages
 from setuptools.command.build_py import build_py as _build_py
 import subprocess
@@ -73,6 +74,15 @@ class build_py(_build_py):
         else:
             print("Warning: proto-public-api directory not found. This is expected when installing from PyPI.")
             print("Using pre-compiled proto files from hex_device/generated/")
+
+        # Copy version.py from proto-public-api to generated directory
+        version_src = os.path.join(proto_dir, 'version.py')
+        version_dst = os.path.join(out_dir, 'version.py')
+        if os.path.exists(version_src):
+            shutil.copy2(version_src, version_dst)
+            print(f"Copied version.py to {out_dir}")
+        else:
+            print("Warning: version.py not found in proto-public-api directory")
 
         # generate __init__.py if it doesn't exist
         init_path = os.path.join(out_dir, '__init__.py')

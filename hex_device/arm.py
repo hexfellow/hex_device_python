@@ -32,6 +32,8 @@ class Arm(DeviceBase, MotorBase):
         public_api_types_pb2.RobotType.RtArmArcherY6L_V1,
         public_api_types_pb2.RobotType.RtArmArcherY6_H1,
         public_api_types_pb2.RobotType.RtArmFireflyY6_H1,
+        public_api_types_pb2.RobotType.RtHelloArcherY6_H1,
+        public_api_types_pb2.RobotType.RtHelloFireflyY6_H1,
     ]
 
     ARM_SERIES_TO_ROBOT_TYPE = {
@@ -41,6 +43,8 @@ class Arm(DeviceBase, MotorBase):
         17: public_api_types_pb2.RobotType.RtArmArcherY6L_V1,
         25: public_api_types_pb2.RobotType.RtArmArcherY6_H1,
         27: public_api_types_pb2.RobotType.RtArmFireflyY6_H1,
+        26: public_api_types_pb2.RobotType.RtHelloArcherY6_H1,
+        27: public_api_types_pb2.RobotType.RtHelloFireflyY6_H1,
     }
 
     def __init__(self,
@@ -90,7 +94,10 @@ class Arm(DeviceBase, MotorBase):
         self._previous_session_holder = None
 
         # Control related
-        self._command_timeout_check = True
+        if robot_type in [public_api_types_pb2.RobotType.RtHelloArcherY6_H1, public_api_types_pb2.RobotType.RtHelloFireflyY6_H1]:
+            self._command_timeout_check = True
+        else:
+            self._command_timeout_check = False
         self._last_command_time = None
         self._command_timeout = 0.3  # 300ms
         self.__last_warning_time = time.perf_counter()  # last log warning time
@@ -221,7 +228,7 @@ class Arm(DeviceBase, MotorBase):
                 if start_time - self.__last_warning_time > 1.0:
                     for i in range(self.motor_count):
                         if self.get_motor_state(i) == "error":
-                            log_err(f"Error: Motor {i} error occurred")
+                            log_err(f"Arm Error: Motor {i} error occurred")
                             self.__last_warning_time = start_time
 
                 # prepare sending message

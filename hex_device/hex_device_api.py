@@ -16,6 +16,8 @@ from .device_base_optional import OptionalDeviceBase
 from .motor_base import Timestamp
 from .hex_socket import HexSocketParser, HexSocketOpcode
 from .kcp_client_core import KCPClient, KCPConfig
+from .generated.version import CURRENT_PROTOCOL_MAJOR_VERSION, CURRENT_PROTOCOL_MINOR_VERSION
+from . import __version__
 
 import time
 import os
@@ -75,6 +77,11 @@ class HexDeviceApi:
             return ReportFrequency.Rf1Hz
 
     def __init__(self, ws_url: str, control_hz: int = 500, enable_kcp: bool = True, local_port: int = None):
+        # protocol version
+        self.protocol_major_version = CURRENT_PROTOCOL_MAJOR_VERSION
+        self.protocol_minor_version = CURRENT_PROTOCOL_MINOR_VERSION
+        log_info(f"HexDeviceApi: Protocol version: {self.protocol_major_version}.{self.protocol_minor_version}, package version: {__version__}")
+
         # variables init
         self.ws_url = ws_url
         try:
@@ -91,7 +98,7 @@ class HexDeviceApi:
         self.__raw_data = []  ## raw data buffer
         self.__control_hz = control_hz
         self.__report_frequency = self._get_report_frequency_from_control_hz(control_hz)
-        log_info(f"Your control frequency is {control_hz}Hz, the report frequency is {public_api_types_pb2.ReportFrequency.Name(self.__report_frequency)}Hz now.")
+        log_info(f"Your target frequency is {control_hz}Hz, the report frequency was set to {public_api_types_pb2.ReportFrequency.Name(self.__report_frequency)}Hz now.")
 
         # time synchronization
         self.__use_ptp = self.__select_time_source()

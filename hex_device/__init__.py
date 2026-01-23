@@ -13,6 +13,9 @@ A Python library for controlling HexDevice robots and devices.
 
 import logging
 import sys
+import os
+from pathlib import Path
+from typing import Optional
 
 # Custom filter for separating error logs from other logs
 class NonErrorFilter(logging.Filter):
@@ -97,6 +100,70 @@ def get_logger():
         logger.info("Custom log message")
     """
     return logging.getLogger('hex_device')
+
+def _get_version_from_pyproject() -> Optional[str]:
+    """
+    Get version from pyproject.toml file.
+    
+    Returns:
+        Version string or None if not found
+    """
+    try:
+        # Try to get version from installed package metadata (works for installed packages)
+        try:
+            from importlib.metadata import version
+            return version("hex_device")
+        except ImportError:
+            # Python < 3.8, try pkg_resources
+            try:
+                import pkg_resources
+                return pkg_resources.get_distribution("hex_device").version
+            except (ImportError, pkg_resources.DistributionNotFound):
+                pass
+    except Exception:
+        pass
+    
+    # Fallback: read directly from pyproject.toml (works in development)
+    try:
+        # Get the directory of this file
+        current_file = Path(__file__).resolve()
+        # Go up to hex_device_python directory
+        project_root = current_file.parent.parent
+        pyproject_path = project_root / "pyproject.toml"
+        
+        if pyproject_path.exists():
+            # Try to parse TOML
+            try:
+                # Python 3.11+ has tomllib built-in
+                import tomllib
+                with open(pyproject_path, 'rb') as f:
+                    data = tomllib.load(f)
+                    return data.get('project', {}).get('version')
+            except ImportError:
+                # Python < 3.11, try tomli
+                try:
+                    import tomli
+                    with open(pyproject_path, 'rb') as f:
+                        data = tomli.load(f)
+                        return data.get('project', {}).get('version')
+                except ImportError:
+                    # Fallback: simple regex parsing (not ideal but works)
+                    import re
+                    with open(pyproject_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        match = re.search(r'version\s*=\s*["\']([^"\']+)["\']', content)
+                        if match:
+                            return match.group(1)
+    except Exception:
+        pass
+    
+    return None
+
+# Version information (defined early to avoid circular import)
+_version = _get_version_from_pyproject()
+__version__ = _version if _version else "1.0.0"  # Fallback version
+__author__ = "Jecjune"
+__email__ = "zejun.chen@hexfellow.com"
 
 # Proto types
 from .generated import public_api_types_pb2
@@ -215,8 +282,3 @@ __all__ = [
     'CURRENT_PROTOCOL_MAJOR_VERSION',
     'CURRENT_PROTOCOL_MINOR_VERSION',
 ]
-
-# Version information
-__version__ = "1.0.0"
-__author__ = "Jecjune"
-__email__ = "zejun.chen@hexfellow.com"

@@ -326,6 +326,8 @@ class ZetaLift(DeviceBase, MotorBase):
             command_type: Command type
             values: List of command values
         """
+        if command_type == CommandType.TORQUE or command_type == CommandType.MIT:
+            raise ValueError("ZetaLift does not support torque or MIT command")
         super().motor_command(command_type, values)
         with self._status_lock:
             self._last_command_time = time.perf_counter()

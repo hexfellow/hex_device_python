@@ -18,8 +18,12 @@ This library provides a simple interface for communicating with and controlling 
 - [✅] **[ChassisTriggerA3](#ChassisTriggerA3)**
 - [✅] **[ArmArcher](#arm_archer)**
 - [✅] **[ArmSaber](#arm_saber)**
-- [✅] **[HandsHtGp100](#hands)**
+- [✅] **[ArmFirefly](#ArmFirefly)**
+- [✅] **[HandsHtGp100](#HandsHtGp100)**
+- [✅] **[HandGp80G1](#HandGp80G1)**
 - [✅] **[LiftLotaP1](#LiftLotaP1)**
+- [✅] **[RtZetaVc2](#RtZetaVc2)**
+- [✅] **[Hello](#Hello)**
 
 ## Prerequisites
 

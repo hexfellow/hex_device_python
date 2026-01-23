@@ -13,9 +13,10 @@ import sys
 import argparse
 import numpy as np
 import time
+import colorsys
 
-## If you want to use the local version of the library, you can uncomment the following lines.
-# PROJECT_PATH = '<your project path>'
+# # If you want to use the local version of the library, you can uncomment the following lines.
+# PROJECT_PATH = '/Users/jecjune/Downloads/python/hex_device/hex_device_python'
 # sys.path.insert(1, f'{PROJECT_PATH}')
 # sys.path.insert(
 #     1,
@@ -57,6 +58,10 @@ def main():
     # Enable/Disable loop test variable
     enable_disable_start_time = time.time()
     is_enabled = True
+
+    # RGB stripe color cycling variables
+    rgb_hue = 0.0  # hue value 0.0 ~ 1.0
+    rgb_last_update_time = time.time()
 
     try:
         while True:
@@ -294,10 +299,22 @@ def main():
                 if optional_devices is not None:
                     device:SdtHello = optional_devices[0]
                     if device.has_new_data():
-                        # set all lights to white
-                        device.set_rgb_stripe_command([255] * 6, [255] * 6, [255] * 6)
-                        # print end controller status
-                        print(f"sdt hello status: {device.get_simple_motor_status()}")
+                        current_time = time.time()
+                        if current_time - rgb_last_update_time >= 0.01:  # 10ms
+                            rgb_last_update_time = current_time
+                            rgb_hue = (rgb_hue + 0.005) % 1.0  # increase 0.5% hue value
+                            r_list, g_list, b_list = [], [], []
+                            for i in range(6):
+                                hue = (rgb_hue + i / 6.0) % 1.0  # each light offset 60°
+                                r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+                                r_list.append(int(r * 255))
+                                g_list.append(int(g * 255))
+                                b_list.append(int(b * 255))
+                            
+                            # set rgb stripe command
+                            device.set_rgb_stripe_command(r_list, g_list, b_list)
+                        
+                        print(f"sdt hello position: {device.get_simple_motor_status()}")
                         
             time.sleep(0.0001)
 

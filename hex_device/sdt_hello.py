@@ -68,6 +68,9 @@ class SdtHello(OptionalDeviceBase):
         self._device_id = device_id
         self._device_type = device_type
 
+        if self._device_type == public_api_types_pb2.SecondaryDeviceType.SdtHello1J1T4BV1:
+            self._motor_count = 7
+
         # hello status
         self._status_lock = threading.Lock()
         self._timestamp = None
@@ -199,13 +202,20 @@ class SdtHello(OptionalDeviceBase):
 
         return {
             'pos': [trigger, joystick_x, joystick_y, btn_a, btn_b, btn_x, btn_y],
-            'vel': [0.0] * 7,
-            'eff': [0.0] * 7,
+            'vel': [0.0] * self._motor_count,
+            'eff': [0.0] * self._motor_count,
             'ts': timestamp.to_dict()
         }
 
     def set_rgb_stripe_command(self, r: list[int], g: list[int], b: list[int]):
-        """Set RGB stripe command"""
+        """
+        Set RGB stripe command
+
+        Args:
+            r: List of red values (0-255)
+            g: List of green values (0-255)
+            b: List of blue values (0-255)
+        """
         if len(r) != len(g) != len(b):
             raise ValueError("RGB list must have the same length")
         with self._command_lock:
@@ -229,7 +239,7 @@ class SdtHello(OptionalDeviceBase):
     # Configuration related methods
     def get_joint_limits(self) -> List[float]:
         """Get hello joint limits"""
-        return deepcopy([[-1.0, 1.0]] * 7)
+        return deepcopy([[-1.0, 1.0, 0.0, 0.0, 0.0, 0.0]] * self._motor_count)
 
     def get_hello_summary(self) -> dict:
         """
@@ -244,3 +254,7 @@ class SdtHello(OptionalDeviceBase):
             'control_hz': self._control_hz,
         })
         return summary
+
+    def __len__(self) -> int:
+        """Return motor count"""
+        return self._motor_count

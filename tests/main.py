@@ -23,7 +23,7 @@ import time
 
 import hex_device
 from hex_device import HexDeviceApi, public_api_types_pb2
-from hex_device import Chassis, LinearLift, Arm, Hands, Imu, Gamepad, ZetaLift
+from hex_device import Chassis, LinearLift, Arm, Hands, Imu, Gamepad, ZetaLift, SdtHello
 from hex_device.motor_base import CommandType, MitMotorCommand
 
 def main():
@@ -283,12 +283,21 @@ def main():
                 optional_devices = api.find_optional_device_by_robot_type(public_api_types_pb2.SecondaryDeviceType.SdtImuY200)
                 if optional_devices is not None:
                     device:Imu = optional_devices[0]
-                    print(f"imu summary: {device.get_imu_summary()}")
+                    # print(f"imu summary: {device.get_imu_summary()}")
 
                 optional_devices = api.find_optional_device_by_robot_type(public_api_types_pb2.SecondaryDeviceType.SdtGamepad)
                 if optional_devices is not None:
                     device:Gamepad = optional_devices[0]
-                    print(f"gamepad summary: {device.get_gamepad_summary()}")
+                    # print(f"gamepad summary: {device.get_gamepad_summary()}")
+
+                optional_devices = api.find_optional_device_by_robot_type(public_api_types_pb2.SecondaryDeviceType.SdtHello1J1T4BV1)
+                if optional_devices is not None:
+                    device:SdtHello = optional_devices[0]
+                    if device.has_new_data():
+                        # set all lights to white
+                        device.set_rgb_stripe_command([255] * 6, [255] * 6, [255] * 6)
+                        # print end controller status
+                        print(f"sdt hello status: {device.get_simple_motor_status()}")
                         
             time.sleep(0.0001)
 

@@ -226,11 +226,14 @@ class Arm(DeviceBase, MotorBase):
 
                 # check motor error
                 if start_time - self.__last_warning_time > 1.0:
+                    error_msg = "Arm Error: Motor "
                     for i in range(self.motor_count):
                         if self.get_motor_state(i) == "error":
-                            log_err(f"Arm Error: Motor {i} error occurred")
+                            error_msg += f"{i}, "
                             self.__last_warning_time = start_time
-
+                    if error_msg != "":
+                        error_msg += "error occurred."
+                        log_err(error_msg)
                 # prepare sending message
                 with self._status_lock:
                     s = self._send_init
@@ -261,7 +264,9 @@ class Arm(DeviceBase, MotorBase):
                     await self._send_message(msg)
 
                 ## check if is holder:
-                if sh != mi:
+                if self.robot_type == public_api_types_pb2.RobotType.RtHelloArcherY6_H1 or self.robot_type == public_api_types_pb2.RobotType.RtHelloFireflyY6_H1:
+                    pass
+                elif sh != mi:
                     if start_time - self.__last_warning_time > 3.0:
                         log_info(f"Arm: Waiting to get the control of the arm...")
                         self.__last_warning_time = start_time

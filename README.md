@@ -78,7 +78,7 @@ If you have already installed the library from PyPI using pip, please refer to [
 
    ```bash
    mkdir ./hex_device/generated
-   protoc --proto_path=proto-public-api --python_out=hex_device/generated proto-public-api/*.proto
+   protoc --proto_path=proto-public-api --python_out=hex_device/generated proto-public-api/*.proto && cp ./proto-public-api/version.py ./hex_device/generated/version.py
    ```
 
 #### Option 1: Package Installation

@@ -231,7 +231,7 @@ class Arm(DeviceBase, MotorBase):
                         if self.get_motor_state(i) == "error":
                             error_msg += f"{i}, "
                             self.__last_warning_time = start_time
-                    if error_msg != "":
+                    if error_msg != "Arm Error: Motor ":
                         error_msg += "error occurred."
                         log_err(error_msg)
                 # prepare sending message

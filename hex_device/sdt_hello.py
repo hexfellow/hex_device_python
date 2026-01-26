@@ -195,13 +195,13 @@ class SdtHello(OptionalDeviceBase):
         joystick_x = status[0].hello1j1t4b_status.joystick_x
         joystick_y = status[0].hello1j1t4b_status.joystick_y
         trigger = status[0].hello1j1t4b_status.trigger
-        btn_a = 1.0 if status[0].hello1j1t4b_status.btn_a else -1.0
-        btn_b = 1.0 if status[0].hello1j1t4b_status.btn_b else -1.0
+        btn_z = 1.0 if status[0].hello1j1t4b_status.btn_z else -1.0
+        btn_w = 1.0 if status[0].hello1j1t4b_status.btn_w else -1.0
         btn_x = 1.0 if status[0].hello1j1t4b_status.btn_x else -1.0
         btn_y = 1.0 if status[0].hello1j1t4b_status.btn_y else -1.0
 
         return {
-            'pos': [trigger, joystick_x, joystick_y, btn_a, btn_b, btn_x, btn_y],
+            'pos': [trigger, joystick_x, joystick_y, btn_z, btn_w, btn_x, btn_y],
             'vel': [0.0] * self._motor_count,
             'eff': [0.0] * self._motor_count,
             'ts': timestamp.to_dict()

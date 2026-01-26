@@ -314,7 +314,7 @@ def main():
                             # set rgb stripe command
                             device.set_rgb_stripe_command(r_list, g_list, b_list)
                         
-                        print(f"sdt hello position: {device.get_simple_motor_status()}")
+                        print(f"sdt hello position: {device.get_simple_motor_status()['pos']}")
                         
             time.sleep(0.0001)
 

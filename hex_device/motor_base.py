@@ -641,6 +641,21 @@ class MotorBase(ABC):
         with self._command_lock:
             self._target_command = command
 
+    def construct_mit_command(self, 
+            pos: Union[np.ndarray, List[float]], 
+            speed: Union[np.ndarray, List[float]], 
+            torque: Union[np.ndarray, List[float]], 
+            kp: Union[np.ndarray, List[float]], 
+            kd: Union[np.ndarray, List[float]]
+        ) -> List[MitMotorCommand]:
+        """
+        Construct MIT command
+        """
+        mit_commands = []
+        for i in range(self.motor_count):
+            mit_commands.append(MitMotorCommand(position=pos[i], speed=speed[i], torque=torque[i], kp=kp[i], kd=kd[i]))
+        return deepcopy(mit_commands)
+
     def mit_motor_command(self, mit_commands: List[MitMotorCommand]):
         """
         Set MIT motor command

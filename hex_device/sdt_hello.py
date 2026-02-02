@@ -20,11 +20,11 @@ from copy import deepcopy
 import threading
 
 
-class SdtHello(OptionalDeviceBase):
+class SdtHello(OptionalDeviceBase, MotorBase):
     """
     SdtHello class - Optional device for processing hello_data
 
-    Inherits from OptionalDeviceBase, mainly implements reading of SdtHello
+    Inherits from OptionalDeviceBase and MotorBase, mainly implements reading of SdtHello
     This class processes the optional hello_data field from APIUp messages.
 
     Supported hello types:
@@ -70,6 +70,10 @@ class SdtHello(OptionalDeviceBase):
 
         if self._device_type == public_api_types_pb2.SecondaryDeviceType.SdtHello1J1T4BV1:
             self._motor_count = 7
+            self._rgb_len = 6
+
+        # Initialize MotorBase for unified interface
+        MotorBase.__init__(self, self._motor_count, name)
 
         # hello status
         self._status_lock = threading.Lock()
@@ -207,7 +211,7 @@ class SdtHello(OptionalDeviceBase):
             'ts': timestamp.to_dict()
         }
 
-    def set_rgb_stripe_command(self, r: list[int], g: list[int], b: list[int]):
+    def set_rgb_stripe_command(self, r: Union[np.ndarray, list[int]], g: Union[np.ndarray, list[int]], b: Union[np.ndarray, list[int]]):
         """
         Set RGB stripe command
 
@@ -216,8 +220,30 @@ class SdtHello(OptionalDeviceBase):
             g: List of green values (0-255)
             b: List of blue values (0-255)
         """
-        if len(r) != len(g) != len(b):
-            raise ValueError("RGB list must have the same length")
+        # Convert numpy arrays to lists if needed
+        if isinstance(r, np.ndarray):
+            r = r.tolist()
+        if isinstance(g, np.ndarray):
+            g = g.tolist()
+        if isinstance(b, np.ndarray):
+            b = b.tolist()
+        
+        # Ensure all are lists
+        r = list(r)
+        g = list(g)
+        b = list(b)
+        
+        # Clamp values to 0-255 range
+        r = [max(0, min(255, int(val))) for val in r]
+        g = [max(0, min(255, int(val))) for val in g]
+        b = [max(0, min(255, int(val))) for val in b]
+        
+        # Pad or truncate to self._rgb_len
+        target_len = self._rgb_len
+        r = (r + [0] * target_len)[:target_len]
+        g = (g + [0] * target_len)[:target_len]
+        b = (b + [0] * target_len)[:target_len]
+        
         with self._command_lock:
             self._command = (r, g, b)
 

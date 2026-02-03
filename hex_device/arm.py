@@ -329,21 +329,6 @@ class Arm(DeviceBase, MotorBase):
         """
         self._command_timeout_check = check_or_not
 
-    def construct_mit_command(self, 
-            pos: Union[np.ndarray, List[float]], 
-            speed: Union[np.ndarray, List[float]], 
-            torque: Union[np.ndarray, List[float]], 
-            kp: Union[np.ndarray, List[float]], 
-            kd: Union[np.ndarray, List[float]]
-        ) -> List[MitMotorCommand]:
-        """
-        Construct MIT command
-        """
-        mit_commands = []
-        for i in range(self.motor_count):
-            mit_commands.append(MitMotorCommand(position=pos[i], speed=speed[i], torque=torque[i], kp=kp[i], kd=kd[i]))
-        return copy.deepcopy(mit_commands)
-
     def motor_command(self, command_type: CommandType, values: Union[List[bool], List[float], List[MitMotorCommand], np.ndarray]):
         """
         Set motor command

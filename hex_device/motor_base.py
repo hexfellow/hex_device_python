@@ -263,7 +263,6 @@ class MotorBase(ABC):
         self.__cache_torques = None
 
         # Motor status parameters (optional)
-        self._states = None  # "normal", "error"
         self._error_codes = None  # Use None to indicate no error
         self._driver_temperature = np.array(np.nan, dtype=np.float64) * motor_count  # Driver temperature (°C)
         self._motor_temperature = np.array(np.nan, dtype=np.float64) * motor_count  # Motor temperature (°C)
@@ -346,19 +345,33 @@ class MotorBase(ABC):
             motor_index: Motor index
         
         Returns:
-            Motor state or None if queue is empty
+            Motor state ("normal" or "error") or None if queue is empty
         """
         with self._data_lock:
-            return deepcopy(self._states[motor_index])
+            if self._error_codes is None:
+                return None
+            error_code = self._error_codes[motor_index]
+            return "error" if error_code is not None else "normal"
 
     def get_motor_states(self) -> Optional[List[str]]:
         """Get all motor states
         
         Returns:
-            List of motor states or None if queue is empty
+            List of motor states ("normal" or "error") or None if queue is empty
         """
         with self._data_lock:
-            return deepcopy(self._states)
+            if self._error_codes is None:
+                return None
+            return ["error" if error_code is not None else "normal" for error_code in self._error_codes]
+
+    def get_motor_warnings(self) -> Optional[List[str]]:
+        """Get all motor warnings
+        
+        Returns:
+            List of motor warnings or None if queue is empty
+        """
+        with self._data_lock:
+            return deepcopy(self._motor_warning)
 
     def get_motor_encoder_positions(self, pop: bool = True) -> Optional[np.ndarray]:
         """Get all motor encoder positions
@@ -781,9 +794,9 @@ class MotorBase(ABC):
         voltage = []
         error_codes = []
         current_targets = []
-        states = []
         pulse_per_rotation = []
         wheel_radius = []
+        motor_warning = []
 
         for motor_status in motor_status_list:
             positions.append(motor_status.position)
@@ -799,17 +812,17 @@ class MotorBase(ABC):
                 'motor_temperature') else 0.0
             volt = motor_status.voltage if motor_status.HasField(
                 'voltage') else 0.0
+            warning = motor_status.motor_warning if motor_status.HasField(
+                'motor_warning') else ""
             driver_temperature.append(driver_temp)
             motor_temperature.append(motor_temp)
             voltage.append(volt)
+            motor_warning.append(warning)
 
             error_code = None
-            state = "normal"
             if motor_status.error:
                 error_code = motor_status.error[0]
-                state = "error"
             error_codes.append(error_code)
-            states.append(state)
 
         driver_temperature_arr = np.asarray(driver_temperature, dtype=np.float64)
         motor_temperature_arr = np.asarray(motor_temperature, dtype=np.float64)
@@ -838,8 +851,8 @@ class MotorBase(ABC):
             self._driver_temperature = driver_temperature_arr
             self._motor_temperature = motor_temperature_arr
             self._voltage = voltage_arr
-            self._states = states
             self._error_codes = error_codes
+            self._motor_warning = motor_warning
 
             if current_targets is not None:
                 for i in range(self.motor_count):
@@ -886,13 +899,12 @@ class MotorBase(ABC):
         """
         with self._data_lock:
             # Check if data is available
-            if (self._states is None or self._error_codes is None or 
+            if (self._error_codes is None or 
                 self.__cache_positions is None or self.__cache_velocities is None or 
                 self.__cache_torques is None):
                 return None
             
             # Get data from cache
-            states = self._states.copy()
             error_codes = self._error_codes.copy()
             positions = self.__cache_positions.tolist()
             velocities = self.__cache_velocities.tolist()
@@ -920,7 +932,6 @@ class MotorBase(ABC):
             summary = {
                 'name': self.name,
                 'motor_count': self.motor_count,
-                'states': states,
                 'error_codes': error_codes,
                 'positions': positions,
                 'velocities': velocities,
@@ -964,7 +975,7 @@ class MotorBase(ABC):
 
         with self._data_lock:
             # Check if data is available
-            if (self._states is None or self._error_codes is None or 
+            if (self._error_codes is None or 
                 self.__cache_positions is None or self.__cache_velocities is None or 
                 self.__cache_torques is None):
                 return None
@@ -972,7 +983,6 @@ class MotorBase(ABC):
             # Get data from cache (pop parameter is ignored since we use cache now)
             status = {
                 'index': motor_index,
-                'state': self._states[motor_index],
                 'error_code': self._error_codes[motor_index],
                 'position': float(self.__cache_positions[motor_index]),
                 'velocity': float(self.__cache_velocities[motor_index]),
@@ -1150,12 +1160,11 @@ class MotorBase(ABC):
 
     def __str__(self) -> str:
         """String representation"""
-        states = self.get_motor_states()
-        if states is None:
+        error_codes = self.get_motor_error_codes()
+        if error_codes is None:
             return f"{self.name}(Count:{self.motor_count}, No data available)"
-        normal_count = sum(1 for state in states if state == "normal")
-        error_count = sum(1 for state in states if state == "error")
-        return f"{self.name}(Count:{self.motor_count}, Normal:{normal_count}, Errors:{error_count})"
+        error_count = sum(1 for error_code in error_codes if error_code is not None)
+        return f"{self.name}(Count:{self.motor_count}, Errors:{error_count})"
 
     def __repr__(self) -> str:
         """Detailed string representation"""

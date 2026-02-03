@@ -199,6 +199,7 @@ class Arm(DeviceBase, MotorBase):
         cycle_time = 1000.0 / self._control_hz
         start_time = time.perf_counter()
         self.__last_warning_time = start_time
+        self.__last_error_time = start_time
 
         await self._init()
         log_info("Arm init success")
@@ -210,9 +211,9 @@ class Arm(DeviceBase, MotorBase):
                 # check arm error
                 error = self.get_parking_stop_detail()
                 if error != public_api_types_pb2.ParkingStopDetail():
-                    if start_time - self.__last_warning_time > 1.0:
+                    if start_time - self.__last_error_time > 1.0:
                         log_err(f"emergency stop: {error}")
-                        self.__last_warning_time = start_time
+                        self.__last_error_time = start_time
 
                     # auto clear api communication timeout
                     if error.category == public_api_types_pb2.ParkingStopCategory.PscAPICommunicationTimeout:
@@ -225,15 +226,31 @@ class Arm(DeviceBase, MotorBase):
                         self.start()
 
                 # check motor error
-                if start_time - self.__last_warning_time > 1.0:
-                    error_msg = "Arm Error: Motor "
-                    for i in range(self.motor_count):
-                        if self.get_motor_state(i) == "error":
-                            error_msg += f"{i}, "
+                if start_time - self.__last_error_time > 1.0:
+                    error_codes = self.get_motor_error_codes()
+                    if error_codes is not None:
+                        error_motors = []
+                        for i in range(self.motor_count):
+                            if error_codes[i] is not None:
+                                error_motors.append(f"Motor {i} (error_code: {error_codes[i]})")
+                        if error_motors:
+                            error_msg = "Arm Error: " + ", ".join(error_motors) + "."
+                            log_err(error_msg)
+                            self.__last_error_time = start_time
+
+                # check motor warning
+                if start_time - self.__last_warning_time > 10.0:
+                    warnings = self.get_motor_warnings()
+                    if warnings is not None:
+                        warning_motors = []
+                        for i in range(self.motor_count):
+                            if warnings[i] != "":
+                                warning_motors.append(f"Motor {i} (warning: {warnings[i]})")
+                        if warning_motors:
+                            warning_msg = "Arm Warning: " + ", ".join(warning_motors) + "."
+                            log_warn(warning_msg)
                             self.__last_warning_time = start_time
-                    if error_msg != "Arm Error: Motor ":
-                        error_msg += "error occurred."
-                        log_err(error_msg)
+
                 # prepare sending message
                 with self._status_lock:
                     s = self._send_init

@@ -17,11 +17,24 @@ import os
 from pathlib import Path
 from typing import Optional
 
+# Global variables to store IP address and port for logging
+_log_ip_address: Optional[str] = None
+_log_port: Optional[int] = None
+
 # Custom filter for separating error logs from other logs
 class NonErrorFilter(logging.Filter):
     """Filter that only allows non-error level logs (DEBUG, INFO, WARNING)"""
     def filter(self, record):
         return record.levelno < logging.ERROR
+
+# Custom formatter that includes IP address and port
+class HexDeviceFormatter(logging.Formatter):
+    """Custom formatter that includes IP address and port in log messages"""
+    def format(self, record):
+        # Add IP and port to the record
+        record.ip_address = _log_ip_address if _log_ip_address is not None else "None"
+        record.port = _log_port if _log_port is not None else "None"
+        return super().format(record)
 
 # Configure default logging for the hex_device package
 # Users can override this configuration if needed
@@ -31,9 +44,9 @@ def _setup_default_logging():
     
     # Only add handler if no handlers exist (avoid duplicate handlers)
     if not logger.handlers:
-        # Create formatter
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        # Create formatter with IP address and port
+        formatter = HexDeviceFormatter(
+            '%(asctime)s - %(name)s - [%(ip_address)s:%(port)s] - %(levelname)s - %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'
         )
         
@@ -100,6 +113,27 @@ def get_logger():
         logger.info("Custom log message")
     """
     return logging.getLogger('hex_device')
+
+def set_log_address(ip_address: Optional[str] = None, port: Optional[int] = None):
+    """
+    Set the IP address and port to be displayed in log messages
+    
+    Args:
+        ip_address: IP address string (e.g., '192.168.1.100') or None to clear
+        port: Port number (e.g., 8080) or None to clear
+    
+    Example:
+        import hex_device
+        
+        # Set IP and port
+        hex_device.set_log_address('192.168.1.100', 8080)
+        
+        # Clear IP and port (set to None)
+        hex_device.set_log_address(None, None)
+    """
+    global _log_ip_address, _log_port
+    _log_ip_address = ip_address
+    _log_port = port
 
 def _get_version_from_pyproject() -> Optional[str]:
     """
@@ -272,6 +306,7 @@ __all__ = [
     # Logging functionality
     'set_log_level',
     'get_logger',
+    'set_log_address',
 
     # Version information
     '__version__',

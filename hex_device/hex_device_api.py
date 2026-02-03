@@ -17,7 +17,7 @@ from .motor_base import Timestamp
 from .hex_socket import HexSocketParser, HexSocketOpcode
 from .kcp_client_core import KCPClient, KCPConfig
 from .generated.version import CURRENT_PROTOCOL_MAJOR_VERSION, CURRENT_PROTOCOL_MINOR_VERSION
-from . import __version__
+from . import __version__, set_log_address
 
 import time
 import os
@@ -84,13 +84,14 @@ class HexDeviceApi:
 
         # variables init
         self.ws_url = ws_url
+        self.enable_kcp = enable_kcp
         try:
             self.__ws_url, _ = is_valid_ws_url(ws_url)
         except InvalidWSURLException as e:
             log_err("Invalid WebSocket URL: " + str(e))
         self.parsed_url = urlparse(self.__ws_url)
         self.local_port = local_port  # Local port to bind tcp socket (None for random port)
-        self.enable_kcp = enable_kcp
+        set_log_address(self.parsed_url.hostname, self.parsed_url.port)
 
         self.__kcp_client: Optional[KCPClient] = None
         self.__kcp_parser = HexSocketParser()

@@ -260,9 +260,10 @@ def main():
                             # Create sinusoidal motion for smooth interpolation
                             t = time.time()
                             interpolation_factor = (math.sin(t * 0.5) + 1.0) / 2.0  # 0 to 1
-                            # eventhough the range is [-1.56, 1.57], the command will limit the position to the range [0.0, 1.335]
-                            min_pos = -1.56
-                            target_position = min_pos + interpolation_factor * (1.57 - min_pos)
+                            # Range is [0.0, 1.335]
+                            min_pos = 0.0
+                            max_pos = 1.335
+                            target_position = min_pos + interpolation_factor * (max_pos - min_pos)
                             # Apply to first motor (or all motors if desired)
                             target_positions = [target_position] + [0.0] * (device.motor_count - 1)
                             

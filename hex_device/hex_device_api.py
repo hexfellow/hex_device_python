@@ -89,6 +89,7 @@ class HexDeviceApi:
             self.__ws_url, _ = is_valid_ws_url(ws_url)
         except InvalidWSURLException as e:
             log_err("Invalid WebSocket URL: " + str(e))
+            exit(1)
         self.parsed_url = urlparse(self.__ws_url)
         self.local_port = local_port  # Local port to bind tcp socket (None for random port)
         set_log_address(self.parsed_url.hostname, self.parsed_url.port)

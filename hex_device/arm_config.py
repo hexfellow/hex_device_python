@@ -164,7 +164,7 @@ class ArmConfigManager:
             motor_model=[0x85, 0x85, 0x85, 0x85, 0x84, 0x84],
             robot_config=JointParams(joints=[
                 JointParam(joint_name="joint_1",
-                           joint_limit=[-2.7, 3.1, -3.77, 3.77, -0.0, 0.0]),
+                           joint_limit=[-2.7, 2.7, -3.77, 3.77, -0.0, 0.0]),
                 JointParam(joint_name="joint_2",
                            joint_limit=[-1.57, 2.094, -3.77, 3.77, -0.0, 0.0]),
                 JointParam(
@@ -175,7 +175,7 @@ class ArmConfigManager:
                 JointParam(joint_name="joint_5",
                            joint_limit=[-1.56, 1.56, -12.56, 12.56, -0.0, 0.0]),
                 JointParam(joint_name="joint_6",
-                           joint_limit=[-1.57, 1.57, -12.56, 12.56, -0.0, 0.0])
+                           joint_limit=[-2.96, 2.96, -12.56, 12.56, -0.0, 0.0])
             ]))
 
         # 0x1B - hello_y6_h1 (6-axis)
@@ -186,7 +186,7 @@ class ArmConfigManager:
             motor_model=[0x86] * 6,
             robot_config=JointParams(joints=[
                 JointParam(joint_name="joint_1",
-                           joint_limit=[-2.7, 3.1, -3.77, 3.77, -0.0, 0.0]),
+                           joint_limit=[-2.7, 2.7, -3.77, 3.77, -0.0, 0.0]),
                 JointParam(joint_name="joint_2",
                            joint_limit=[-1.57, 2.094, -3.77, 3.77, -0.0, 0.0]),
                 JointParam(
@@ -197,7 +197,7 @@ class ArmConfigManager:
                 JointParam(joint_name="joint_5",
                            joint_limit=[-1.56, 1.56, -12.56, 12.56, -0.0, 0.0]),
                 JointParam(joint_name="joint_6",
-                           joint_limit=[-1.57, 1.57, -12.56, 12.56, -0.0, 0.0])
+                           joint_limit=[-2.96, 2.96, -12.56, 12.56, -0.0, 0.0])
             ]))
 
         # 0x1B - firefly_y6_h1 (6-axis)
@@ -208,7 +208,7 @@ class ArmConfigManager:
             motor_model=[0x85, 0x85, 0x85, 0x85, 0x84, 0x84],
             robot_config=JointParams(joints=[
                 JointParam(joint_name="joint_1",
-                           joint_limit=[-2.7, 3.1, -3.77, 3.77, -0.0, 0.0]),
+                           joint_limit=[-2.7, 2.7, -3.77, 3.77, -0.0, 0.0]),
                 JointParam(joint_name="joint_2",
                            joint_limit=[-1.57, 2.094, -3.77, 3.77, -0.0, 0.0]),
                 JointParam(
@@ -219,7 +219,7 @@ class ArmConfigManager:
                 JointParam(joint_name="joint_5",
                            joint_limit=[-1.56, 1.56, -12.56, 12.56, -0.0, 0.0]),
                 JointParam(joint_name="joint_6",
-                           joint_limit=[-1.57, 1.57, -12.56, 12.56, -0.0, 0.0])
+                           joint_limit=[-2.96, 2.96, -12.56, 12.56, -0.0, 0.0])
             ]))
 
         # 0x1C - hello_firefly_y6_h1 (6-axis)
@@ -230,7 +230,7 @@ class ArmConfigManager:
             motor_model=[0x86] * 6,
             robot_config=JointParams(joints=[
                 JointParam(joint_name="joint_1",
-                           joint_limit=[-2.7, 3.1, -3.77, 3.77, -0.0, 0.0]),
+                           joint_limit=[-2.7, 2.7, -3.77, 3.77, -0.0, 0.0]),
                 JointParam(joint_name="joint_2",
                            joint_limit=[-1.57, 2.094, -3.77, 3.77, -0.0, 0.0]),
                 JointParam(
@@ -241,7 +241,7 @@ class ArmConfigManager:
                 JointParam(joint_name="joint_5",
                            joint_limit=[-1.56, 1.56, -12.56, 12.56, -0.0, 0.0]),
                 JointParam(joint_name="joint_6",
-                           joint_limit=[-1.57, 1.57, -12.56, 12.56, -0.0, 0.0])
+                           joint_limit=[-2.96, 2.96, -12.56, 12.56, -0.0, 0.0])
             ]))
 
     def get_config(self, arm_series: int) -> Optional[ArmConfig]:

@@ -284,7 +284,7 @@ class Arm(DeviceBase, MotorBase):
                 if self.robot_type == public_api_types_pb2.RobotType.RtHelloArcherY6_H1 or self.robot_type == public_api_types_pb2.RobotType.RtHelloFireflyY6_H1:
                     pass
                 elif sh != mi:
-                    if start_time - self.__last_warning_time > 3.0:
+                    if start_time - self.__last_warning_time > 5.0:
                         log_info(f"Arm: Waiting to get the control of the arm...")
                         self.__last_warning_time = start_time
                     continue
@@ -308,8 +308,21 @@ class Arm(DeviceBase, MotorBase):
                     ### normal command
                     else:
                         try:
-                            msg = self._construct_joint_command_msg()
-                            await self._send_message(msg)
+                            # if no new command, use the last command 
+                            command = None
+                            with self._command_lock:
+                                if self._target_command is None:
+                                    raise ValueError(
+                                        "Construct down msg failed, No target command")
+                                command = self._target_command
+                            if isinstance(command, MotorCommand):
+                                # common motor command
+                                msg = self._construct_joint_command_msg(command)
+                                await self._send_message(msg)
+                            else:
+                                # special command
+                                msg = self._construct_special_arm_command_msg(command)
+                                await self._send_message(msg)
                         except Exception as e:
                             log_err(f"Arm failed to construct joint command message: {e}")
                             continue
@@ -359,6 +372,115 @@ class Arm(DeviceBase, MotorBase):
             self) -> public_api_types_pb2.ParkingStopDetail:
         """Get parking stop details"""
         return copy.deepcopy(self._parking_stop_detail)
+
+    # Special command
+    def enable_free_drag(self, gravity_acc: list[float]):
+        """
+        @brief: For enabling free drag.
+
+        Args:
+            gravity_acc: Gravity acceleration (ax, ay, az) for compensation.
+                Optional, length 3 when provided.
+        """
+        if len(gravity_acc) != 3:
+            raise ValueError("gravity_acc must be a list of 3 floats")
+        acceleration_source: public_api_types_pb2.ImuAcceleration = public_api_types_pb2.ImuAcceleration(
+            ax=gravity_acc[0],
+            ay=gravity_acc[1],
+            az=gravity_acc[2]
+        )
+        msg = self._construct_ApiFreeDragCommand_msg(acceleration_source)
+        with self._command_lock:
+            self._target_command = msg
+            self._last_command_time = time.perf_counter()
+
+    def enable_zero_current_control(self):
+        """
+        @brief: For enabling current control.
+        """
+        msg = self._construct_ApiZeroCurrentCommand_msg()
+        with self._command_lock:
+            self._target_command = msg
+            self._last_command_time = time.perf_counter()
+
+    def end_effector_control(
+        self,
+        position: Union[List[float], Tuple[float, float, float]],
+        orientation: Union[List[float], Tuple[float, float, float, float], None] = None,
+        gravity_acc: Optional[List[float]] = None,
+    ):
+        """
+        @brief: For enabling end effector control.
+
+        Args:
+            position: End effector position (x, y, z) in meters, length 3.
+            orientation: End effector orientation as quaternion (qw, qx, qy, qz).
+                Optional, default [1, 0, 0, 0] (identity).
+            gravity_acc: Gravity acceleration (ax, ay, az) for compensation.
+                Optional, length 3 when provided.
+        """
+        if len(position) != 3:
+            raise ValueError("position must be a sequence of 3 floats (x, y, z)")
+        px, py, pz = float(position[0]), float(position[1]), float(position[2])
+
+        if orientation is not None:
+            if len(orientation) != 4:
+                raise ValueError("orientation must be a sequence of 4 floats (qw, qx, qy, qz)")
+            qw, qx, qy, qz = float(orientation[0]), float(orientation[1]), float(orientation[2]), float(orientation[3])
+        else:
+            qw, qx, qy, qz = 1.0, 0.0, 0.0, 0.0
+
+        end_pose = public_api_types_pb2.Pose(px=px, py=py, pz=pz, qw=qw, qx=qx, qy=qy, qz=qz)
+
+        if gravity_acc is not None:
+            if len(gravity_acc) != 3:
+                raise ValueError("gravity_acc must be a list of 3 floats")
+            acceleration_source = public_api_types_pb2.ImuAcceleration(
+                ax=gravity_acc[0],
+                ay=gravity_acc[1],
+                az=gravity_acc[2],
+            )
+        else:
+            acceleration_source = None
+
+        msg = self._construct_ApiEndEffectorCommand_msg(end_pose, acceleration_source)
+        with self._command_lock:
+            self._target_command = msg
+            self._last_command_time = time.perf_counter()
+
+    def joint_position_control(self, joint_positions: List[float]):
+        """
+        @brief: A more convenient positioning mode that will plan the target position before moving.
+
+        Args:
+            joint_positions: Joint positions in rad, length must be the same as the motor count.
+        """
+        if len(joint_positions) != self.motor_count:
+            raise ValueError("joint_positions must be a list of floats, length must be the same as the motor count")
+        msg = self._construct_ApiJointPositionCommand_msg(joint_positions)
+        with self._command_lock:
+            self._target_command = msg
+            self._last_command_time = time.perf_counter()
+
+    def compensated_mit_control(self, mit_commands: List[MitMotorCommand], gravity_acc: List[float]):
+        """
+        @brief: Compensated MIT control mode. It will be more precise.
+        
+        Args:
+            mit_commands: MIT commands, each element contains torque, speed, position, kp, kd
+            gravity_acc: Gravity acceleration (ax, ay, az) for compensation.
+        """
+        if len(gravity_acc) != 3:
+            raise ValueError("gravity_acc must be a list of 3 floats")
+        acceleration_source: public_api_types_pb2.ImuAcceleration = public_api_types_pb2.ImuAcceleration(
+            ax=gravity_acc[0],
+            ay=gravity_acc[1],
+            az=gravity_acc[2]
+        )
+        msg = self._construct_ApiCompensatedMitMotorTargets_msg(mit_commands, acceleration_source)
+        with self._command_lock:
+            self._target_command = msg
+            self._last_command_time = time.perf_counter()
 
     # A soft lock for saber arm, will move on soon.
     def enable_mit(self):
@@ -443,16 +565,8 @@ class Arm(DeviceBase, MotorBase):
             self,
             pulse_per_rotation,
             dt,
-            command: MotorCommand = None) -> public_api_types_pb2.MotorTargets:
+            command) -> public_api_types_pb2.MotorTargets:
         """Construct downstream message"""
-        # if no new command, use the last command 
-        if command is None:
-            with self._command_lock:
-                if self._target_command is None:
-                    raise ValueError(
-                        "Construct down msg failed, No target command")
-                command = self._target_command
-
         # validate joint positions and velocities
         validated_command = copy.deepcopy(command)
 
@@ -467,7 +581,7 @@ class Arm(DeviceBase, MotorBase):
         
         return motor_targets
 
-    def _construct_joint_command_msg(self) -> public_api_down_pb2.APIDown:
+    def _construct_joint_command_msg(self, command: MotorCommand) -> public_api_down_pb2.APIDown:
         """
         @brief: For constructing a joint command message.
         """
@@ -478,7 +592,7 @@ class Arm(DeviceBase, MotorBase):
 
         pulse_per_rotation_arr = self.get_motor_pulse_per_rotations()
         if pulse_per_rotation_arr is not None:
-            motor_targets = self._construct_target_motor_msg(pulse_per_rotation_arr, self._period)
+            motor_targets = self._construct_target_motor_msg(pulse_per_rotation_arr, self._period, command)
             arm_api_control_command.motor_targets.CopyFrom(motor_targets)
             arm_exclusive_command.arm_api_control_command.CopyFrom(arm_api_control_command)
             arm_command.arm_exclusive_command.CopyFrom(arm_exclusive_command)
@@ -497,6 +611,87 @@ class Arm(DeviceBase, MotorBase):
         arm_api_control_command = public_api_types_pb2.ArmApiControlCommand()
         
         arm_api_control_command.motor_targets.CopyFrom(motor_msg)
+        arm_exclusive_command.arm_api_control_command.CopyFrom(arm_api_control_command)
+        arm_command.arm_exclusive_command.CopyFrom(arm_exclusive_command)
+        msg.arm_command.CopyFrom(arm_command)
+        return msg
+
+    def _construct_ApiFreeDragCommand_msg(self, acceleration_source: public_api_types_pb2.ImuAcceleration) -> public_api_types_pb2.ArmApiFreeDragCommand:
+        """
+        @brief: For constructing a ApiFreeDragCommand message.
+        """
+        msg = public_api_types_pb2.ArmApiFreeDragCommand()
+        msg.acceleration_source.custom_acceleration.CopyFrom(acceleration_source)
+        return msg
+
+    def _construct_ApiZeroCurrentCommand_msg(self) -> public_api_types_pb2.ArmApiZeroCurrentCommand:
+        """
+        @brief: For constructing a ApiZeroCurrentCommand message.
+        """
+        msg = public_api_types_pb2.ArmApiZeroCurrentCommand()
+        return msg
+
+    def _construct_ApiEndEffectorCommand_msg(self, end_pose: public_api_types_pb2.Pose, 
+                                             acceleration_source: public_api_types_pb2.ImuAcceleration = None,
+                                            ) -> public_api_types_pb2.ArmApiEndEffectorCommand:
+        """
+        @brief: For constructing a ApiEndEffectorCommand message.
+        """
+        msg = public_api_types_pb2.ArmApiEndEffectorCommand()
+        msg.end_pose.CopyFrom(end_pose)
+        # warning!!! If not provided AccelerationSource, gravity compensation will close.
+        if acceleration_source is not None:
+            msg.acceleration_source.CopyFrom(acceleration_source)
+        return msg
+
+    def _construct_ApiJointPositionCommand_msg(self, joint_positions: List[float]) -> public_api_types_pb2.ArmApiJointPositionCommand:
+        """
+        @brief: For constructing a ApiJointPositionCommand message.
+        """
+        msg = public_api_types_pb2.ArmApiJointPositionCommand()
+        msg.joint_positions.extend(joint_positions)
+        return msg
+
+    def _construct_ApiCompensatedMitMotorTargets_msg(self, mit_targets: List[MitMotorCommand], 
+                                                     acceleration_source: public_api_types_pb2.ImuAcceleration) -> public_api_types_pb2.ArmApiCompensatedMitMotorTargets:
+        """
+        @brief: For constructing a ApiCompensatedMitMotorTargets message.
+        """
+        msg = public_api_types_pb2.ArmApiCompensatedMitMotorTargets()
+        proto_targets = [
+            public_api_types_pb2.MitMotorTarget(
+                torque=float(cmd.torque),
+                speed=float(cmd.speed),
+                position=float(cmd.position),
+                kp=float(cmd.kp),
+                kd=float(cmd.kd),
+            )
+            for cmd in mit_targets
+        ]
+        msg.mit_target.extend(proto_targets)
+        msg.acceleration_source.custom_acceleration.CopyFrom(acceleration_source)
+        return msg
+
+    def _construct_special_arm_command_msg(self, command: Any) -> public_api_down_pb2.APIDown:
+        """
+        @brief: For constructing a special arm command message.
+        """
+        msg = public_api_down_pb2.APIDown()
+        arm_command = public_api_types_pb2.ArmCommand()
+        arm_exclusive_command = public_api_types_pb2.ArmExclusiveCommand()
+        arm_api_control_command = public_api_types_pb2.ArmApiControlCommand()
+        if isinstance(command, public_api_types_pb2.ArmApiFreeDragCommand):
+            arm_api_control_command.arm_api_free_drag_command.CopyFrom(command)
+        elif isinstance(command, public_api_types_pb2.ArmApiZeroCurrentCommand):
+            arm_api_control_command.arm_api_zero_current_command.CopyFrom(command)
+        elif isinstance(command, public_api_types_pb2.ArmApiEndEffectorCommand):
+            arm_api_control_command.arm_api_end_effector_command.CopyFrom(command)
+        elif isinstance(command, public_api_types_pb2.ArmApiJointPositionCommand):
+            arm_api_control_command.arm_api_joint_position_command.CopyFrom(command)
+        elif isinstance(command, public_api_types_pb2.ArmApiCompensatedMitMotorTargets):
+            arm_api_control_command.arm_api_compensated_mit_motor_targets.CopyFrom(command)
+        else:
+            raise ValueError(f"Invalid arm command type: {type(command)}")
         arm_exclusive_command.arm_api_control_command.CopyFrom(arm_api_control_command)
         arm_command.arm_exclusive_command.CopyFrom(arm_exclusive_command)
         msg.arm_command.CopyFrom(arm_command)

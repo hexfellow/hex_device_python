@@ -216,8 +216,8 @@ def main():
                             #     np.array([-0.3, -1.48, 2.86, 0.0, 0.0, 0.0]), 
                             #     np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0]), 
                             #     np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0]), 
-                            #     np.array([150.0, 150.0, 150.0, 150.0, 39.0, 39.0]), 
-                            #     np.array([12.0, 12.0, 12.0, 12.0, 0.8, 0.8])
+                            #     np.array([200.0, 200.0, 200.0, 200.0, 100.0, 100.0]), 
+                            #     np.array([5.0, 5.0, 5.0, 5.0, 3.0, 3.0])
                             # )
                             # mit_commands = device.construct_mit_command(
                             #     [0.3, -1.48, 2.86, 0.0, 0.0, 0.0], 
@@ -229,6 +229,18 @@ def main():
                             # device.motor_command(
                             #     CommandType.MIT,
                             #     mit_commands)
+
+                            ## special arm command (Experimental feature)
+                            # device.enable_zero_current_control()
+                            # device.enable_free_drag([0.0, 0.0, -9.8])
+                            # device.joint_position_control([-0.3, -1.48, 2.86, 0.0, 0.0, 0.0])
+
+                            ## Have not support yet.
+                            # device.end_effector_control([0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0], [0.0, 0.0, -9.8])
+                            # device.compensated_mit_control(
+                            #     mit_commands = mit_commands,
+                            #     gravity_acc = [0.0, 0.0, -9.8]
+                            # )
 
                     elif isinstance(device, LinearLift):
                         if device.has_new_data():

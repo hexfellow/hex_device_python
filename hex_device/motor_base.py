@@ -271,7 +271,8 @@ class MotorBase(ABC):
 
         # Target commands
         self._current_targets = [deque(maxlen=10) for _ in range(motor_count)]  # Commands currently running on the device
-        self._target_command = None  # The raw command, not converted to the scale in proto comments
+        # MotorCommand or other special command for device
+        self._target_command: Optional[Union[MotorCommand, Any]] = None  # The raw command, not converted to the scale in proto comments
 
         # Thread locks
         self._data_lock = threading.Lock()

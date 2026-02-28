@@ -260,8 +260,8 @@ class Chassis(DeviceBase, MotorBase):
 
                 # check if is holder:
                 if sh != mi:
-                    if start_time - self.__last_warning_time > 3.0:
-                        log_warn(f"Chassis: You are not the session holder, please use start() method to get the control of the chassis...")
+                    if start_time - self.__last_warning_time > 5.0:
+                        log_info(f"Chassis: You are not the session holder, please use start() method to get the control of the chassis...")
                         self.__last_warning_time = start_time
                     continue
 
@@ -270,7 +270,8 @@ class Chassis(DeviceBase, MotorBase):
                     if self._simple_control_mode == False and self._target_zero_resistance == True:
                         pass
                     else:
-                        if start_time - self.__last_warning_time > 1.0:
+                        # Have send command but not api control initialized.
+                        if start_time - self.__last_warning_time > 5.0:
                             log_warn(
                                 f"Chassis is not started."
                             )

@@ -32,6 +32,11 @@ from websockets.exceptions import ConnectionClosed
 RAW_DATA_LEN = 50
 ORPHANED_TASK_CHECK_INTERVAL = 100
 
+# The minimum supported protocol version.
+# WARNING!!!! Do not modify the supported version number!!! Incompatible drivers may cause serious damage to the device!!!
+MIN_PROTOCOL_MAJOR_VERSION = 1
+MIN_PROTOCOL_MINOR_VERSION = 3
+
 class ReportFrequency:
     """
     Report frequency
@@ -552,10 +557,16 @@ class HexDeviceApi:
             return False
         else:
             version = api_up.protocol_major_version
-            if version < 1.0:
+            min_version = api_up.protocol_minor_version
+            if version < MIN_PROTOCOL_MAJOR_VERSION:
                 log_err(f"The hardware firmware version is too low({version})!!! Please use a lower version of hex_device.")
                 log_err(f"The hardware firmware version is too low({version})!!! Please use a lower version of hex_device.")
                 log_err(f"The hardware firmware version is too low({version})!!! Please use a lower version of hex_device.")
+                return False
+            if min_version < MIN_PROTOCOL_MINOR_VERSION:
+                log_err:(f"Your controller firmware version is older than hex_device, please update the controller firmware or use a lower version of hex_device.")
+                log_err:(f"Your controller firmware version is older than hex_device, please update the controller firmware or use a lower version of hex_device.")
+                log_err:(f"Your controller firmware version is older than hex_device, please update the controller firmware or use a lower version of hex_device.")
                 return False
         return True
 

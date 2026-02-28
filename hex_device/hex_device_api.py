@@ -554,6 +554,7 @@ class HexDeviceApi:
             log_err("Your hardware version is too lower!!! please use hex_device v1.2.2 or lower.")
             log_err("Your hardware version is too lower!!! please use hex_device v1.2.2 or lower.")
             log_err("Your hardware version is too lower!!! please use hex_device v1.2.2 or lower.")
+            log_warn(f"Change log: https://github.com/hexfellow/hex_device_python/wiki/Change-Log")
             return False
         else:
             version = api_up.protocol_major_version
@@ -562,11 +563,13 @@ class HexDeviceApi:
                 log_err(f"The hardware firmware version is too low({version})!!! Please use a lower version of hex_device.")
                 log_err(f"The hardware firmware version is too low({version})!!! Please use a lower version of hex_device.")
                 log_err(f"The hardware firmware version is too low({version})!!! Please use a lower version of hex_device.")
+                log_warn(f"Change log: https://github.com/hexfellow/hex_device_python/wiki/Change-Log")
                 return False
             if min_version < MIN_PROTOCOL_MINOR_VERSION:
                 log_err:(f"Your controller firmware version is older than hex_device, please update the controller firmware or use a lower version of hex_device.")
                 log_err:(f"Your controller firmware version is older than hex_device, please update the controller firmware or use a lower version of hex_device.")
                 log_err:(f"Your controller firmware version is older than hex_device, please update the controller firmware or use a lower version of hex_device.")
+                log_warn(f"Change log: https://github.com/hexfellow/hex_device_python/wiki/Change-Log")
                 return False
         return True
 

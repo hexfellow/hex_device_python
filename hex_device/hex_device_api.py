@@ -615,6 +615,9 @@ class HexDeviceApi:
         return msg
 
     async def _send_down_message(self, data: public_api_down_pb2.APIDown):
+        # Add protocol version to the message
+        data.protocol_major_version = CURRENT_PROTOCOL_MAJOR_VERSION
+        data.protocol_minor_version = CURRENT_PROTOCOL_MINOR_VERSION
         msg = data.SerializeToString()
         
         if not self.enable_kcp or self.__kcp_client is None:

@@ -32,6 +32,11 @@ from websockets.exceptions import ConnectionClosed
 RAW_DATA_LEN = 50
 ORPHANED_TASK_CHECK_INTERVAL = 100
 
+# The minimum supported protocol version.
+# WARNING!!!! Do not modify the supported version number!!! Incompatible drivers may cause serious damage to the device!!!
+MIN_PROTOCOL_MAJOR_VERSION = 1
+MIN_PROTOCOL_MINOR_VERSION = 4
+
 class ReportFrequency:
     """
     Report frequency
@@ -546,16 +551,27 @@ class HexDeviceApi:
             bool: True if protocol version is supported, False otherwise
         """
         if not hasattr(api_up, 'protocol_major_version'):
-            log_err("Your hardware version is too lower!!! please use hex_device v1.2.2 or lower.")
-            log_err("Your hardware version is too lower!!! please use hex_device v1.2.2 or lower.")
-            log_err("Your hardware version is too lower!!! please use hex_device v1.2.2 or lower.")
+            log_err("\n\
+                Your hardware version is too lower!!! please use hex_device v1.2.2 or lower.\n\
+                Your hardware version is too lower!!! please use hex_device v1.2.2 or lower.\n\
+                Your hardware version is too lower!!! please use hex_device v1.2.2 or lower.\n\
+                Change log can be found at: https://github.com/hexfellow/hex_device_python/wiki/Change-Log")
             return False
         else:
             version = api_up.protocol_major_version
-            if version < 1.0:
-                log_err(f"The hardware firmware version is too low({version})!!! Please use a lower version of hex_device.")
-                log_err(f"The hardware firmware version is too low({version})!!! Please use a lower version of hex_device.")
-                log_err(f"The hardware firmware version is too low({version})!!! Please use a lower version of hex_device.")
+            min_version = api_up.protocol_minor_version
+            if version < MIN_PROTOCOL_MAJOR_VERSION or min_version < MIN_PROTOCOL_MINOR_VERSION:
+                log_err(f"\n\
+                    Your hardware version is too low({version}.{min_version})!!! Please use a lower version of hex_device.\n\
+                    Your hardware version is too low({version}.{min_version})!!! Please use a lower version of hex_device.\n\
+                    Your hardware version is too low({version}.{min_version})!!! Please use a lower version of hex_device.\n\
+                    Change log can be found at: https://github.com/hexfellow/hex_device_python/wiki/Change-Log")
+                return False
+            elif version > CURRENT_PROTOCOL_MAJOR_VERSION or min_version > CURRENT_PROTOCOL_MINOR_VERSION:
+                log_err(f"\n\
+                    Your hex_device version is lower than hardware:({version}.{min_version})! You can use a latest version of hex_device.\n\
+                    Your hex_device version is lower than hardware:({version}.{min_version})! You can use a latest version of hex_device.\n\
+                    Change log can be found at: https://github.com/hexfellow/hex_device_python/wiki/Change-Log")
                 return False
         return True
 
@@ -599,6 +615,9 @@ class HexDeviceApi:
         return msg
 
     async def _send_down_message(self, data: public_api_down_pb2.APIDown):
+        # Add protocol version to the message
+        data.protocol_major_version = CURRENT_PROTOCOL_MAJOR_VERSION
+        data.protocol_minor_version = CURRENT_PROTOCOL_MINOR_VERSION
         msg = data.SerializeToString()
         
         if not self.enable_kcp or self.__kcp_client is None:

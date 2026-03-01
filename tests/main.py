@@ -230,18 +230,6 @@ def main():
                             #     CommandType.MIT,
                             #     mit_commands)
 
-                            ## special arm command (Experimental feature)
-                            # device.enable_zero_current_control()
-                            # device.enable_free_drag([0.0, 0.0, -9.8])
-                            # device.joint_position_control([-0.3, -1.48, 2.86, 0.0, 0.0, 0.0])
-
-                            ## Have not support yet.
-                            # device.end_effector_control([0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0], [0.0, 0.0, -9.8])
-                            # device.compensated_mit_control(
-                            #     mit_commands = mit_commands,
-                            #     gravity_acc = [0.0, 0.0, -9.8]
-                            # )
-
                     elif isinstance(device, LinearLift):
                         if device.has_new_data():
                             if first_time:

@@ -1084,16 +1084,11 @@ class MotorBase(ABC):
                 single_motor_target.torque = target
                 motor_targets.targets.append(deepcopy(single_motor_target))
         elif command.command_type == CommandType.MIT:
-            # Convert to encoder position
-            raw_positions = np.array([cmd.position for cmd in command.mit_command])
-            trans_positions = self.convert_rad_to_positions(
-                raw_positions, pulse_per_rotation)
-
-            for i, mit_cmd in enumerate(command.mit_command):
+            for mit_cmd in command.mit_command:
                 mit_target = public_api_types_pb2.MitMotorTarget()
                 mit_target.torque = mit_cmd.torque
                 mit_target.speed = mit_cmd.speed
-                mit_target.position = trans_positions[i]
+                mit_target.position = mit_cmd.position
                 mit_target.kp = mit_cmd.kp
                 mit_target.kd = mit_cmd.kd
                 

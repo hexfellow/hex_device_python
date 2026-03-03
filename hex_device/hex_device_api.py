@@ -81,23 +81,37 @@ class HexDeviceApi:
         else:
             return ReportFrequency.Rf1Hz
 
-    def __init__(self, ws_url: str, control_hz: int = 500, enable_kcp: bool = True, local_port: int = None):
+    def __init__(self, ws_url: str = None, control_hz: int = 500, enable_kcp: bool = True, local_port: int = None,
+                 send_down_callback=None):
         # protocol version
         self.protocol_major_version = CURRENT_PROTOCOL_MAJOR_VERSION
         self.protocol_minor_version = CURRENT_PROTOCOL_MINOR_VERSION
         log_info(f"HexDeviceApi: Protocol version: {self.protocol_major_version}.{self.protocol_minor_version}, package version: {__version__}")
 
+        # Stream mode: when send_down_callback is provided, bypass all WebSocket/KCP transport.
+        # In this mode the caller feeds data by invoking _process_api_up() directly and receives
+        # outgoing commands through the provided callback.
+        self._stream_mode: bool = send_down_callback is not None
+        self._send_down_callback = send_down_callback
+
         # variables init
         self.ws_url = ws_url
-        self.enable_kcp = enable_kcp
-        try:
-            self.__ws_url, _ = is_valid_ws_url(ws_url)
-        except InvalidWSURLException as e:
-            log_err("Invalid WebSocket URL: " + str(e))
-            exit(1)
-        self.parsed_url = urlparse(self.__ws_url)
-        self.local_port = local_port  # Local port to bind tcp socket (None for random port)
-        set_log_address(self.parsed_url.hostname, self.parsed_url.port)
+        self.enable_kcp = enable_kcp if not self._stream_mode else False
+
+        if not self._stream_mode:
+            try:
+                self.__ws_url, _ = is_valid_ws_url(ws_url)
+            except InvalidWSURLException as e:
+                log_err("Invalid WebSocket URL: " + str(e))
+                exit(1)
+            self.parsed_url = urlparse(self.__ws_url)
+            self.local_port = local_port  # Local port to bind tcp socket (None for random port)
+            set_log_address(self.parsed_url.hostname, self.parsed_url.port)
+        else:
+            self.__ws_url = None
+            self.parsed_url = None
+            self.local_port = None
+            log_info("HexDeviceApi: stream mode enabled, WebSocket transport is disabled.")
 
         self.__kcp_client: Optional[KCPClient] = None
         self.__kcp_parser = HexSocketParser()
@@ -144,7 +158,7 @@ class HexDeviceApi:
         self.__is_closing = threading.Event()
         # init api
         self.__loop_thread.start()
-        if self.local_port:
+        if not self._stream_mode and self.local_port:
             log_info(f"HexDeviceApi initialized (local port: {self.local_port}).")
         else:
             log_info(f"HexDeviceApi initialized.")
@@ -619,6 +633,15 @@ class HexDeviceApi:
         data.protocol_major_version = CURRENT_PROTOCOL_MAJOR_VERSION
         data.protocol_minor_version = CURRENT_PROTOCOL_MINOR_VERSION
         msg = data.SerializeToString()
+
+        if self._stream_mode:
+            try:
+                result = self._send_down_callback(msg)
+                if asyncio.iscoroutine(result):
+                    await result
+            except Exception as e:
+                log_err(f"Failed to send message via stream callback: {e}")
+            return
         
         if not self.enable_kcp or self.__kcp_client is None:
             if self.__websocket is None:
@@ -1032,10 +1055,14 @@ class HexDeviceApi:
         self.__shutdown_event = asyncio.Event()
         log_common("HexDevice Api started.")
 
-        await self.__connect_ws()
+        if not self._stream_mode:
+            await self.__connect_ws()
+            task1 = asyncio.create_task(self.__websocket_data_parser())
+            self.__tasks = [task1]
+        else:
+            self.__tasks = []
+            log_info("Stream mode: WebSocket data parser is disabled, call _process_api_up() externally to feed data.")
 
-        task1 = asyncio.create_task(self.__websocket_data_parser())
-        self.__tasks = [task1]
         await self.__shutdown_event.wait()
 
         # Stop all device tasks
@@ -1115,11 +1142,11 @@ class HexDeviceApi:
                 api_up = await self.__capture_data_frame_from_websocket()
                 if api_up is None and self.__is_closing.is_set():
                     return
+                if not self.enable_kcp:
+                    self._process_api_up(api_up)
             except Exception as e:
                 log_err(f"__websocket_data_parser error: {e}")
                 continue
-            if not self.enable_kcp:
-                self._process_api_up(api_up)
 
     # User api
     async def reset_report_frequency(self, report_frequency: int):

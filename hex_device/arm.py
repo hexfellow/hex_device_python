@@ -98,6 +98,7 @@ class Arm(DeviceBase, MotorBase):
             self._command_timeout_check = True
         else:
             self._command_timeout_check = False
+        self._is_timeout = False
         self._last_command_time = None
         self._command_timeout = 0.3  # 300ms
         self.__last_warning_time = time.perf_counter()  # last log warning time
@@ -297,6 +298,7 @@ class Arm(DeviceBase, MotorBase):
                     ### command timeout
                     elif self._command_timeout_check and (start_time -
                           self._last_command_time) > self._command_timeout:
+                        self._is_timeout = True
                         try:
                             motor_msg = self._construct_custom_motor_msg(
                                 CommandType.BRAKE, [True] * self.motor_count)
@@ -307,6 +309,7 @@ class Arm(DeviceBase, MotorBase):
                             continue
                     ### normal command
                     else:
+                        self._is_timeout = False
                         try:
                             # if no new command, use the last command 
                             command = None
@@ -486,6 +489,12 @@ class Arm(DeviceBase, MotorBase):
     def enable_mit(self):
         """Enable MIT"""
         self._enable_mit = True
+
+    def is_timeout(self) -> bool:
+        """
+        Check if the command is timeout
+        """
+        return copy.copy(self._is_timeout)
 
     # old revert function, will be removed soon
     def convert_positions_to_rad_func(self, positions: np.ndarray, pulse_per_rotation: np.ndarray) -> np.ndarray:

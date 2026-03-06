@@ -1053,7 +1053,6 @@ class HexDeviceApi:
 
     async def __main_loop(self):
         self.__shutdown_event = asyncio.Event()
-        log_common("HexDevice Api started.")
 
         if not self._stream_mode:
             await self.__connect_ws()
@@ -1061,7 +1060,6 @@ class HexDeviceApi:
             self.__tasks = [task1]
         else:
             self.__tasks = []
-            log_info("Stream mode: WebSocket data parser is disabled, call _process_api_up() externally to feed data.")
 
         await self.__shutdown_event.wait()
 

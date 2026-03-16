@@ -15,7 +15,6 @@ from .device_base_optional import OptionalDeviceBase
 from .motor_base import MitMotorCommand, MotorBase, MotorError, MotorCommand, CommandType, Timestamp
 from .generated import public_api_down_pb2, public_api_up_pb2, public_api_types_pb2
 from copy import deepcopy
-from .generated.public_api_types_pb2 import (HandStatus)
 import threading
 
 
@@ -26,18 +25,22 @@ class Hands(OptionalDeviceBase, MotorBase):
     Inherits from OptionalDeviceBase and MotorBase, mainly implements control of Hands
     This class processes the optional hand_status field from APIUp messages.
 
-    Supported hand types:
-    - HtGp100: GP100 hand type
+    Supported device types:
+    - SdtHandGp100: GP100 hand type
+    - SdtHandGp80G1: GP80G1 hand type
+    - SdtHandGr100: GR100 hand type
     """
 
     SUPPORTED_DEVICE_TYPE = [
         public_api_types_pb2.SecondaryDeviceType.SdtHandGp100,
         public_api_types_pb2.SecondaryDeviceType.SdtHandGp80G1,
+        public_api_types_pb2.SecondaryDeviceType.SdtHandGr100,
     ]
 
     DEVICE_ID_TO_DEVICE_TYPE = {
         1: public_api_types_pb2.SecondaryDeviceType.SdtHandGp100,
         4: public_api_types_pb2.SecondaryDeviceType.SdtHandGp80G1,
+        6: public_api_types_pb2.SecondaryDeviceType.SdtHandGr100,
     }
 
     def __init__(self,
@@ -54,7 +57,7 @@ class Hands(OptionalDeviceBase, MotorBase):
         
         Args:
             device_id: Device ID (SecondaryDeviceType enum)
-            device_type: Device type (e.g., 'SdtUnknown', 'SdtHandGp100', 'SdtGamepad', 'SdtImuY200')
+            device_type: Device type (e.g., 'SdtUnknown', 'SdtHandGp100', 'SdtHandGp80G1', 'SdtHandGr100')
             motor_count: Number of motors
             name: Device name
             control_hz: Control frequency
@@ -97,6 +100,10 @@ class Hands(OptionalDeviceBase, MotorBase):
             self._positon_step = 0.02
         elif self._device_type == public_api_types_pb2.SecondaryDeviceType.SdtHandGp80G1:
             self._hands_limit = [0.0, 5.65, -np.inf, np.inf, -np.inf, np.inf]
+            self._max_torque = 3.0
+            self._positon_step = 0.02
+        elif self._device_type == public_api_types_pb2.SecondaryDeviceType.SdtHandGr100:
+            self._hands_limit = [0.0, 0.57, -np.inf, np.inf, -np.inf, np.inf]
             self._max_torque = 3.0
             self._positon_step = 0.02
         else:

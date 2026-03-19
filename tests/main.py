@@ -185,9 +185,9 @@ def main():
                             #     CommandType.POSITION,
                             #     [-0.3, -1.48, 2.86, 0.0, 0.0, 0.0])
 
-                            # device.motor_command(
-                            #     CommandType.TORQUE,
-                            #     [0.0] * device.motor_count)
+                            device.motor_command(
+                                CommandType.TORQUE,
+                                [0.0] * device.motor_count)
 
                             # device.motor_command(
                             #     CommandType.SPEED,
@@ -308,28 +308,28 @@ def main():
                         #         MitMotorCommand(position=2.6, speed=0.0, torque=0.0, kp=20.0, kd=1.0),
                         #         ])
 
-                optional_devices = api.find_optional_device_by_robot_type(public_api_types_pb2.SecondaryDeviceType.SdtHandGr100)
-                if optional_devices is not None:
-                    device: Hands = optional_devices[0]
-                    if device.has_new_data():
-                        # device.set_positon_step(0.02)
-                        # device.set_pos_torque(3.0)
+                # optional_devices = api.find_optional_device_by_robot_type(public_api_types_pb2.SecondaryDeviceType.SdtHandGr100)
+                # if optional_devices is not None:
+                #     device: Hands = optional_devices[0]
+                #     if device.has_new_data():
+                #         # device.set_positon_step(0.02)
+                #         # device.set_pos_torque(3.0)
 
-                        print(f"hands position: {device.get_motor_positions()}")
-                        # print(f"hands position: {device.get_motor_encoder_positions()}")
+                #         print(f"hands position: {device.get_motor_positions()}")
+                #         # print(f"hands position: {device.get_motor_encoder_positions()}")
 
-                        device.motor_command(
-                            CommandType.TORQUE,
-                            [0.0] * device.motor_count
-                        )
-                        # device.motor_command(
-                        #     CommandType.POSITION,
-                        #     [0.0] * device.motor_count
-                        # )
-                        # device.motor_command(
-                        #         CommandType.MIT,[
-                        #         MitMotorCommand(position=2.6, speed=0.0, torque=0.0, kp=20.0, kd=1.0),
-                        #         ])
+                #         device.motor_command(
+                #             CommandType.TORQUE,
+                #             [0.0] * device.motor_count
+                #         )
+                #         # device.motor_command(
+                #         #     CommandType.POSITION,
+                #         #     [0.0] * device.motor_count
+                #         # )
+                #         # device.motor_command(
+                #         #         CommandType.MIT,[
+                #         #         MitMotorCommand(position=2.6, speed=0.0, torque=0.0, kp=20.0, kd=1.0),
+                #         #         ])
 
                 optional_devices = api.find_optional_device_by_robot_type(public_api_types_pb2.SecondaryDeviceType.SdtImuY200)
                 if optional_devices is not None:

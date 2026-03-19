@@ -95,9 +95,10 @@ class Arm(DeviceBase, MotorBase):
 
         # Control related
         if robot_type in [public_api_types_pb2.RobotType.RtHelloArcherY6_H1, public_api_types_pb2.RobotType.RtHelloFireflyY6_H1]:
-            self._command_timeout_check = True
-        else:
             self._command_timeout_check = False
+        else:
+            self._command_timeout_check = True
+        self._is_timeout = False
         self._last_command_time = None
         self._command_timeout = 0.3  # 300ms
         self.__last_warning_time = time.perf_counter()  # last log warning time
@@ -297,6 +298,7 @@ class Arm(DeviceBase, MotorBase):
                     ### command timeout
                     elif self._command_timeout_check and (start_time -
                           self._last_command_time) > self._command_timeout:
+                        self._is_timeout = True
                         try:
                             motor_msg = self._construct_custom_motor_msg(
                                 CommandType.BRAKE, [True] * self.motor_count)
@@ -307,6 +309,7 @@ class Arm(DeviceBase, MotorBase):
                             continue
                     ### normal command
                     else:
+                        self._is_timeout = False
                         try:
                             # if no new command, use the last command 
                             command = None
@@ -356,9 +359,13 @@ class Arm(DeviceBase, MotorBase):
         if isinstance(values, np.ndarray):
             values = values.tolist()
 
-        if (command_type == CommandType.MIT or command_type == CommandType.TORQUE) and not self._enable_mit:
-            raise ValueError("Due to specific configurations, certain robotic arms may require consultation before they can be safely operated. \
-            The MIT command is not enabled by default on this arm. Please contact customer service to inquire about activating MIT support.")
+        if command_type != CommandType.POSITION:
+            arm_config_manager.clear_position_history(self.robot_type)
+            if command_type in (CommandType.MIT, CommandType.TORQUE) and not self._enable_mit:
+                raise ValueError(
+                    "Due to specific configurations, certain robotic arms may require consultation before they can be safely operated. "
+                    "The MIT command is not enabled by default on this arm. Please contact customer service to inquire about activating MIT support."
+                )
         
         super().motor_command(command_type, values)
         self._last_command_time = time.perf_counter()
@@ -486,6 +493,12 @@ class Arm(DeviceBase, MotorBase):
     def enable_mit(self):
         """Enable MIT"""
         self._enable_mit = True
+
+    def is_timeout(self) -> bool:
+        """
+        Check if the command is timeout
+        """
+        return copy.copy(self._is_timeout)
 
     # old revert function, will be removed soon
     def convert_positions_to_rad_func(self, positions: np.ndarray, pulse_per_rotation: np.ndarray) -> np.ndarray:
@@ -835,6 +848,10 @@ class Arm(DeviceBase, MotorBase):
     def clear_position_history(self):
         """Clear position history records"""
         arm_config_manager.clear_position_history(self.robot_type)
+
+    def clear_last_positions(self):
+        """Clear _last_positions so next position command re-initializes from current actual position for velocity limiting"""
+        arm_config_manager.clear_last_positions(self.robot_type)
 
     def clear_velocity_history(self):
         """Clear velocity history records"""

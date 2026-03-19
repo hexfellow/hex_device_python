@@ -568,23 +568,23 @@ class ArmConfigManager:
 
     def clear_position_history(self, arm_series: int):
         """
-        Clear position history records for specified robotic arm series
+        Clear position history records for specified robotic arm series.
+        Idempotent: safe to call repeatedly (no-op if already cleared).
         
         Args:
             arm_series: Robotic arm series
         """
-        if arm_series in self._last_positions:
-            del self._last_positions[arm_series]
+        self._last_positions.pop(arm_series, None)
 
     def clear_velocity_history(self, arm_series: int):
         """
-        Clear velocity history records for specified robotic arm series
+        Clear velocity history records for specified robotic arm series.
+        Idempotent: safe to call repeatedly (no-op if already cleared).
         
         Args:
             arm_series: Robotic arm series
         """
-        if arm_series in self._last_velocities:
-            del self._last_velocities[arm_series]
+        self._last_velocities.pop(arm_series, None)
 
     def clear_motion_history(self, arm_series: int):
         """

@@ -200,7 +200,7 @@ __author__ = "Jecjune"
 __email__ = "zejun.chen@hexfellow.com"
 
 # Proto types
-from .generated import public_api_types_pb2
+from .generated import public_api_types_pb2, public_api_down_pb2, public_api_up_pb2
 from .generated.version import CURRENT_PROTOCOL_MAJOR_VERSION, CURRENT_PROTOCOL_MINOR_VERSION
 
 # Core classes
@@ -255,6 +255,11 @@ from .hex_device_api import HexDeviceApi
 
 # Define what gets imported with "from hex_device import *"
 __all__ = [
+    # Message types
+    'public_api_types_pb2',
+    'public_api_down_pb2',
+    'public_api_up_pb2',
+
     # Core classes
     'DeviceBase',
     'OptionalDeviceBase',

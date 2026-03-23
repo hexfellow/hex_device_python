@@ -7,7 +7,7 @@
 ################################################################
 
 # A Simple Test for HexDeviceApi
-# Quick Start: python3 tests/main.py --url ws://<Your controller ip>:8439 or ws://[::1%eth0]:8439
+# Quick Start: python3 tests/lift_test.py --url ws://<Your controller ip>:8439 or ws://[::1%eth0]:8439
 
 import sys
 import argparse

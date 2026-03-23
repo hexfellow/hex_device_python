@@ -13,18 +13,10 @@ import sys
 import argparse
 import numpy as np
 import time
-import colorsys
-
-# # If you want to use the local version of the library, you can uncomment the following lines.
-# PROJECT_PATH = '/home/tl/ssd/docker_link/python/hex_device_python'
-# sys.path.insert(1, f'{PROJECT_PATH}')
-# sys.path.insert(
-#     1,
-#     f'{PROJECT_PATH}/hex_device/generated')
 
 import hex_device
 from hex_device import HexDeviceApi, public_api_types_pb2
-from hex_device import Chassis, LinearLift, Arm, Hands, Imu, Gamepad, ZetaLift, SdtHello
+from hex_device import LinearLift, ZetaLift
 from hex_device.motor_base import CommandType, MitMotorCommand
 
 def main():

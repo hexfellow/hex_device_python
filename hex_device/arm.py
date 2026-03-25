@@ -95,9 +95,9 @@ class Arm(DeviceBase, MotorBase):
 
         # Control related
         if robot_type in [public_api_types_pb2.RobotType.RtHelloArcherY6_H1, public_api_types_pb2.RobotType.RtHelloFireflyY6_H1]:
-            self._command_timeout_check = True
-        else:
             self._command_timeout_check = False
+        else:
+            self._command_timeout_check = True
         self._last_command_time = None
         self._command_timeout = 0.3  # 300ms
         self.__last_warning_time = time.perf_counter()  # last log warning time
@@ -343,9 +343,13 @@ class Arm(DeviceBase, MotorBase):
         if isinstance(values, np.ndarray):
             values = values.tolist()
 
-        if (command_type == CommandType.MIT or command_type == CommandType.TORQUE) and not self._enable_mit:
-            raise ValueError("Due to specific configurations, certain robotic arms may require consultation before they can be safely operated. \
-            The MIT command is not enabled by default on this arm. Please contact customer service to inquire about activating MIT support.")
+        if command_type != CommandType.POSITION:
+            arm_config_manager.clear_position_history(self.robot_type)
+            if command_type in (CommandType.MIT, CommandType.TORQUE) and not self._enable_mit:
+                raise ValueError(
+                    "Due to specific configurations, certain robotic arms may require consultation before they can be safely operated. "
+                    "The MIT command is not enabled by default on this arm. Please contact customer service to inquire about activating MIT support."
+                )
         
         super().motor_command(command_type, values)
         self._last_command_time = time.perf_counter()

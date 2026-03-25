@@ -260,8 +260,8 @@ class Chassis(DeviceBase, MotorBase):
 
                 # check if is holder:
                 if sh != mi:
-                    if start_time - self.__last_warning_time > 3.0:
-                        log_warn(f"Chassis: You are not the session holder, please use start() method to get the control of the chassis...")
+                    if start_time - self.__last_warning_time > 5.0:
+                        log_info(f"Chassis: You are not the session holder, using start() method to get the control of the chassis...")
                         self.__last_warning_time = start_time
                     continue
 

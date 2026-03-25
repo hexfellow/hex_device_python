@@ -183,7 +183,7 @@ class LinearLift(DeviceBase):
             try:
                 # check lift error
                 error = self.get_parking_stop_detail()
-                if error != public_api_types_pb2.ParkingStopDetail():
+                if error != None:
                     if start_time - self.__last_warning_time > 1.0:
                         log_err(f"emergency stop: {error}")
                         self.__last_warning_time = start_time

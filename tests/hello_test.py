@@ -19,6 +19,28 @@ import hex_device
 from hex_device import HexDeviceApi, public_api_types_pb2
 from hex_device import Arm, SdtHello
 
+import socket
+import json
+from copy import deepcopy
+
+def send_plotjuggle_data(Plotjuggle_socket: socket.socket, data, IP:str, port:int):
+    Plotjuggle_socket.sendto(json.dumps(data).encode(), (IP, port))
+
+def transform_plotjuggle_data(device: Arm) -> dict:
+    dic = {}
+    dic["arm_series"] = device.get_arm_series()
+    dic["motor_positions"] = device.get_motor_positions(False).tolist()
+    dic["joint_limits"] = device.get_joint_limits()
+    dic["joint_names"] = device.get_joint_names()
+    dic["expected_motor_count"] = device.get_expected_motor_count()
+    dic["last_velocities"] = device.get_last_velocities()
+    dic["last_positions"] = device.get_last_positions()
+    device_motor_status = device.get_simple_motor_status(False)
+    dic["position"] = device_motor_status["pos"].tolist()
+    dic["velocity"] = device_motor_status["vel"].tolist()
+    dic["torques"] = device_motor_status["eff"].tolist()
+    return deepcopy(dic)
+
 def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(
@@ -43,6 +65,26 @@ def main():
         default='both',
         help='Which device to print status for: arm (motor positions), sdt-hello (simple motor pos), or both.'
     )
+    
+    parser.add_argument(
+        "--visuavle",
+        action="store_true",
+        help="Enable visualization of the arm trajectory."
+    )
+    
+    parser.add_argument(
+        "--visuavleIp",
+        default="127.0.0.1",
+        help="IP address for Plotjuggle visualization."
+    )
+    
+    parser.add_argument(
+        "--visuavlePort",
+        default=9870,
+        type=int,
+        help="Port number for Plotjuggle visualization."
+    )
+    
     args = parser.parse_args()
     
     check_arm = args.device in ('arm', 'both')
@@ -51,6 +93,22 @@ def main():
     # Set log level
     hex_device.set_log_level(args.log_level)
     print(f"Log level set to: {args.log_level}")
+    
+    # Check if visualization is enabled
+    check_visuavle = args.visuavle
+    visuavleIp = args.visuavleIp
+    visuavlePort = args.visuavlePort
+    
+    # Init Plotjuggle
+    Plotjuggle_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    Plotjuggle_data = {}
+    Plotjuggle_data["Hello"] = {}
+    Plotjuggle_data["Arm"] = {}
+    Plotjuggle_last_send_time = time.time()
+    if check_visuavle:
+        print(f"If visuavle port conflict, you can manually specify the IP and port using --visuableIp and --visuablePort.")
+        print(f"============= visuavle Server url:{visuavleIp} port:{visuavlePort} =================")
+        
     
     # Init HexDeviceApi
     api = HexDeviceApi(ws_url=args.url, control_hz=500, enable_kcp=True, local_port=0)
@@ -75,9 +133,12 @@ def main():
                                 # Must start device before using it.
                                 device.start()
                                
-                            if check_arm:
-                                print(f"arm position: {device.get_motor_positions(False).tolist()}")
+                            # if check_arm:
+                            #     print(f"arm position: {device.get_motor_positions(False).tolist()}")
                             # print(f"arm simple motor status: {device.get_simple_motor_status(False)}")
+                            
+                            if check_visuavle:
+                                Plotjuggle_data['Arm'] = transform_plotjuggle_data(device)
 
                 optional_devices = api.find_optional_device_by_robot_type(public_api_types_pb2.SecondaryDeviceType.SdtHello1J1T4BV1)
                 if optional_devices is not None:
@@ -97,9 +158,21 @@ def main():
                             
                             # set rgb stripe command
                             device.set_rgb_stripe_command(r_list, g_list, b_list)
-                        
+                            
+                        # if check_sdt_hello:
+                        #     print(f"sdt hello position: {device.get_simple_motor_status()['pos']}")
+                            
                         if check_sdt_hello:
-                            print(f"sdt hello position: {device.get_simple_motor_status()['pos']}")
+                            # print(f"sdt hello position: {device.get_simple_motor_status()['pos']}")
+                            if check_visuavle:
+                                Plotjuggle_data['Hello']["summary"] = device.get_hello_summary()
+                                Plotjuggle_data['Hello']["joint_limits"] = device.get_joint_limits()
+                                Plotjuggle_data['Hello']["motor_status"] = device.get_simple_motor_status()
+            if check_visuavle:
+                Plotjuggle_current_send_time = time.time()
+                if Plotjuggle_current_send_time - Plotjuggle_last_send_time >= 0.01:  # 10ms
+                    send_plotjuggle_data(Plotjuggle_socket, Plotjuggle_data, visuavleIp, visuavlePort)
+                    Plotjuggle_last_send_time = Plotjuggle_current_send_time
                         
             time.sleep(0.0001)
 

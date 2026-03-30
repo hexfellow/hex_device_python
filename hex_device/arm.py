@@ -34,6 +34,7 @@ class Arm(DeviceBase, MotorBase):
         public_api_types_pb2.RobotType.RtArmFireflyY6_H1,
         public_api_types_pb2.RobotType.RtHelloArcherY6_H1,
         public_api_types_pb2.RobotType.RtHelloFireflyY6_H1,
+        public_api_types_pb2.RobotType.RtArmArcherX7H1,
     ]
 
     ARM_SERIES_TO_ROBOT_TYPE = {
@@ -44,7 +45,8 @@ class Arm(DeviceBase, MotorBase):
         25: public_api_types_pb2.RobotType.RtArmArcherY6_H1,
         27: public_api_types_pb2.RobotType.RtArmFireflyY6_H1,
         26: public_api_types_pb2.RobotType.RtHelloArcherY6_H1,
-        27: public_api_types_pb2.RobotType.RtHelloFireflyY6_H1,
+        28: public_api_types_pb2.RobotType.RtHelloFireflyY6_H1,
+        29: public_api_types_pb2.RobotType.RtArmArcherX7H1,
     }
 
     def __init__(self,

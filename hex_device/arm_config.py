@@ -244,6 +244,29 @@ class ArmConfigManager:
                            joint_limit=[-2.96, 2.96, -12.56, 12.56, -0.0, 0.0])
             ]))
 
+        # 0x1D - archer_x7_h1 (7-axis)
+        self._configs[29] = ArmConfig(
+            name="archer_x7_h1",
+            dof_num=DofType.SEVEN_AXIS,
+            arm_series=29,
+            motor_model=[0x87, 0x87, 0x85, 0x85, 0x84, 0x84, 0x84],
+            robot_config=JointParams(joints=[
+                JointParam(joint_name="joint_1",
+                           joint_limit=[-2.7, 2.7, -3.77, 3.77, -0.0, 0.0]),
+                JointParam(joint_name="joint_2",
+                           joint_limit=[-1.9, 1.3, -3.77, 3.77, -0.0, 0.0]),
+                JointParam(joint_name="joint_3",
+                           joint_limit=[-2.7, 2.7, -3.77, 3.77, -0.0, 0.0]),
+                JointParam(joint_name="joint_4",
+                           joint_limit=[-1.9, 1.0, -3.77, 3.77, -0.0, 0.0]),
+                JointParam(joint_name="joint_5",
+                           joint_limit=[-2.7, 2.7, -12.56, 12.56, -0.0, 0.0]),
+                JointParam(joint_name="joint_6",
+                           joint_limit=[-0.85, 0.9, -12.56, 12.56, -0.0, 0.0]),
+                JointParam(joint_name="joint_7",
+                           joint_limit=[-0.77, 0.79, -12.56, 12.56, -0.0, 0.0])
+            ]))
+
     def get_config(self, arm_series: int) -> Optional[ArmConfig]:
         """Get robotic arm configuration for specified series"""
         return self._configs.get(arm_series)

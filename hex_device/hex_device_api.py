@@ -35,7 +35,7 @@ ORPHANED_TASK_CHECK_INTERVAL = 100
 # The minimum supported protocol version.
 # WARNING!!!! Do not modify the supported version number!!! Incompatible drivers may cause serious damage to the device!!!
 MIN_PROTOCOL_MAJOR_VERSION = 1
-MIN_PROTOCOL_MINOR_VERSION = 4
+MIN_PROTOCOL_MINOR_VERSION = 3
 
 class ReportFrequency:
     """
@@ -371,7 +371,7 @@ class HexDeviceApi:
 
         return device
 
-    def _create_and_register_optional_device(self, device_id: int, device_type, secondary_device_status) -> Optional[OptionalDeviceBase]:
+    def _create_and_register_optional_device(self, device_id: int, device_type, secondary_device_status, proto_version) -> Optional[OptionalDeviceBase]:
         """
         Create and register optional device based on device_id and device_type
         
@@ -379,14 +379,16 @@ class HexDeviceApi:
             device_id: Device ID from SecondaryDeviceStatus
             device_type: Device type
             secondary_device_status: The SecondaryDeviceStatus object
+            proto_version: Protocol version
             
         Returns:
             Created optional device instance or None
         """
         # init optional device
         device = self._device_factory.create_optional_device(
-            device_id,
-            device_type,
+            device_id=device_id,
+            device_type=device_type,
+            proto_version=proto_version,
             secondary_device_status=secondary_device_status,
             control_hz=self.__control_hz,
             send_message_callback=self._send_down_message,
@@ -1007,7 +1009,8 @@ class HexDeviceApi:
                             
                             try:
                                 # Create and register new optional device
-                                optional_device = self._create_and_register_optional_device(device_id, device_type, secondary_device)
+                                proto_version = (api_up.protocol_major_version, api_up.protocol_minor_version)
+                                optional_device = self._create_and_register_optional_device(device_id, device_type, secondary_device, proto_version)
                             except Exception as e:
                                 log_err(f"_create_and_register_optional_device_by_id error: {e}")
                                 continue

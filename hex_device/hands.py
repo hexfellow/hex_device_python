@@ -47,6 +47,7 @@ class Hands(OptionalDeviceBase, MotorBase):
                  device_id,
                  device_type,
                  motor_count,
+                 proto_version: tuple[int, int],
                  send_message_callback,
                  name: str = "Hands",
                  control_hz: int = 250,
@@ -68,11 +69,11 @@ class Hands(OptionalDeviceBase, MotorBase):
 
         # Convert function for old revert function
         if device_type in [public_api_types_pb2.SecondaryDeviceType.SdtHandGp100]:
-            MotorBase.__init__(self, motor_count, name,
+            MotorBase.__init__(self, motor_count, proto_version, name,
                 convert_positions_to_rad_func=self.convert_positions_to_rad_func, 
                 convert_rad_to_positions_func=self.convert_rad_to_positions_func)
         else:
-            MotorBase.__init__(self, motor_count, name)
+            MotorBase.__init__(self, motor_count, proto_version, name)
 
         self.name = name or "Hands"
         self._control_hz = control_hz

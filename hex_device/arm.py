@@ -52,6 +52,7 @@ class Arm(DeviceBase, MotorBase):
     def __init__(self,
                  robot_type,
                  motor_count,
+                 proto_version,
                  name: str = "Arm",
                  control_hz: int = 500,
                  send_message_callback=None):
@@ -72,11 +73,11 @@ class Arm(DeviceBase, MotorBase):
                             public_api_types_pb2.RobotType.RtArmSaberD7x,
                             public_api_types_pb2.RobotType.RtArmArcherD6Y_P1,
                             public_api_types_pb2.RobotType.RtArmArcherY6L_V1]:
-            MotorBase.__init__(self, motor_count, name, 
+            MotorBase.__init__(self, motor_count, proto_version, name, 
             convert_positions_to_rad_func=self.convert_positions_to_rad_func, 
             convert_rad_to_positions_func=self.convert_rad_to_positions_func)
         else:
-            MotorBase.__init__(self, motor_count, name)
+            MotorBase.__init__(self, motor_count, proto_version, name)
 
         self.name = name or "Arm"
         self._control_hz = control_hz

@@ -34,6 +34,7 @@ class ZetaLift(DeviceBase, MotorBase):
     def __init__(self,
                  motor_count: int,
                  robot_type: int,
+                 proto_version: tuple[int, int],
                  name: str = "ZetaLift",
                  control_hz: int = 500,
                  send_message_callback=None,
@@ -43,12 +44,13 @@ class ZetaLift(DeviceBase, MotorBase):
         
         Args:
             motor_count: Number of motors
+            proto_version: Protocol version
             name: Device name
             control_hz: Control frequency
             send_message_callback: Callback function for sending messages, used to send downstream messages
         """
         DeviceBase.__init__(self, name, send_message_callback)
-        MotorBase.__init__(self, motor_count, name)
+        MotorBase.__init__(self, motor_count, proto_version, name)
         self.name = name or "ZetaLift"
         self._set_robot_type(robot_type)
         self._control_hz = control_hz

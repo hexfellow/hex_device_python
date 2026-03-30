@@ -227,13 +227,17 @@ class MotorBase(ABC):
     This class corresponds to MotorStatus in proto
     """
 
-    def __init__(self, motor_count: int, name: str = "",
-                 convert_positions_to_rad_func: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None,
-                 convert_rad_to_positions_func: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None):
+    def __init__(self, motor_count: int, 
+                proto_version: tuple[int, int],
+                name: str = "",
+                convert_positions_to_rad_func: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None,
+                convert_rad_to_positions_func: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None,
+                ):
         """
         Initialize motor base class
         Args:
             motor_count: Number of motors
+            proto_version: Protocol version
             name: Motor group name
             convert_positions_to_rad_func: Optional custom function to convert encoder positions to radians.
                 If None, uses default implementation.
@@ -244,6 +248,7 @@ class MotorBase(ABC):
         """
         self.motor_count = motor_count
         self.name = name or f"MotorGroup"
+        self.__proto_version = proto_version
 
         # Motor status data: stores tuples of (List[MotorStatus], timestamp)
         # Each entry contains all motors' status at a given timestamp
@@ -1084,11 +1089,19 @@ class MotorBase(ABC):
                 single_motor_target.torque = target
                 motor_targets.targets.append(deepcopy(single_motor_target))
         elif command.command_type == CommandType.MIT:
-            for mit_cmd in command.mit_command:
+            # If the proto version is lower than 1.4 , Must convert to encoder position
+            if self.__proto_version < (1, 4):
+                raw_positions = np.array([cmd.position for cmd in command.mit_command])
+                trans_positions = self.convert_rad_to_positions(
+                    raw_positions, pulse_per_rotation)
+            else:
+                trans_positions = np.array([cmd.position for cmd in command.mit_command])
+                
+            for i, mit_cmd in enumerate(command.mit_command):
                 mit_target = public_api_types_pb2.MitMotorTarget()
                 mit_target.torque = mit_cmd.torque
                 mit_target.speed = mit_cmd.speed
-                mit_target.position = mit_cmd.position
+                mit_target.position = trans_positions[i]
                 mit_target.kp = mit_cmd.kp
                 mit_target.kd = mit_cmd.kd
                 

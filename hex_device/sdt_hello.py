@@ -43,6 +43,7 @@ class SdtHello(OptionalDeviceBase, MotorBase):
         self,
         device_id,
         device_type,
+        proto_version: tuple[int, int],
         send_message_callback,
         name: str = "SdtHello",
         control_hz: int = 500,
@@ -73,7 +74,7 @@ class SdtHello(OptionalDeviceBase, MotorBase):
             self._rgb_len = 6
 
         # Initialize MotorBase for unified interface
-        MotorBase.__init__(self, self._motor_count, name)
+        MotorBase.__init__(self, self._motor_count, proto_version, name)
 
         # hello status
         self._status_lock = threading.Lock()

@@ -89,7 +89,7 @@ class DeviceFactory:
 
         return None
 
-    def create_optional_device(self, device_id: int, device_type, secondary_device_status, control_hz, send_message_callback=None) -> Optional[OptionalDeviceBase]:
+    def create_optional_device(self, device_id: int, device_type, proto_version: tuple[int, int], secondary_device_status, control_hz, send_message_callback=None) -> Optional[OptionalDeviceBase]:
         """
         Create an optional device instance for the specified device_id and message type
         
@@ -108,7 +108,7 @@ class DeviceFactory:
         device_class = self._optional_device_classes[device_type]
         
         # Extract constructor parameters based on device class and api_up
-        constructor_params = self._extract_optional_constructor_params_from_msg(device_class, device_type, secondary_device_status)
+        constructor_params = self._extract_optional_constructor_params_from_msg(device_class, device_type, proto_version, secondary_device_status)
         all_params = {
             'device_id': device_id,
             'device_type': device_type,
@@ -120,13 +120,14 @@ class DeviceFactory:
         device_instance = device_class(**all_params)
         return device_instance
 
-    def _extract_optional_constructor_params_from_msg(self, device_class: Type[OptionalDeviceBase], device_type, secondary_device_status) -> Dict[str, Any]:
+    def _extract_optional_constructor_params_from_msg(self, device_class: Type[OptionalDeviceBase], device_type, proto_version: tuple[int, int], secondary_device_status) -> Dict[str, Any]:
         """
         Extract optional device constructor parameters from secondary_device_status
         
         Args:
             device_class: Optional device class
             device_type: Device type (SecondaryDeviceType)
+            proto_version: Protocol version
             secondary_device_status: SecondaryDeviceStatus
             
         Returns:
@@ -147,6 +148,7 @@ class DeviceFactory:
             
             params.update({
                 'motor_count': motor_count,
+                'proto_version': proto_version,
                 'name': f"Hands_{device_type}",
             })
         
@@ -162,6 +164,7 @@ class DeviceFactory:
 
         elif class_name == 'SdtHello':
             params.update({
+                'proto_version': proto_version,
                 'name': f"SdtHello_{device_type}",
             })
 
@@ -187,8 +190,10 @@ class DeviceFactory:
 
         # Extract different parameters based on device class name
         class_name = device_class.__name__
+        proto_version = (api_up.protocol_major_version, api_up.protocol_minor_version)
 
         if class_name == 'Arm':
+            params['proto_version'] = proto_version
             params['robot_type'] = robot_type
             params['name'] = f"ArmArcher_{robot_type}"
             # Get motor_count from api_up
@@ -197,6 +202,7 @@ class DeviceFactory:
                 params['motor_count'] = motor_count
 
         elif class_name == 'Chassis':
+            params['proto_version'] = proto_version
             params['name'] = f"Chassis_{robot_type}"
             params['robot_type'] = robot_type
             # Get motor_count from api_up
@@ -213,6 +219,7 @@ class DeviceFactory:
                 params['motor_count'] = motor_count
 
         elif class_name == 'ZetaLift':
+            params['proto_version'] = proto_version
             params['name'] = f"ZetaLift_{robot_type}"
             params['robot_type'] = robot_type
             # Get motor_count from api_up

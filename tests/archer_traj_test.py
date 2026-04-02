@@ -281,10 +281,10 @@ def main():
                             #     mit_commands)
 
                             # example 2:
-                            # device.motor_command(
-                            #     CommandType.POSITION,
-                            #     target_positions
-                            # )
+                            device.motor_command(
+                                CommandType.POSITION,
+                                target_positions
+                            )
 
             time.sleep(0.002)
 

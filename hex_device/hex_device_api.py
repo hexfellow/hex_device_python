@@ -35,7 +35,7 @@ ORPHANED_TASK_CHECK_INTERVAL = 100
 # The minimum supported protocol version.
 # WARNING!!!! Do not modify the supported version number!!! Incompatible drivers may cause serious damage to the device!!!
 MIN_PROTOCOL_MAJOR_VERSION = 1
-MIN_PROTOCOL_MINOR_VERSION = 3
+MIN_PROTOCOL_MINOR_VERSION = 2
 
 class ReportFrequency:
     """

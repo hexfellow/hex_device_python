@@ -10,7 +10,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional, Tuple, List, Dict, Any, Union, Callable
 
-from hex_device.common_utils import log_warn
+import logging as _logging
+_motor_base_fallback_logger = _logging.getLogger('hex_device')
 from .generated import public_api_down_pb2, public_api_up_pb2, public_api_types_pb2
 from enum import Enum
 import threading
@@ -739,7 +740,7 @@ class MotorBase(ABC):
             timestamp: Timestamp object with s and ns components
         """
         if len(motor_status_list) != self.motor_count:
-            log_warn(
+            getattr(self, '_logger', _motor_base_fallback_logger).warning(
                 f"Warning: Motor count mismatch in _push_motor_data, expected {self.motor_count}, got {len(motor_status_list)}")
             return
         
@@ -787,7 +788,7 @@ class MotorBase(ABC):
             # No data available yet
             return
         if len(motor_status_list) != self.motor_count:
-            log_warn(
+            getattr(self, '_logger', _motor_base_fallback_logger).warning(
                 f"Warning: Motor count mismatch, expected {self.motor_count}, actual {len(motor_status_list)}")
             return
         
@@ -871,7 +872,7 @@ class MotorBase(ABC):
             # No data available yet
             return None, None, None, None, None
         if len(motor_status_list) != self.motor_count:
-            log_warn(
+            getattr(self, '_logger', _motor_base_fallback_logger).warning(
                 f"Warning: Motor count mismatch, expected {self.motor_count}, actual {len(motor_status_list)}")
             return None, None, None, None, None
         # Parse motor data

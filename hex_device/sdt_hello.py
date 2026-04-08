@@ -12,7 +12,7 @@ from signal import raise_signal
 import time
 import numpy as np
 from typing import Optional, Tuple, List, Dict, Any, Union
-from .common_utils import delay, log_common, log_info, log_warn, log_err
+from .common_utils import delay
 from .device_base_optional import OptionalDeviceBase
 from .motor_base import MitMotorCommand, MotorBase, MotorError, MotorCommand, CommandType, Timestamp
 from .generated import public_api_down_pb2, public_api_up_pb2, public_api_types_pb2
@@ -48,6 +48,7 @@ class SdtHello(OptionalDeviceBase, MotorBase):
         name: str = "SdtHello",
         control_hz: int = 500,
         read_only: bool = False,
+        logger=None,
     ):
         """
         Initialize SdtHello device
@@ -61,7 +62,7 @@ class SdtHello(OptionalDeviceBase, MotorBase):
             read_only: Whether this device is read-only (read only will not create periodic task)
         """
         OptionalDeviceBase.__init__(self, read_only, name, device_id,
-                                    device_type, send_message_callback)
+                                    device_type, send_message_callback, logger=logger)
 
         self.name = name or "SdtHello"
         self._control_hz = control_hz
@@ -123,7 +124,7 @@ class SdtHello(OptionalDeviceBase, MotorBase):
             bool: Whether update was successful
         """
         if device_type != self._device_type:
-            log_warn(
+            self._log_warn(
                 f"Warning: SdtHello device type mismatch, expected {self._device_type}, actual {device_type}"
             )
             return False
@@ -136,7 +137,7 @@ class SdtHello(OptionalDeviceBase, MotorBase):
 
             return True
         except Exception as e:
-            log_err(f"SdtHello data update failed: {e}")
+            self._log_err(f"SdtHello data update failed: {e}")
             return False
 
     async def _periodic(self):
@@ -149,7 +150,7 @@ class SdtHello(OptionalDeviceBase, MotorBase):
         self.__last_warning_time = start_time
 
         await self._init()
-        log_info("SdtHello init success")
+        self._log_info("SdtHello init success")
         while True:
             await delay(start_time, cycle_time)
             start_time = time.perf_counter()
@@ -165,7 +166,7 @@ class SdtHello(OptionalDeviceBase, MotorBase):
                     await self._send_message(cmd)
 
             except Exception as e:
-                log_err(f"SdtHello periodic task exception: {e}")
+                self._log_err(f"SdtHello periodic task exception: {e}")
                 await asyncio.sleep(0.5)
                 continue
 

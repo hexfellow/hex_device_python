@@ -29,11 +29,16 @@ class NonErrorFilter(logging.Filter):
 
 # Custom formatter that includes IP address and port
 class HexDeviceFormatter(logging.Formatter):
-    """Custom formatter that includes IP address and port in log messages"""
+    """Custom formatter that includes IP address and port in log messages.
+
+    Reads ip_address/port from the LogRecord first (injected by LoggerAdapter),
+    then falls back to the module-level globals for backward compatibility.
+    """
     def format(self, record):
-        # Add IP and port to the record
-        record.ip_address = _log_ip_address if _log_ip_address is not None else "None"
-        record.port = _log_port if _log_port is not None else "None"
+        record.ip_address = getattr(record, 'ip_address',
+                                    _log_ip_address if _log_ip_address is not None else "None")
+        record.port = getattr(record, 'port',
+                              _log_port if _log_port is not None else "None")
         return super().format(record)
 
 # Configure default logging for the hex_device package

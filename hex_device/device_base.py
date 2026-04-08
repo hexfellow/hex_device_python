@@ -8,8 +8,11 @@
 
 from abc import ABC, abstractmethod
 from typing import Optional, List, Dict, Any
+import logging
 import threading
 from collections import deque
+
+_fallback_logger = logging.getLogger('hex_device')
 
 
 class DeviceBase(ABC):
@@ -18,13 +21,17 @@ class DeviceBase(ABC):
     Defines common interfaces and basic functionality for all devices
     """
 
-    def __init__(self, name: str = "", send_message_callback=None):
+    def __init__(self, name: str = "", send_message_callback=None, logger=None):
         """
         Initialize device base class
         Args:
             name: Device name
+            send_message_callback: Callback for sending downstream messages
+            logger: Per-instance logger or LoggerAdapter; falls back to the
+                    shared 'hex_device' logger when not provided.
         """
         self.name = name or "Device"
+        self._logger = logger if logger is not None else _fallback_logger
 
         self._send_message_callback = send_message_callback
 
@@ -152,6 +159,22 @@ class DeviceBase(ABC):
             bool: Whether it is supported
         """
         pass
+
+    # ------------------------------------------------------------------
+    # Per-instance logging helpers (use self._logger so that each API
+    # instance writes logs tagged with its own ip_address / port).
+    # ------------------------------------------------------------------
+    def _log_info(self, msg: str) -> None:
+        self._logger.info(msg)
+
+    def _log_warn(self, msg: str) -> None:
+        self._logger.warning(msg)
+
+    def _log_err(self, msg: str) -> None:
+        self._logger.error(msg)
+
+    def _log_debug(self, msg: str) -> None:
+        self._logger.debug(msg)
 
     def __str__(self) -> str:
         """String representation"""

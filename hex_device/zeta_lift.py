@@ -9,7 +9,7 @@
 from typing import Optional, List, Dict, Any, Tuple
 import numpy as np
 from collections import deque
-from .common_utils import delay, log_common, log_info, log_warn, log_err
+from .common_utils import delay
 from .device_base import DeviceBase
 from .generated import public_api_down_pb2, public_api_up_pb2, public_api_types_pb2
 from .motor_base import MotorBase, MotorError, MotorCommand, CommandType, Timestamp
@@ -38,6 +38,7 @@ class ZetaLift(DeviceBase, MotorBase):
                  name: str = "ZetaLift",
                  control_hz: int = 500,
                  send_message_callback=None,
+                 logger=None,
                  ):
         """
         Initialize ZetaLift
@@ -49,7 +50,7 @@ class ZetaLift(DeviceBase, MotorBase):
             control_hz: Control frequency
             send_message_callback: Callback function for sending messages, used to send downstream messages
         """
-        DeviceBase.__init__(self, name, send_message_callback)
+        DeviceBase.__init__(self, name, send_message_callback, logger=logger)
         MotorBase.__init__(self, motor_count, proto_version, name)
         self.name = name or "ZetaLift"
         self._set_robot_type(robot_type)
@@ -112,7 +113,7 @@ class ZetaLift(DeviceBase, MotorBase):
         try:
             return True
         except Exception as e:
-            log_err(f"ZetaLift initialization failed: {e}")
+            self._log_err(f"ZetaLift initialization failed: {e}")
             return False
 
     def _update(self, api_up_data, timestamp: Timestamp) -> bool:
@@ -150,7 +151,7 @@ class ZetaLift(DeviceBase, MotorBase):
 
             return True
         except Exception as e:
-            log_err(f"ZetaLift data update failed: {e}")
+            self._log_err(f"ZetaLift data update failed: {e}")
             return False
 
     async def _periodic(self):
@@ -167,7 +168,7 @@ class ZetaLift(DeviceBase, MotorBase):
         self.__last_warning_time = start_time
 
         await self._init()
-        log_info("ZetaLift init success")
+        self._log_info("ZetaLift init success")
         while True:
             await delay(start_time, cycle_time)
             start_time = time.perf_counter()
@@ -177,7 +178,7 @@ class ZetaLift(DeviceBase, MotorBase):
                 if self.get_parking_stop_detail(
                 ) != public_api_types_pb2.ParkingStopDetail():
                     if start_time - self.__last_warning_time > 1.0:
-                        log_err(
+                        self._log_err(
                             f"emergency stop: {self.get_parking_stop_detail()}"
                         )
                         self.__last_warning_time = start_time
@@ -186,7 +187,7 @@ class ZetaLift(DeviceBase, MotorBase):
                 if start_time - self.__last_warning_time > 1.0:
                     for i in range(self.motor_count):
                         if self.get_motor_state(i) == "error":
-                            log_err(f"Error: Motor {i} error occurred")
+                            self._log_err(f"Error: Motor {i} error occurred")
                             self.__last_warning_time = start_time
 
                 # prepare sending message
@@ -222,7 +223,7 @@ class ZetaLift(DeviceBase, MotorBase):
                         await self._send_message(msg)
 
             except Exception as e:
-                log_err(f"lift periodic failed: {e}")
+                self._log_err(f"lift periodic failed: {e}")
 
     ## control functions
     def calibrate(self):

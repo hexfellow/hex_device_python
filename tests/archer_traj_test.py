@@ -151,12 +151,13 @@ def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(
         description='Hexapod robotic arm trajectory planning and execution test',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        usage="python hello_test.py --url ws://<device_url>:8439 [options]"
     )
     parser.add_argument(
         '--url', 
         metavar='URL',
-        default="ws://0.0.0.0:8439",
+        required=True,
         help='WebSocket URL for HEX device connection'
     )
     args = parser.parse_args()

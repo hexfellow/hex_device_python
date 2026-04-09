@@ -745,8 +745,8 @@ class MotorBase(ABC):
             return
         
         # Store tuple (List[MotorStatus], timestamp) as a single entry
+        self._update_motor_status_data(motor_status_list, timestamp)
         self.__motor_data.append((motor_status_list, timestamp))
-        self._update_motor_status_data()
 
     def has_new_data(self) -> bool:
         """
@@ -779,19 +779,14 @@ class MotorBase(ABC):
             motor_status_list, timestamp = self.__motor_data[-1]
             return motor_status_list, timestamp
     
-    def _update_motor_status_data(self):
+    def _update_motor_status_data(self, motor_status_list: List[public_api_types_pb2.MotorStatus], timestamp: Timestamp):
         """
-        Update motor status data
+        Update motor status cache from the provided motor status list.
+
+        Args:
+            motor_status_list: List of motor status data for each motor (already validated)
+            timestamp: Timestamp corresponding to this status snapshot
         """
-        motor_status_list, timestamp = self._get_motor_data(pop=False)
-        if motor_status_list is None:
-            # No data available yet
-            return
-        if len(motor_status_list) != self.motor_count:
-            getattr(self, '_logger', _motor_base_fallback_logger).warning(
-                f"Warning: Motor count mismatch, expected {self.motor_count}, actual {len(motor_status_list)}")
-            return
-        
         # Parse motor data
         positions = []
         velocities = []

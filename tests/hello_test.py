@@ -7,7 +7,7 @@
 ################################################################
 
 # A Simple Test for HexDeviceApi
-# Quick Start: python3 tests/hello_test.py --url ws://<Your controller ip>:8439 [--device arm|sdt-hello|both] [--visuable]
+# Quick Start: python3 tests/hello_test.py --url ws://<Your controller ip>:8439 [--device arm|hello|both] [--visuable]
 
 import argparse
 import numpy as np
@@ -67,7 +67,7 @@ def main():
     args = parser.parse_args()
     
     check_arm = args.device in ('arm', 'both')
-    check_sdt_hello = args.device in ('sdt-hello', 'both')
+    check_sdt_hello = args.device in ('hello', 'both')
     
     # Set log level
     hex_device.set_log_level(args.log_level)

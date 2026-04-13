@@ -315,7 +315,7 @@ class Chassis(DeviceBase, MotorBase):
                                 self._is_timeout = True
                                 self.motor_command(
                                     CommandType.BRAKE,
-                                    [0.0 * self.motor_count])
+                                    [0.0]* self.motor_count)
                                 msg = self._construct_wheel_control_message()
                             else:
                                 self._is_timeout = False

@@ -139,7 +139,7 @@ class ZetaLift(DeviceBase, MotorBase):
                 self._my_session_id = api_up_data.session_id
                 # Update lift status
                 self._calibrated = lift_status.calibrated
-                self._base_state = lift_status.state
+                self._state = lift_status.state
                 self.max_pos = lift_status.max_pos
                 self.min_pos = lift_status.min_pos
 
@@ -329,8 +329,8 @@ class ZetaLift(DeviceBase, MotorBase):
             command_type: Command type
             values: List of command values
         """
-        if command_type == CommandType.TORQUE or command_type == CommandType.MIT:
-            raise ValueError("ZetaLift does not support torque or MIT command")
+        if command_type == CommandType.TORQUE or command_type == CommandType.MIT or command_type == CommandType.SPEED_WITH_MAX_CURRENT:
+            raise ValueError("ZetaLift does not support commands: torque / MIT / Speed with Max Current")
         super().motor_command(command_type, values)
         with self._status_lock:
             self._last_command_time = time.perf_counter()

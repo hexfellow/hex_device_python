@@ -370,6 +370,8 @@ class Arm(DeviceBase, MotorBase):
                     "Due to specific configurations, certain robotic arms may require consultation before they can be safely operated. "
                     "The MIT command is not enabled by default on this arm. Please contact customer service to inquire about activating MIT support."
                 )
+        if command_type == CommandType.SPEED_WITH_MAX_CURRENT:
+            raise ValueError("Arm does not support commands: Speed with Max Current")
         
         super().motor_command(command_type, values)
         self._last_command_time = time.perf_counter()

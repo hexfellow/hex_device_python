@@ -461,7 +461,7 @@ class Arm(DeviceBase, MotorBase):
             self._target_command = msg
             self._last_command_time = time.perf_counter()
 
-    def joint_position_control(self, joint_positions: List[float]):
+    def joint_position_control(self, joint_positions: List[float], velocities: List[float], accelerations: List[float]):
         """
         @brief: A more convenient positioning mode that will plan the target position before moving.
 
@@ -470,7 +470,7 @@ class Arm(DeviceBase, MotorBase):
         """
         if len(joint_positions) != self.motor_count:
             raise ValueError("joint_positions must be a list of floats, length must be the same as the motor count")
-        msg = self._construct_ApiJointPositionCommand_msg(joint_positions)
+        msg = self._construct_ApiJointPositionCommand_msg(joint_positions, velocities, accelerations)
         with self._command_lock:
             self._target_command = msg
             self._last_command_time = time.perf_counter()
@@ -663,12 +663,20 @@ class Arm(DeviceBase, MotorBase):
             msg.acceleration_source.CopyFrom(acceleration_source)
         return msg
 
-    def _construct_ApiJointPositionCommand_msg(self, joint_positions: List[float]) -> public_api_types_pb2.ArmApiJointPositionCommand:
+    def _construct_ApiJointPositionCommand_msg(self, joint_positions: List[float], velocities: List[float], accelerations: List[float]) -> public_api_types_pb2.ArmApiJointPositionCommand:
         """
         @brief: For constructing a ApiJointPositionCommand message.
         """
         msg = public_api_types_pb2.ArmApiJointPositionCommand()
-        msg.joint_positions.extend(joint_positions)
+        proto_targets = [
+            public_api_types_pb2.PosVelAccTarget(
+                position=float(position),
+                velocity=float(velocity),
+                acceleration=float(acceleration),
+            )
+            for position, velocity, acceleration in zip(joint_positions, velocities, accelerations)
+        ]
+        msg.joint_targets.extend(proto_targets)
         return msg
 
     def _construct_ApiCompensatedMitMotorTargets_msg(self, mit_targets: List[MitMotorCommand], 

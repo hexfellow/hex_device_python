@@ -217,7 +217,8 @@ from .motor_base import (
     MotorError, 
     MotorCommand, 
     CommandType, 
-    MitMotorCommand
+    MitMotorCommand,
+    SpeedWithMaxCurrentMotorCommand,
 )
 
 # Device implementations
@@ -274,6 +275,7 @@ __all__ = [
     'MotorCommand',
     'CommandType',
     'MitMotorCommand',
+    'SpeedWithMaxCurrentMotorCommand',
     
     # Device implementations
     'Arm',

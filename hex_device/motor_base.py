@@ -79,6 +79,7 @@ class CommandType(Enum):
     POSITION = "position"
     TORQUE = "torque"
     MIT = "mit"
+    SPEED_WITH_MAX_CURRENT = "speed_with_max_current"
 
 
 @dataclass
@@ -97,6 +98,18 @@ class MitMotorCommand:
     position: float
     kp: float
     kd: float
+    
+@dataclass
+class SpeedWithMaxCurrentMotorCommand:
+    """Speed with Max Current motor command structure
+
+    Contains all parameters required for Speed with Max Current motor control:
+    - speed: Speed (rad/s) 
+    - max_current: Maximum  current (A)
+    """
+    speed: float
+    max_current: float
+
 
 @dataclass
 class MotorCommand:
@@ -108,6 +121,7 @@ class MotorCommand:
     3. position command - float array type
     4. torque command - float array type
     5. MIT command - MitMotorCommand list type
+    6. speedWithMaxCurrent command - SpeedWithMaxCurrentMotorCommand list type
     """
     command_type: CommandType
     brake_command: Optional[List[bool]] = None
@@ -115,6 +129,7 @@ class MotorCommand:
     position_command: Optional[List[float]] = None
     torque_command: Optional[List[float]] = None
     mit_command: Optional[List[MitMotorCommand]] = None
+    speedWithMaxCurrent_command: Optional[List[SpeedWithMaxCurrentMotorCommand]] = None
 
     def __post_init__(self):
         """Validate command data validity"""
@@ -129,9 +144,9 @@ class MotorCommand:
         elif self.command_type == CommandType.SPEED:
             if self.speed_command is None:
                 raise ValueError("speed command type requires speed_command parameter")
-            if self.brake_command is not None or self.position_command is not None or self.torque_command is not None or self.mit_command is not None:
+            if self.brake_command is not None or self.position_command is not None or self.torque_command is not None or self.mit_command is not None or self.speedWithMaxCurrent_command is not None:
                 raise ValueError(
-                    "speed command type should not contain brake_command, position_command, torque_command or mit_command"
+                    "speed command type should not contain brake_command, position_command, torque_command, mit_command or speedWithMaxCurrent"
                 )
             if not isinstance(self.speed_command, list) or not all(
                     isinstance(x, (int, float)) for x in self.speed_command):
@@ -140,9 +155,9 @@ class MotorCommand:
         elif self.command_type == CommandType.POSITION:
             if self.position_command is None:
                 raise ValueError("position command type requires position_command parameter")
-            if self.brake_command is not None or self.speed_command is not None or self.torque_command is not None or self.mit_command is not None:
+            if self.brake_command is not None or self.speed_command is not None or self.torque_command is not None or self.mit_command is not None or self.speedWithMaxCurrent_command is not None:
                 raise ValueError(
-                    "position command type should not contain brake_command, speed_command, torque_command or mit_command"
+                    "position command type should not contain brake_command, speed_command, torque_command, mit_command or speedWithMaxCurrent"
                 )
             if not isinstance(self.position_command, list) or not all(
                     isinstance(x, (int, float))
@@ -152,9 +167,9 @@ class MotorCommand:
         elif self.command_type == CommandType.TORQUE:
             if self.torque_command is None:
                 raise ValueError("torque command type requires torque_command parameter")
-            if self.brake_command is not None or self.speed_command is not None or self.position_command is not None or self.mit_command is not None:
+            if self.brake_command is not None or self.speed_command is not None or self.position_command is not None or self.mit_command is not None or self.speedWithMaxCurrent_command is not None:
                 raise ValueError(
-                    "torque command type should not contain brake_command, speed_command, position_command or mit_command"
+                    "torque command type should not contain brake_command, speed_command, position_command, mit_command or speedWithMaxCurrent"
                 )
             if not isinstance(self.torque_command, list) or not all(
                     isinstance(x, (int, float)) for x in self.torque_command):
@@ -163,14 +178,26 @@ class MotorCommand:
         elif self.command_type == CommandType.MIT:
             if self.mit_command is None:
                 raise ValueError("mit command type requires mit_command parameter")
-            if self.brake_command is not None or self.speed_command is not None or self.position_command is not None or self.torque_command is not None:
+            if self.brake_command is not None or self.speed_command is not None or self.position_command is not None or self.torque_command is not None or self.speedWithMaxCurrent_command is not None:
                 raise ValueError(
-                    "mit command type should not contain brake_command, speed_command, position_command or torque_command"
+                    "mit command type should not contain brake_command, speed_command, position_command, torque_command or speedWithMaxCurrent"
                 )
             if not isinstance(self.mit_command, list) or not all(
                     isinstance(x, MitMotorCommand) for x in self.mit_command):
                 raise ValueError("mit_command must be a list of MitMotorCommand objects")
 
+        elif self.command_type == CommandType.SPEED_WITH_MAX_CURRENT:
+            if self.speedWithMaxCurrent_command is None:
+                raise ValueError("Speed with Max Current command type requires SpeedWithMaxCurrentMotorCommand parameter")
+            if self.brake_command is not None or self.speed_command is not None or self.position_command is not None or self.torque_command is not None or self.mit_command is not None:
+                raise ValueError(
+                    "Speed with Max Current command type should not contain brake_command, speed_command, position_command, torque_command or mit_command"
+                )
+            if not isinstance(self.speedWithMaxCurrent_command, list) or not all(
+                    isinstance(x, SpeedWithMaxCurrentMotorCommand) for x in self.speedWithMaxCurrent_command):
+                raise ValueError("speedWithMaxCurrent_command must be a list of SpeedWithMaxCurrentMotorCommand objects")
+            pass
+        
     @classmethod
     def create_brake_command(cls, brake: List[bool]) -> 'MotorCommand':
         """Create brake command
@@ -209,6 +236,11 @@ class MotorCommand:
     def create_mit_command(cls, mit_commands: List[MitMotorCommand]) -> 'MotorCommand':
         """Create MIT command"""
         return cls(command_type=CommandType.MIT, mit_command=deepcopy(mit_commands))
+    
+    @classmethod
+    def create_speed_with_max_current_command(cls, commands: List[SpeedWithMaxCurrentMotorCommand]) -> 'MotorCommand':
+        """Create MIT command"""
+        return cls(command_type=CommandType.SPEED_WITH_MAX_CURRENT, speedWithMaxCurrent_command=deepcopy(commands))
 
 class MotorError(Enum):
     """Motor error enumeration, used to implement mapping from MotorError in proto to python class"""
@@ -597,7 +629,7 @@ class MotorBase(ABC):
                 return None
             return deepcopy(float(self._wheel_radius[motor_index]))
 
-    def motor_command(self, command_type: CommandType, values: Union[List[bool], List[float], List[MitMotorCommand], np.ndarray]):
+    def motor_command(self, command_type: CommandType, values: Union[List[bool], List[float], List[MitMotorCommand],List[SpeedWithMaxCurrentMotorCommand], np.ndarray]):
         """
         Set motor command
         
@@ -655,6 +687,15 @@ class MotorBase(ABC):
                     f"Expected {self.motor_count} MIT commands, got {len(values)}"
                 )
             command = MotorCommand.create_mit_command(values)
+        elif command_type == CommandType.SPEED_WITH_MAX_CURRENT:
+            if not isinstance(values, list) or not all(isinstance(x, SpeedWithMaxCurrentMotorCommand) for x in values):
+                raise ValueError("Speed with Max Current command type requires SpeedWithMaxCurrentMotorCommand object list")
+            if len(values) != self.motor_count:
+                raise ValueError(
+                    f"Expected {self.motor_count} Speed with Max Current commands, got {len(values)}"
+                )
+            command = MotorCommand.create_speed_with_max_current_command(values)
+        
         else:
             raise ValueError(f"Unknown command type: {command_type}")
 
@@ -1103,6 +1144,15 @@ class MotorBase(ABC):
                 
                 single_motor_target.mit_target.CopyFrom(mit_target)
                 motor_targets.targets.append(deepcopy(single_motor_target))
+        elif command.command_type == CommandType.SPEED_WITH_MAX_CURRENT:
+            for i, cmd in enumerate(command.speedWithMaxCurrent_command):
+                speedWithMaxCurrent_target = public_api_types_pb2.SpeedWithMaxCurrent()
+                speedWithMaxCurrent_target.speed = cmd.speed
+                speedWithMaxCurrent_target.max_current = cmd.max_current
+                
+                single_motor_target.speed_with_max_current.CopyFrom(speedWithMaxCurrent_target)
+                motor_targets.targets.append(deepcopy(single_motor_target))
+            
         else:
             raise ValueError("construct_down_message: command_type error")
         return motor_targets
@@ -1152,6 +1202,12 @@ class MotorBase(ABC):
                     f"Expected {self.motor_count} mit values, got {len(values)}"
                 )
             command = MotorCommand.create_mit_command(values)
+        elif command_type == CommandType.SPEED_WITH_MAX_CURRENT:
+            if len(values) != self.motor_count:
+                raise ValueError(
+                    f"Expected {self.motor_count} speed_with_max_current values, got {len(values)}"
+                )
+            command = MotorCommand.create_speed_with_max_current_command(values)
         else:
             raise ValueError(f"Unknown command type: {command_type}")
 

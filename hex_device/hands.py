@@ -256,7 +256,10 @@ class Hands(OptionalDeviceBase, MotorBase):
         # limit position
         if command_type == CommandType.POSITION:
             values = [max(min(value, self._hands_limit[1]), self._hands_limit[0]) for value in values]
-
+        elif command_type == CommandType.SPEED_WITH_MAX_CURRENT:
+            raise ValueError("Hands does not support commands: Speed with Max Current")
+            
+        
         super().motor_command(command_type, values)
         self._last_command_time = time.perf_counter()
 

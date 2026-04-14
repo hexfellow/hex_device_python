@@ -80,6 +80,7 @@ class CommandType(Enum):
     TORQUE = "torque"
     MIT = "mit"
     SPEED_WITH_MAX_CURRENT = "speed_with_max_current"
+    POS_VEL_ACC = "pos_vel_acc"
 
 
 @dataclass
@@ -109,7 +110,21 @@ class SpeedWithMaxCurrentMotorCommand:
     """
     speed: float
     max_current: float
+    
+@dataclass
+class PosVelAccCommand:
+    """Position Velocity Acceleration motor command structure
 
+    Contains all parameters required for Position Velocity Acceleration motor control:
+    - position: position (rad) 
+    - velocity: Maximum  velocity (rad/s)
+    - acceleration: Maximum  acceleration (rad/s²)
+    
+    """
+    position: float 
+    velocity: float 
+    acceleration: float 
+    
 
 @dataclass
 class MotorCommand:
@@ -122,6 +137,7 @@ class MotorCommand:
     4. torque command - float array type
     5. MIT command - MitMotorCommand list type
     6. speedWithMaxCurrent command - SpeedWithMaxCurrentMotorCommand list type
+    7. posVelAcc command - posVelAccCommand list type
     """
     command_type: CommandType
     brake_command: Optional[List[bool]] = None
@@ -130,6 +146,7 @@ class MotorCommand:
     torque_command: Optional[List[float]] = None
     mit_command: Optional[List[MitMotorCommand]] = None
     speedWithMaxCurrent_command: Optional[List[SpeedWithMaxCurrentMotorCommand]] = None
+    posVelAcc_command: Optional[List[PosVelAccCommand]] = None
 
     def __post_init__(self):
         """Validate command data validity"""
@@ -155,7 +172,7 @@ class MotorCommand:
         elif self.command_type == CommandType.POSITION:
             if self.position_command is None:
                 raise ValueError("position command type requires position_command parameter")
-            if self.brake_command is not None or self.speed_command is not None or self.torque_command is not None or self.mit_command is not None or self.speedWithMaxCurrent_command is not None:
+            if self.brake_command is not None or self.speed_command is not None or self.torque_command is not None or self.mit_command is not None or self.speedWithMaxCurrent_command is not None or self.posVelAcc_command is not None:
                 raise ValueError(
                     "position command type should not contain brake_command, speed_command, torque_command, mit_command or speedWithMaxCurrent"
                 )
@@ -167,7 +184,7 @@ class MotorCommand:
         elif self.command_type == CommandType.TORQUE:
             if self.torque_command is None:
                 raise ValueError("torque command type requires torque_command parameter")
-            if self.brake_command is not None or self.speed_command is not None or self.position_command is not None or self.mit_command is not None or self.speedWithMaxCurrent_command is not None:
+            if self.brake_command is not None or self.speed_command is not None or self.position_command is not None or self.mit_command is not None or self.speedWithMaxCurrent_command is not None or self.posVelAcc_command is not None:
                 raise ValueError(
                     "torque command type should not contain brake_command, speed_command, position_command, mit_command or speedWithMaxCurrent"
                 )
@@ -178,7 +195,7 @@ class MotorCommand:
         elif self.command_type == CommandType.MIT:
             if self.mit_command is None:
                 raise ValueError("mit command type requires mit_command parameter")
-            if self.brake_command is not None or self.speed_command is not None or self.position_command is not None or self.torque_command is not None or self.speedWithMaxCurrent_command is not None:
+            if self.brake_command is not None or self.speed_command is not None or self.position_command is not None or self.torque_command is not None or self.speedWithMaxCurrent_command is not None or self.posVelAcc_command is not None:
                 raise ValueError(
                     "mit command type should not contain brake_command, speed_command, position_command, torque_command or speedWithMaxCurrent"
                 )
@@ -189,13 +206,26 @@ class MotorCommand:
         elif self.command_type == CommandType.SPEED_WITH_MAX_CURRENT:
             if self.speedWithMaxCurrent_command is None:
                 raise ValueError("Speed with Max Current command type requires SpeedWithMaxCurrentMotorCommand parameter")
-            if self.brake_command is not None or self.speed_command is not None or self.position_command is not None or self.torque_command is not None or self.mit_command is not None:
+            if self.brake_command is not None or self.speed_command is not None or self.position_command is not None or self.torque_command is not None or self.mit_command is not None or self.posVelAcc_command is not None:
                 raise ValueError(
                     "Speed with Max Current command type should not contain brake_command, speed_command, position_command, torque_command or mit_command"
                 )
             if not isinstance(self.speedWithMaxCurrent_command, list) or not all(
                     isinstance(x, SpeedWithMaxCurrentMotorCommand) for x in self.speedWithMaxCurrent_command):
                 raise ValueError("speedWithMaxCurrent_command must be a list of SpeedWithMaxCurrentMotorCommand objects")
+            pass
+        
+        
+        elif self.command_type == CommandType.POS_VEL_ACC:
+            if self.posVelAcc_command is None:
+                raise ValueError("Position Velocity Acceleration command type requires PosVelAccCommand parameter")
+            if self.brake_command is not None or self.speed_command is not None or self.position_command is not None or self.torque_command is not None or self.mit_command is not None or self.speedWithMaxCurrent_command is not None:
+                raise ValueError(
+                    "Position Velocity Acceleration command type should not contain brake_command, speed_command, position_command, torque_command or mit_command"
+                )
+            if not isinstance(self.posVelAcc_command, list) or not all(
+                    isinstance(x, PosVelAccCommand) for x in self.posVelAcc_command):
+                raise ValueError("posVelAcc_command must be a list of PosVelAccCommand objects")
             pass
         
     @classmethod
@@ -239,8 +269,13 @@ class MotorCommand:
     
     @classmethod
     def create_speed_with_max_current_command(cls, commands: List[SpeedWithMaxCurrentMotorCommand]) -> 'MotorCommand':
-        """Create MIT command"""
+        """Create Speed with Max Current command"""
         return cls(command_type=CommandType.SPEED_WITH_MAX_CURRENT, speedWithMaxCurrent_command=deepcopy(commands))
+    
+    @classmethod
+    def create_pos_vel_acc_command(cls, commands: List[PosVelAccCommand]) -> 'MotorCommand':
+        """Create PosVelAccCommand """
+        return cls(command_type=CommandType.POS_VEL_ACC, posVelAcc_command=deepcopy(commands))
 
 class MotorError(Enum):
     """Motor error enumeration, used to implement mapping from MotorError in proto to python class"""
@@ -695,6 +730,15 @@ class MotorBase(ABC):
                     f"Expected {self.motor_count} Speed with Max Current commands, got {len(values)}"
                 )
             command = MotorCommand.create_speed_with_max_current_command(values)
+            
+        elif command_type == CommandType.POS_VEL_ACC:
+            if not isinstance(values, list) or not all(isinstance(x, PosVelAccCommand) for x in values):
+                raise ValueError("Position Velocity Acceleration command type requires PosVelAccCommand object list")
+            if len(values) != self.motor_count:
+                raise ValueError(
+                    f"Expected {self.motor_count} Position Velocity Acceleration commands, got {len(values)}"
+                )
+            command = MotorCommand.create_pos_vel_acc_command(values)
         
         else:
             raise ValueError(f"Unknown command type: {command_type}")
@@ -716,8 +760,33 @@ class MotorBase(ABC):
         for i in range(self.motor_count):
             mit_commands.append(MitMotorCommand(position=pos[i], speed=speed[i], torque=torque[i], kp=kp[i], kd=kd[i]))
         return deepcopy(mit_commands)
+    
+    def construct_speedWithMaxCurrent_command(self, 
+            speed: Union[np.ndarray, List[float]], 
+            max_current: Union[np.ndarray, List[float]], 
+        ) -> List[SpeedWithMaxCurrentMotorCommand]:
+        """
+        Construct speedWithMaxCurrent command
+        """
+        speedWithMaxCurrent_commands = []
+        for i in range(self.motor_count):
+            speedWithMaxCurrent_commands.append(SpeedWithMaxCurrentMotorCommand(speed=speed[i],max_current=max_current[i]))
+        return deepcopy(speedWithMaxCurrent_commands)
+    
+    def construct_posVelAcc_command(self, 
+            position: Union[np.ndarray, List[float]], 
+            velocity: Union[np.ndarray, List[float]], 
+            acceleration: Union[np.ndarray, List[float]], 
+        ) -> List[PosVelAccCommand]:
+        """
+        Construct MIT command
+        """
+        posVelAcc_commands = []
+        for i in range(self.motor_count):
+            posVelAcc_commands.append(PosVelAccCommand(position=position[i], velocity=velocity[i], acceleration=acceleration[i]))
+        return deepcopy(posVelAcc_commands)
 
-    def mit_motor_command(self, mit_commands: List[MitMotorCommand]):
+    def mit_motor_command(self, mit_commands: List[PosVelAccCommand]):
         """
         Set MIT motor command
         
@@ -1157,7 +1226,17 @@ class MotorBase(ABC):
                 
                 single_motor_target.speed_with_max_current.CopyFrom(speedWithMaxCurrent_target)
                 motor_targets.targets.append(deepcopy(single_motor_target))
-            
+        
+        elif command.command_type == CommandType.POS_VEL_ACC:
+            for i, cmd in enumerate(command.posVelAcc_command):
+                PosVelAcc_target = public_api_types_pb2.PosVelAccTarget()
+                PosVelAcc_target.position = cmd.position
+                PosVelAcc_target.velocity  = cmd.velocity 
+                PosVelAcc_target.acceleration  = cmd.acceleration 
+                
+                single_motor_target.pos_with_trapezoidal_velocity.CopyFrom(PosVelAcc_target)
+                motor_targets.targets.append(deepcopy(single_motor_target))
+        
         else:
             raise ValueError("construct_down_message: command_type error")
         return motor_targets
@@ -1213,6 +1292,14 @@ class MotorBase(ABC):
                     f"Expected {self.motor_count} speed_with_max_current values, got {len(values)}"
                 )
             command = MotorCommand.create_speed_with_max_current_command(values)
+        
+        elif command_type == CommandType.POS_VEL_ACC:
+            if len(values) != self.motor_count:
+                raise ValueError(
+                    f"Expected {self.motor_count} speed_with_max_current values, got {len(values)}"
+                )
+            command = MotorCommand.create_pos_vel_acc_command(values)
+        
         else:
             raise ValueError(f"Unknown command type: {command_type}")
 

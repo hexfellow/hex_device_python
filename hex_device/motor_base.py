@@ -153,7 +153,7 @@ class MotorCommand:
         if self.command_type == CommandType.BRAKE:
             if self.brake_command is None:
                 raise ValueError("brake command type requires brake_command parameter")
-            if self.speed_command is not None or self.position_command is not None or self.torque_command is not None or self.mit_command is not None:
+            if self.speed_command is not None or self.position_command is not None or self.torque_command is not None or self.mit_command is not None or self.speedWithMaxCurrent_command is not None or self.posVelAcc_command is not None:
                 raise ValueError(
                     "brake command type should not contain speed_command, position_command, torque_command or mit_command"
                 )
@@ -161,7 +161,7 @@ class MotorCommand:
         elif self.command_type == CommandType.SPEED:
             if self.speed_command is None:
                 raise ValueError("speed command type requires speed_command parameter")
-            if self.brake_command is not None or self.position_command is not None or self.torque_command is not None or self.mit_command is not None or self.speedWithMaxCurrent_command is not None:
+            if self.brake_command is not None or self.position_command is not None or self.torque_command is not None or self.mit_command is not None or self.speedWithMaxCurrent_command is not None or self.posVelAcc_command is not None:
                 raise ValueError(
                     "speed command type should not contain brake_command, position_command, torque_command, mit_command or speedWithMaxCurrent"
                 )
@@ -786,7 +786,7 @@ class MotorBase(ABC):
             posVelAcc_commands.append(PosVelAccCommand(position=position[i], velocity=velocity[i], acceleration=acceleration[i]))
         return deepcopy(posVelAcc_commands)
 
-    def mit_motor_command(self, mit_commands: List[PosVelAccCommand]):
+    def mit_motor_command(self, mit_commands: List[MitMotorCommand]):
         """
         Set MIT motor command
         
@@ -1296,7 +1296,7 @@ class MotorBase(ABC):
         elif command_type == CommandType.POS_VEL_ACC:
             if len(values) != self.motor_count:
                 raise ValueError(
-                    f"Expected {self.motor_count} speed_with_max_current values, got {len(values)}"
+                    f"Expected {self.motor_count} pos_vel_acc values, got {len(values)}"
                 )
             command = MotorCommand.create_pos_vel_acc_command(values)
         

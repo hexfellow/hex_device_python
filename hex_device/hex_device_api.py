@@ -762,16 +762,40 @@ class HexDeviceApi:
             Connected socket with TCP optimizations for fast retransmission
         """
         if local_port is not None and local_port != 0:
-            # Create socket manually and bind to specific local port
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            # Determine socket family based on the target address type
+            clean_host = host.split('%')[0].strip('[]')
             try:
-                # Allow reuse of local address to avoid "Address already in use" errors
+                import ipaddress as _ipaddress
+                addr_obj = _ipaddress.ip_address(clean_host)
+                family = socket.AF_INET6 if isinstance(addr_obj, _ipaddress.IPv6Address) else socket.AF_INET
+            except ValueError:
+                family = socket.AF_INET
+            bind_addr = '::' if family == socket.AF_INET6 else '0.0.0.0'
+
+            sock = socket.socket(family, socket.SOCK_STREAM)
+            try:
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                # Bind to specific local port (0.0.0.0 means any local interface)
-                sock.bind(('::', local_port))
-                self._logger.debug(f"Socket bound to local port {local_port}")
-                # Connect to remote host
-                sock.connect((host, port))
+                if family == socket.AF_INET6:
+                    # Allow IPv6 socket to also accept IPv4 connections
+                    sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+                sock.bind((bind_addr, local_port))
+                self._logger.debug(f"Socket bound to local port {local_port} (family={'IPv6' if family == socket.AF_INET6 else 'IPv4'})")
+                # For IPv6 link-local with scope id, connect needs a 4-tuple
+                if family == socket.AF_INET6:
+                    scope_id = 0
+                    idx = host.find('%')
+                    if idx != -1:
+                        zone_str = host[idx + 1:].strip(']')
+                        try:
+                            scope_id = int(zone_str)
+                        except ValueError:
+                            try:
+                                scope_id = socket.if_nametoindex(zone_str)
+                            except (OSError, AttributeError):
+                                self._logger.warning(f"Cannot resolve scope id for zone '{zone_str}', ignoring")
+                    sock.connect((clean_host, port, 0, scope_id))
+                else:
+                    sock.connect((host, port))
             except OSError as e:
                 sock.close()
                 self._logger.error(f"Failed to bind to local port {local_port}: {e}")

@@ -35,7 +35,7 @@ ORPHANED_TASK_CHECK_INTERVAL = 100
 # The minimum supported protocol version.
 # WARNING!!!! Do not modify the supported version number!!! Incompatible drivers may cause serious damage to the device!!!
 MIN_PROTOCOL_MAJOR_VERSION = 1
-MIN_PROTOCOL_MINOR_VERSION = 2
+MIN_PROTOCOL_MINOR_VERSION = 0
 
 class ReportFrequency:
     """
@@ -173,6 +173,8 @@ class HexDeviceApi:
             self._logger.info(f"HexDeviceApi initialized (local port: {self.local_port}).")
         else:
             self._logger.info(f"HexDeviceApi initialized.")
+            
+        self.__websocket_recv_timeout = False
 
     # Device interface
     @property
@@ -701,6 +703,10 @@ class HexDeviceApi:
                 # Timeout
                 message = await asyncio.wait_for(self.__websocket.recv(),
                                                  timeout=3.0)
+                
+                if self.__websocket_recv_timeout:
+                    self.__websocket_recv_timeout = False
+                    
                 # Only process binary messages
                 if isinstance(message, bytes):
                     try:
@@ -730,6 +736,8 @@ class HexDeviceApi:
                     raise
                 else:
                     self._logger.error("No data received for 3 seconds")
+                    if not self.__websocket_recv_timeout:
+                        self.__websocket_recv_timeout = True
                     continue
 
             except ConnectionClosed as e:
@@ -1256,6 +1264,15 @@ class HexDeviceApi:
         if self.__loop is None:
             return False
         return self.__loop.is_closed()
+
+    def is_websocket_recv_timeout(self) -> bool:
+        """
+        @brief: Check if websocket receive timeout
+        @return:
+            bool: True receive timeout
+        """
+        
+        return self.__websocket_recv_timeout
 
     def get_raw_data(self) -> Tuple[public_api_up_pb2.APIUp, int]:
         """

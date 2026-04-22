@@ -10,7 +10,7 @@ import copy
 import time
 import numpy as np
 from typing import Optional, Tuple, List, Dict, Any, Union
-from .common_utils import delay, log_common, log_info, log_warn, log_err
+from .common_utils import delay
 from .device_base import DeviceBase
 from .motor_base import MitMotorCommand, MotorBase, MotorError, MotorCommand, CommandType, Timestamp
 from .generated import public_api_down_pb2, public_api_up_pb2, public_api_types_pb2
@@ -55,7 +55,8 @@ class Arm(DeviceBase, MotorBase):
                  proto_version,
                  name: str = "Arm",
                  control_hz: int = 500,
-                 send_message_callback=None):
+                 send_message_callback=None,
+                 logger=None):
         """
         Initialize chassis Maver
         
@@ -66,7 +67,7 @@ class Arm(DeviceBase, MotorBase):
             control_hz: Control frequency
             send_message_callback: Callback function for sending messages, used to send downstream messages
         """
-        DeviceBase.__init__(self, name, send_message_callback)
+        DeviceBase.__init__(self, name, send_message_callback, logger=logger)
 
         # Convert function for old revert function
         if robot_type in [public_api_types_pb2.RobotType.RtArmSaberD6x,
@@ -145,7 +146,7 @@ class Arm(DeviceBase, MotorBase):
             # self.start()
             return True
         except Exception as e:
-            log_err(f"Arm initialization failed: {e}")
+            self._log_err(f"Arm initialization failed: {e}")
             return False
 
     def _update(self, api_up_data, timestamp: Timestamp) -> bool:
@@ -176,9 +177,9 @@ class Arm(DeviceBase, MotorBase):
 
                 if self._session_holder != self._previous_session_holder:
                     if self._session_holder == self._my_session_id:
-                        log_info(f"Arm: You can control the arm now! Your session ID: {self._session_holder}")
+                        self._log_info(f"Arm: You can control the arm now! Your session ID: {self._session_holder}")
                     else:
-                        log_warn(f"Arm: Can not control the arm, now holder is ID: {self._session_holder}, waiting...")
+                        self._log_warn(f"Arm: Can not control the arm, now holder is ID: {self._session_holder}, waiting...")
                 self._previous_session_holder = self._session_holder
 
                 if arm_status.HasField('parking_stop_detail'):
@@ -188,7 +189,7 @@ class Arm(DeviceBase, MotorBase):
             return True
 
         except Exception as e:
-            log_err(f"Arm _update failed: {e}")
+            self._log_err(f"Arm _update failed: {e}")
             return False
 
     async def _periodic(self):
@@ -206,7 +207,7 @@ class Arm(DeviceBase, MotorBase):
         self.__last_error_time = start_time
 
         await self._init()
-        log_info("Arm init success")
+        self._log_info("Arm init success")
         while True:
             await delay(start_time, cycle_time)
             start_time = time.perf_counter()
@@ -216,13 +217,13 @@ class Arm(DeviceBase, MotorBase):
                 error = self.get_parking_stop_detail()
                 if error != public_api_types_pb2.ParkingStopDetail():
                     if start_time - self.__last_error_time > 1.0:
-                        log_err(f"emergency stop: {error}")
+                        self._log_err(f"emergency stop: {error}")
                         self.__last_error_time = start_time
 
                     # auto clear api communication timeout
                     if error.category == public_api_types_pb2.ParkingStopCategory.PscAPICommunicationTimeout:
                         if start_time - self.__last_warning_time > 1.0:
-                            log_warn(f"You have disconnected from arm, trying to connect again.")
+                            self._log_warn(f"You have disconnected from arm, trying to connect again.")
                             self.__last_warning_time = start_time
                         msg = self._construct_clear_parking_stop_message()
                         await self._send_message(msg)
@@ -239,7 +240,7 @@ class Arm(DeviceBase, MotorBase):
                                 error_motors.append(f"Motor {i} (error_code: {error_codes[i]})")
                         if error_motors:
                             error_msg = "Arm Error: " + ", ".join(error_motors) + "."
-                            log_err(error_msg)
+                            self._log_err(error_msg)
                             self.__last_error_time = start_time
 
                 # check motor warning
@@ -252,7 +253,7 @@ class Arm(DeviceBase, MotorBase):
                                 warning_motors.append(f"Motor {i} (warning: {warnings[i]})")
                         if warning_motors:
                             warning_msg = "Arm Warning: " + ", ".join(warning_motors) + "."
-                            log_warn(warning_msg)
+                            self._log_warn(warning_msg)
                             self.__last_warning_time = start_time
 
                 # prepare sending message
@@ -289,7 +290,7 @@ class Arm(DeviceBase, MotorBase):
                     pass
                 elif sh != mi:
                     if start_time - self.__last_warning_time > 5.0:
-                        log_info(f"Arm: Waiting to get the control of the arm...")
+                        self._log_info(f"Arm: Waiting to get the control of the arm...")
                         self.__last_warning_time = start_time
                     continue
                 
@@ -308,7 +309,7 @@ class Arm(DeviceBase, MotorBase):
                             msg = self._construct_custom_joint_command_msg(motor_msg)
                             await self._send_message(msg)
                         except Exception as e:
-                            log_err(f"Arm failed to construct custom joint command message: {e}")
+                            self._log_err(f"Arm failed to construct custom joint command message: {e}")
                             continue
                     ### normal command
                     else:
@@ -330,7 +331,7 @@ class Arm(DeviceBase, MotorBase):
                                 msg = self._construct_special_arm_command_msg(command)
                                 await self._send_message(msg)
                         except Exception as e:
-                            log_err(f"Arm failed to construct joint command message: {e}")
+                            self._log_err(f"Arm failed to construct joint command message: {e}")
                             continue
                 elif c == False:
                     # If there is anything that requires special action, modify this calibrate sending logic.
@@ -338,7 +339,7 @@ class Arm(DeviceBase, MotorBase):
                     await self._send_message(msg)
 
             except Exception as e:
-                log_err(f"Arm periodic task exception: {e}")
+                self._log_err(f"Arm periodic task exception: {e}")
                 continue
 
     # Robotic arm specific methods
@@ -369,6 +370,8 @@ class Arm(DeviceBase, MotorBase):
                     "Due to specific configurations, certain robotic arms may require consultation before they can be safely operated. "
                     "The MIT command is not enabled by default on this arm. Please contact customer service to inquire about activating MIT support."
                 )
+        if command_type == CommandType.SPEED_WITH_MAX_CURRENT:
+            raise ValueError("Arm does not support commands: Speed with Max Current")
         
         super().motor_command(command_type, values)
         self._last_command_time = time.perf_counter()
@@ -458,7 +461,7 @@ class Arm(DeviceBase, MotorBase):
             self._target_command = msg
             self._last_command_time = time.perf_counter()
 
-    def joint_position_control(self, joint_positions: List[float]):
+    def joint_position_control(self, joint_positions: List[float], velocities: List[float], accelerations: List[float]):
         """
         @brief: A more convenient positioning mode that will plan the target position before moving.
 
@@ -467,7 +470,7 @@ class Arm(DeviceBase, MotorBase):
         """
         if len(joint_positions) != self.motor_count:
             raise ValueError("joint_positions must be a list of floats, length must be the same as the motor count")
-        msg = self._construct_ApiJointPositionCommand_msg(joint_positions)
+        msg = self._construct_ApiJointPositionCommand_msg(joint_positions, velocities, accelerations)
         with self._command_lock:
             self._target_command = msg
             self._last_command_time = time.perf_counter()
@@ -660,12 +663,20 @@ class Arm(DeviceBase, MotorBase):
             msg.acceleration_source.CopyFrom(acceleration_source)
         return msg
 
-    def _construct_ApiJointPositionCommand_msg(self, joint_positions: List[float]) -> public_api_types_pb2.ArmApiJointPositionCommand:
+    def _construct_ApiJointPositionCommand_msg(self, joint_positions: List[float], velocities: List[float], accelerations: List[float]) -> public_api_types_pb2.ArmApiJointPositionCommand:
         """
         @brief: For constructing a ApiJointPositionCommand message.
         """
         msg = public_api_types_pb2.ArmApiJointPositionCommand()
-        msg.joint_positions.extend(joint_positions)
+        proto_targets = [
+            public_api_types_pb2.PosVelAccTarget(
+                position=float(position),
+                velocity=float(velocity),
+                acceleration=float(acceleration),
+            )
+            for position, velocity, acceleration in zip(joint_positions, velocities, accelerations)
+        ]
+        msg.joint_targets.extend(proto_targets)
         return msg
 
     def _construct_ApiCompensatedMitMotorTargets_msg(self, mit_targets: List[MitMotorCommand], 
@@ -752,7 +763,7 @@ class Arm(DeviceBase, MotorBase):
             if len(current_positions) == len(positions):
                 arm_config_manager.set_last_positions(self.robot_type, current_positions)
             else:
-                log_warn(f"Arm: Current motor positions count({len(current_positions)}) does not match the target positions count({len(positions)})")
+                self._log_warn(f"Arm: Current motor positions count({len(current_positions)}) does not match the target positions count({len(positions)})")
         
         return arm_config_manager.validate_joint_positions(
             self.robot_type, positions, dt)
@@ -804,12 +815,12 @@ class Arm(DeviceBase, MotorBase):
             success = arm_config_manager.reload_from_dict(
                 self.robot_type, config_data)
             if success:
-                log_common(f"Arm: reload arm config success: {config_data.get('name', 'unknown')}")
+                self._log_info(f"Arm: reload arm config success: {config_data.get('name', 'unknown')}")
             else:
-                log_err(f"Arm: reload arm config from dict failed: {config_data.get('name', 'unknown')}")
+                self._log_err(f"Arm: reload arm config from dict failed: {config_data.get('name', 'unknown')}")
             return success
         except Exception as e:
-            log_err(f"Arm: reload arm config from dict exception: {e}")
+            self._log_err(f"Arm: reload arm config from dict exception: {e}")
             return False
 
     def set_initial_positions(self, positions: List[float]):

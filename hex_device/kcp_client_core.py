@@ -16,7 +16,8 @@ import threading
 import ipaddress
 from typing import Optional, Callable
 from dataclasses import dataclass
-from .common_utils import log_err, log_info, log_debug, log_warn
+import logging as _logging
+_kcp_fallback_logger = _logging.getLogger('hex_device')
 
 from kcp.extension import KCP
 
@@ -48,13 +49,16 @@ class KCPClient:
     - Configurable KCP parameters
     """
 
-    def __init__(self, config: Optional[KCPConfig] = None):
+    def __init__(self, config: Optional[KCPConfig] = None, logger=None):
         """
         Initialize KCP client
         
         Args:
             config: KCP configuration (uses DEFAULT_KCP_CONFIG if None)
+            logger: Per-instance logger or LoggerAdapter; falls back to the
+                    shared 'hex_device' logger when not provided.
         """
+        self._logger = logger if logger is not None else _kcp_fallback_logger
         self.server_address = None
         self.server_port = None
         self.filter_address = None
@@ -72,7 +76,7 @@ class KCPClient:
             self._sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
         except (OSError, AttributeError):
             # If dual-stack is not supported, continue with IPv6-only
-            log_debug(
+            self._logger.debug(
                 "[KCP Client] Dual-stack mode not supported, using IPv6-only")
 
         self._sock.settimeout(0.5)
@@ -117,7 +121,7 @@ class KCPClient:
         self.server_address = address
         self.server_port = port
         self._set_filter(address, port)
-        log_debug(
+        self._logger.debug(
             f"[KCP Client] Configured: address={address}, port={port}, conv_id={conv_id}"
         )
 
@@ -146,10 +150,10 @@ class KCPClient:
         """
         try:
             if self.server_address is None or self.server_port is None:
-                log_warn(f"[KCP Client] Server not started, skip sending.")
+                self._logger.warning(f"[KCP Client] Server not started, skip sending.")
                 return
             if len(data) > self._config.max_message_length:
-                log_err(
+                self._logger.error(
                     f"[KCP Client] Message length exceeds {self._config.max_message_length} bytes: {len(data)}, skip"
                 )
                 return
@@ -170,7 +174,7 @@ class KCPClient:
                     try:
                         scope_id = socket.if_nametoindex(zone_str)
                     except (OSError, AttributeError):
-                        log_warn(f"[KCP Client] Invalid zone identifier: {zone_str}, ignoring")
+                        self._logger.warning(f"[KCP Client] Invalid zone identifier: {zone_str}, ignoring")
                         scope_id = 0
 
             # For IPv6 socket (AF_INET6), IPv4 addresses need to be converted to IPv4-mapped IPv6 format
@@ -200,7 +204,7 @@ class KCPClient:
                         if len(addr_tuple) >= 4 and addr_tuple[3] != 0:
                             scope_id = addr_tuple[3]
                 except (socket.gaierror, OSError) as e:
-                    log_debug(
+                    self._logger.debug(
                         f"[KCP Client] Address resolution for {send_address} failed: {e}"
                     )
                     # If resolution fails, the original sendto will raise an error
@@ -213,7 +217,7 @@ class KCPClient:
             else:
                 self._sock.sendto(data, (send_address, self.server_port))
         except Exception as e:
-            log_err(f"[KCP Client] Socket send error: {e}")
+            self._logger.error(f"[KCP Client] Socket send error: {e}")
 
     def _on_kcp_output(self, kcp: KCP, data: bytes) -> None:
         """
@@ -262,7 +266,7 @@ class KCPClient:
             return None
         except Exception as e:
             if self._running:  # Only log if we're still running
-                log_err(f"[KCP Client] Socket receive error: {e}")
+                self._logger.error(f"[KCP Client] Socket receive error: {e}")
             return None
 
     def _set_filter(self, address: str, port: int) -> None:
@@ -302,7 +306,7 @@ class KCPClient:
                 try:
                     self._message_callback(data)
                 except Exception as e:
-                    log_err(f"[KCP Client] Message callback error: {e}")
+                    self._logger.error(f"[KCP Client] Message callback error: {e}")
 
     def send(self, data: bytes) -> bool:
         """
@@ -323,7 +327,7 @@ class KCPClient:
 
             return True
         except Exception as e:
-            log_err(f"[KCP Client] Send error: {e}")
+            self._logger.error(f"[KCP Client] Send error: {e}")
             return False
 
     def _update_loop(self) -> None:
@@ -331,7 +335,7 @@ class KCPClient:
         KCP update loop - runs in separate thread
         Handles KCP protocol state updates and retransmissions
         """
-        log_debug("[KCP Client] Update loop started")
+        self._logger.debug("[KCP Client] Update loop started")
 
         while self._running:
             try:
@@ -349,16 +353,16 @@ class KCPClient:
 
             except Exception as e:
                 if self._running:
-                    log_err(f"[KCP Client] Update loop error: {e}")
+                    self._logger.error(f"[KCP Client] Update loop error: {e}")
 
-        log_debug("[KCP Client] Update loop stopped")
+        self._logger.debug("[KCP Client] Update loop stopped")
 
     def _receive_loop(self) -> None:
         """
         Socket receive loop - runs in separate thread
         Continuously receives data from socket and processes through KCP
         """
-        log_debug("[KCP Client] Receive loop started")
+        self._logger.debug("[KCP Client] Receive loop started")
 
         while self._running:
             try:
@@ -371,9 +375,9 @@ class KCPClient:
 
             except Exception as e:
                 if self._running:
-                    log_err(f"[KCP Client] Receive loop error: {e}")
+                    self._logger.error(f"[KCP Client] Receive loop error: {e}")
 
-        log_debug("[KCP Client] Receive loop stopped")
+        self._logger.debug("[KCP Client] Receive loop stopped")
 
     def start(self) -> None:
         """
@@ -381,13 +385,13 @@ class KCPClient:
         Launches update and receive threads
         """
         if self._kcp is None or self._message_callback is None:
-            log_err("[KCP Client] KCP not configured, can not start")
+            self._logger.error("[KCP Client] KCP not configured, can not start")
             return
         elif self._running:
-            log_debug("[KCP Client] Already running")
+            self._logger.debug("[KCP Client] Already running")
             return
 
-        log_debug(f"[KCP Client] Starting, local port: {self.local_port}")
+        self._logger.debug(f"[KCP Client] Starting, local port: {self.local_port}")
         self._running = True
 
         # Start update thread
@@ -402,7 +406,7 @@ class KCPClient:
                                                 name="KCP-Receive")
         self._receive_thread.start()
 
-        log_debug("[KCP Client] Started")
+        self._logger.debug("[KCP Client] Started")
 
     def stop(self) -> None:
         """
@@ -412,7 +416,7 @@ class KCPClient:
         if not self._running:
             return
 
-        log_debug("[KCP Client] Stopping...")
+        self._logger.debug("[KCP Client] Stopping...")
         self._running = False
 
         # Wait for threads to finish
@@ -427,7 +431,7 @@ class KCPClient:
         except:
             pass
 
-        log_debug("[KCP Client] Stopped")
+        self._logger.debug("[KCP Client] Stopped")
 
     def is_running(self) -> bool:
         """Check if client is running"""
@@ -453,7 +457,7 @@ if __name__ == "__main__":
     # Message callback
     def on_message(data: bytes):
         """Handle received messages"""
-        log_info(f"[Main] Received: {data}")
+        print(f"[Main] Received: {data}")
 
     # Create custom KCP configuration (optional)
     custom_config = KCPConfig(
@@ -481,7 +485,7 @@ if __name__ == "__main__":
         for i in range(5):
             message = f"Hello {i}".encode()
             if client.send(message):
-                log_info(f"[Main] Sent: {message}")
+                print(f"[Main] Sent: {message}")
             time.sleep(1)
 
         # Keep running
@@ -489,6 +493,6 @@ if __name__ == "__main__":
             time.sleep(1)
 
     except KeyboardInterrupt:
-        log_info("\n[Main] Interrupted by user")
+        print("\n[Main] Interrupted by user")
     finally:
         client.stop()

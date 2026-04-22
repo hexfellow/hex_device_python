@@ -12,7 +12,7 @@ import numpy as np
 import asyncio
 from typing import List, Optional, Union, Tuple
 
-from .common_utils import delay, log_err, log_info, log_warn
+from .common_utils import delay
 from .device_base import DeviceBase
 from .generated import public_api_down_pb2, public_api_up_pb2, public_api_types_pb2
 from .motor_base import MitMotorCommand, CommandType, Timestamp
@@ -29,11 +29,11 @@ class LinearLift(DeviceBase):
         public_api_types_pb2.RobotType.RtIotaVc1,
     ]
 
-    def __init__(self, motor_count: int, robot_type: int, name: str = "Lift", control_hz: int = 500, send_message_callback=None):
+    def __init__(self, motor_count: int, robot_type: int, name: str = "Lift", control_hz: int = 500, send_message_callback=None, logger=None):
         """
         Initialize Linear Lift
         """
-        DeviceBase.__init__(self, name, send_message_callback)
+        DeviceBase.__init__(self, name, send_message_callback, logger=logger)
         
         self.name = name or "Linear Lift"
         self._control_hz = control_hz
@@ -96,7 +96,7 @@ class LinearLift(DeviceBase):
             # self.start()
             return True
         except Exception as e:
-            log_err(f"Lift initialization failed: {e}")
+            self._log_err(f"Lift initialization failed: {e}")
             return False
 
     def _update(self, api_up_data, timestamp: Timestamp) -> bool:
@@ -137,7 +137,7 @@ class LinearLift(DeviceBase):
 
             return True
         except Exception as e:
-            log_err(f"Lift data update failed: {e}")
+            self._log_err(f"Lift data update failed: {e}")
             return False
 
     def has_new_data(self) -> bool:
@@ -176,7 +176,7 @@ class LinearLift(DeviceBase):
         self.__last_warning_time = start_time
         
         await self._init()
-        log_info("Lift init success")
+        self._log_info("Lift init success")
         while True:
             await delay(start_time, cycle_time)
             start_time = time.perf_counter()
@@ -186,7 +186,7 @@ class LinearLift(DeviceBase):
                 error = self.get_parking_stop_detail()
                 if error != None:
                     if start_time - self.__last_warning_time > 1.0:
-                        log_err(f"emergency stop: {error}")
+                        self._log_err(f"emergency stop: {error}")
                         self.__last_warning_time = start_time
 
                 # prepare sending message
@@ -222,7 +222,7 @@ class LinearLift(DeviceBase):
                         await self._send_message(msg)
                 
             except Exception as e:
-                log_err(f"Lift periodic task exception: {e}")
+                self._log_err(f"Lift periodic task exception: {e}")
                 continue
     
     def get_parking_stop_detail(self) -> public_api_types_pb2.ParkingStopDetail:

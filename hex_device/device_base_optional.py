@@ -8,8 +8,11 @@
 
 from abc import ABC, abstractmethod
 from typing import Optional, List, Dict, Any, Type
+import logging
 import threading
 from collections import deque
+
+_fallback_logger = logging.getLogger('hex_device')
 
 
 class OptionalDeviceBase(ABC):
@@ -19,7 +22,8 @@ class OptionalDeviceBase(ABC):
     These devices are matched by device_id from SecondaryDeviceStatus.
     """
 
-    def __init__(self, read_only: bool, name: str, device_id, device_type, send_message_callback=None):
+    def __init__(self, read_only: bool, name: str, device_id, device_type,
+                 send_message_callback=None, logger=None):
         """
         Initialize optional device base class
         Args:
@@ -27,10 +31,13 @@ class OptionalDeviceBase(ABC):
             name: Device name
             send_message_callback: Callback function for sending messages
             device_id: Device ID from SecondaryDeviceStatus
+            logger: Per-instance logger or LoggerAdapter; falls back to the
+                    shared 'hex_device' logger when not provided.
         """
         self.name = name or "OptionalDevice"
         self.device_id = device_id
         self.device_type = device_type
+        self._logger = logger if logger is not None else _fallback_logger
 
         self._send_message_callback = send_message_callback
 
@@ -108,6 +115,18 @@ class OptionalDeviceBase(ABC):
             bool: Whether execution was successful
         """
         return True
+
+    def _log_info(self, msg: str) -> None:
+        self._logger.info(msg)
+
+    def _log_warn(self, msg: str) -> None:
+        self._logger.warning(msg)
+
+    def _log_err(self, msg: str) -> None:
+        self._logger.error(msg)
+
+    def _log_debug(self, msg: str) -> None:
+        self._logger.debug(msg)
 
     def __str__(self) -> str:
         """String representation"""

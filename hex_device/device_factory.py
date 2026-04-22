@@ -5,10 +5,12 @@
 # Author: Jecjune zejun.chen@hexfellow.com
 # Date  : 2025-8-1
 ################################################################
+import logging as _logging
 from typing import Optional, Tuple, List, Type, Dict, Any
 from .device_base import DeviceBase
 from .device_base_optional import OptionalDeviceBase
-from .common_utils import log_err
+
+_factory_fallback_logger = _logging.getLogger('hex_device')
 
 class DeviceFactory:
     """
@@ -16,7 +18,8 @@ class DeviceFactory:
     Supports both robot_type-based devices (DeviceBase) and device_id-based devices (OptionalDeviceBase)
     """
 
-    def __init__(self):
+    def __init__(self, logger=None):
+        self._logger = logger if logger is not None else _factory_fallback_logger
         # Traditional robot_type-based devices
         self._device_classes: List[Type[DeviceBase]] = []
         
@@ -80,6 +83,7 @@ class DeviceFactory:
                 all_params = {
                     'control_hz': control_hz,
                     'send_message_callback': send_message_callback,
+                    'logger': self._logger,
                     **constructor_params,
                 }
 
@@ -114,6 +118,7 @@ class DeviceFactory:
             'device_type': device_type,
             'control_hz' : control_hz,
             'send_message_callback': send_message_callback,
+            'logger': self._logger,
             **constructor_params,
         }
 
@@ -262,7 +267,7 @@ class DeviceFactory:
                 motor_count = len(api_up.rotate_lift_status.motor_status)
                 return motor_count
         else:
-            log_err(f"No recognized status field is set (got: {status_field})")
+            self._logger.error(f"No recognized status field is set (got: {status_field})")
 
         return None
 

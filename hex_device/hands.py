@@ -10,7 +10,7 @@ import asyncio
 import time
 import numpy as np
 from typing import Optional, Tuple, List, Dict, Any, Union
-from .common_utils import delay, log_common, log_info, log_warn, log_err
+from .common_utils import delay
 from .device_base_optional import OptionalDeviceBase
 from .motor_base import MitMotorCommand, MotorBase, MotorError, MotorCommand, CommandType, Timestamp
 from .generated import public_api_down_pb2, public_api_up_pb2, public_api_types_pb2
@@ -52,6 +52,7 @@ class Hands(OptionalDeviceBase, MotorBase):
                  name: str = "Hands",
                  control_hz: int = 250,
                  read_only: bool = False,
+                 logger=None,
                  ):
         """
         Initialize Hands device
@@ -65,7 +66,7 @@ class Hands(OptionalDeviceBase, MotorBase):
             read_only: Whether this device is read-only (read only will not create periodic task)
             send_message_callback: Callback function for sending messages, used to send downstream messages
         """
-        OptionalDeviceBase.__init__(self, read_only, name, device_id, device_type, send_message_callback)
+        OptionalDeviceBase.__init__(self, read_only, name, device_id, device_type, send_message_callback, logger=logger)
 
         # Convert function for old revert function
         if device_type in [public_api_types_pb2.SecondaryDeviceType.SdtHandGp100]:
@@ -134,7 +135,7 @@ class Hands(OptionalDeviceBase, MotorBase):
             self.motor_command(CommandType.POSITION, [0.0] * self.motor_count)
             return True
         except Exception as e:
-            log_err(f"Hands initialization failed: {e}")
+            self._log_err(f"Hands initialization failed: {e}")
             return False
 
     def _update_optional_data(self, device_type, device_status: public_api_types_pb2.SecondaryDeviceStatus, timestamp: Timestamp) -> bool:
@@ -149,7 +150,7 @@ class Hands(OptionalDeviceBase, MotorBase):
             bool: Whether update was successful
         """
         if device_type != self._device_type:
-            log_warn(f"Warning: Hands device type mismatch, expected {self._device_type}, actual {device_type}")
+            self._log_warn(f"Warning: Hands device type mismatch, expected {self._device_type}, actual {device_type}")
             return False
             
         try:
@@ -157,7 +158,7 @@ class Hands(OptionalDeviceBase, MotorBase):
             self._push_motor_data(device_status.hand_status.motor_status, timestamp)
             return True
         except Exception as e:
-            log_err(f"Hands data update failed: {e}")
+            self._log_err(f"Hands data update failed: {e}")
             return False
 
     async def _periodic(self):
@@ -170,7 +171,7 @@ class Hands(OptionalDeviceBase, MotorBase):
         self.__last_warning_time = start_time
 
         await self._init()
-        log_info("Hands init success")
+        self._log_info("Hands init success")
         while True:
             await delay(start_time, cycle_time)
             start_time = time.perf_counter()
@@ -181,7 +182,7 @@ class Hands(OptionalDeviceBase, MotorBase):
                     for i in range(self.motor_count):
                         motor_state = self.get_motor_state(i)
                         if motor_state is not None and motor_state == "error":
-                            log_err(f"Error: Motor {i} error occurred")
+                            self._log_err(f"Error: Motor {i} error occurred")
                             self.__last_warning_time = start_time
 
                 # prepare sending message
@@ -194,7 +195,7 @@ class Hands(OptionalDeviceBase, MotorBase):
                         msg = self._construct_custom_joint_command_msg(motor_msg)
                         await self._send_message(msg)
                     except Exception as e:
-                        log_err(f"Hands failed to construct custom joint command message: {e}")
+                        self._log_err(f"Hands failed to construct custom joint command message: {e}")
                         continue
                 # normal command
                 else:
@@ -202,11 +203,11 @@ class Hands(OptionalDeviceBase, MotorBase):
                         msg = self._construct_joint_command_msg()
                         await self._send_message(msg)
                     except Exception as e:
-                        log_err(f"Hands failed to construct joint command message: {e}")
+                        self._log_err(f"Hands failed to construct joint command message: {e}")
                         continue
 
             except Exception as e:
-                log_err(f"Hands periodic task exception: {e}")
+                self._log_err(f"Hands periodic task exception: {e}")
                 await asyncio.sleep(0.5)
                 continue
         
@@ -255,7 +256,10 @@ class Hands(OptionalDeviceBase, MotorBase):
         # limit position
         if command_type == CommandType.POSITION:
             values = [max(min(value, self._hands_limit[1]), self._hands_limit[0]) for value in values]
-
+        elif command_type == CommandType.SPEED_WITH_MAX_CURRENT:
+            raise ValueError("Hands does not support commands: Speed with Max Current")
+            
+        
         super().motor_command(command_type, values)
         self._last_command_time = time.perf_counter()
 

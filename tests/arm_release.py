@@ -36,7 +36,15 @@ def main():
         default='INFO',
         help='Set logging level for hex_device package, example: DEBUG, INFO, WARNING, ERROR'
     )
+    parser.add_argument(
+        '--print',
+        choices=['arm', 'hands', 'both'],
+        default='both',
+        help='Which device motor positions to print: arm, hands, or both (default: both)'
+    )
     args = parser.parse_args()
+    show_arm = args.print in ('arm', 'both')
+    show_hands = args.print in ('hands', 'both')
     
     # Set log level
     hex_device.set_log_level(args.log_level)
@@ -88,7 +96,8 @@ def main():
                                 if not device.reload_arm_config_from_dict(config_dict):
                                     exit(1)
 
-                            print(f"arm position: {device.get_motor_positions(False).tolist()}")
+                            if show_arm:
+                                print(f"arm position: {device.get_motor_positions(False).tolist()}")
                             # print(f"arm simple motor status: {device.get_simple_motor_status(False)}")
                             
                             device.motor_command(
@@ -99,7 +108,8 @@ def main():
                 if optional_devices is not None:
                     device: Hands = optional_devices[0]
                     if device.has_new_data():
-                        print(f"hands position: {device.get_motor_positions()}")
+                        if show_hands:
+                            print(f"hands position: {device.get_motor_positions()}")
                         device.motor_command(
                             CommandType.TORQUE,
                             [0.0] * device.motor_count
@@ -109,7 +119,8 @@ def main():
                 if optional_devices is not None:
                     device: Hands = optional_devices[0]
                     if device.has_new_data():
-                        print(f"hands position: {device.get_motor_positions()}")
+                        if show_hands:
+                            print(f"hands position: {device.get_motor_positions()}")
 
                         device.motor_command(
                             CommandType.TORQUE,

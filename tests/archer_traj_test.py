@@ -159,7 +159,15 @@ def main():
         default="ws://0.0.0.0:8439",
         help='WebSocket URL for HEX device connection'
     )
+    parser.add_argument(
+        '--move',
+        choices=['arm', 'hands', 'both'],
+        default='both',
+        help='Move only arm, only hands, or both (default: both)'
+    )
     args = parser.parse_args()
+    move_arm = args.move in ('arm', 'both')
+    move_hands = args.move in ('hands', 'both')
     
     # Init HexDeviceApi
     api = HexDeviceApi(ws_url=args.url, control_hz=250, enable_kcp=True, local_port=0)
@@ -190,6 +198,8 @@ def main():
             else:
                 for device in api.device_list:
                     if isinstance(device, Arm):
+                        if not move_arm:
+                            continue
                         arm_device = device  # Store reference
                         if device.has_new_data():
                             if first_time:
@@ -246,74 +256,76 @@ def main():
                                             loop_counter += 1
                                             # print(f"--- Completed trajectory loop {loop_counter} ---")
 
-                for device in api.optional_device_list:
-                    if isinstance(device, Hands):
-                        if device.has_new_data():
-                            if hands_first_time:
-                                hands_first_time = False
-                                device.set_positon_step(0.02)
-                                device.set_pos_torque(3.0)
+                if move_hands:
+                    for device in api.optional_device_list:
+                        if isinstance(device, Hands):
+                            if device.has_new_data():
+                                if hands_first_time:
+                                    hands_first_time = False
+                                    device.set_positon_step(0.02)
+                                    device.set_pos_torque(3.0)
 
-                                pos_range = device.get_joint_limits()
-                                min_pos = pos_range[0]
-                                max_pos = pos_range[1]
+                                    pos_range = device.get_joint_limits()
+                                    min_pos = pos_range[0]
+                                    max_pos = pos_range[1]
+                                    
+                                current_positions = device.get_motor_positions()
+                                # print(f"hands position: {current_positions}")
                                 
-                            current_positions = device.get_motor_positions()
-                            # print(f"hands position: {current_positions}")
-                            
-                            # Create sinusoidal motion for smooth interpolation
-                            t = time.time()
-                            interpolation_factor = (math.sin(t * 0.5) + 1.0) / 2.0  # 0 to 1
-                            target_position = min_pos + interpolation_factor * (max_pos - min_pos)
-                            # Apply to first motor (or all motors if desired)
-                            target_positions = [target_position] + [0.0] * (device.motor_count - 1)
-                            
-                            device.motor_command(
-                                CommandType.POSITION,
-                                target_positions
-                            )
+                                # Create sinusoidal motion for smooth interpolation
+                                t = time.time()
+                                interpolation_factor = (math.sin(t * 0.5) + 1.0) / 2.0  # 0 to 1
+                                target_position = min_pos + interpolation_factor * (max_pos - min_pos)
+                                # Apply to first motor (or all motors if desired)
+                                target_positions = [target_position] + [0.0] * (device.motor_count - 1)
+                                
+                                device.motor_command(
+                                    CommandType.POSITION,
+                                    target_positions
+                                )
 
             time.sleep(0.002)
 
     except KeyboardInterrupt:
-        print("\nReceived Ctrl-C. Planning return to home position...")
-        
-        # Get the last commanded position
-        last_position = trajectory_planner.get_last_position()
-        if last_position is None:
-            print("No trajectory data available, using default start position")
-            last_position = arm_position[0]
-        
-        print(f"Current position: {[f'{x:.3f}' for x in last_position]}")
-        print(f"Home position: {HOME_POSITION}")
-        print(f"Return duration: {RETURN_HOME_DURATION} seconds")
-        
-        # Create return home controller
-        return_home = ReturnHomeController(last_position, HOME_POSITION, RETURN_HOME_DURATION)
-        
-        # Execute return home trajectory
+        print("\nReceived Ctrl-C.")
         reached_home = False
-        while not reached_home and arm_device is not None:
-            if api.is_api_exit():
-                print("Public API has exited during return home.")
-                break
-            
-            if arm_device.has_new_data():
-                target_position, reached_home = return_home.get_target_position()
-                arm_device.motor_command(CommandType.POSITION, target_position.tolist())
-                
-                # Print progress
-                current_time = time.time()
-                elapsed = current_time - return_home.start_time
-                if int(elapsed * 10) % 5 == 0:  # Print every 0.5 seconds
-                    progress = min(100, (elapsed / RETURN_HOME_DURATION) * 100)
-                    print(f"Return progress: {progress:.1f}% - Position: {[f'{x:.3f}' for x in target_position]}")
-            
-            time.sleep(0.002)
-        
-        if reached_home:
-            print("Successfully reached home position!")
-        
+        if move_arm and arm_device is not None:
+            print("Planning return to home position...")
+            last_position = trajectory_planner.get_last_position()
+            if last_position is None:
+                print("No trajectory data available, using default start position")
+                last_position = arm_position[0]
+
+            print(f"Current position: {[f'{x:.3f}' for x in last_position]}")
+            print(f"Home position: {HOME_POSITION}")
+            print(f"Return duration: {RETURN_HOME_DURATION} seconds")
+
+            return_home = ReturnHomeController(last_position, HOME_POSITION, RETURN_HOME_DURATION)
+
+            while not reached_home:
+                if api.is_api_exit():
+                    print("Public API has exited during return home.")
+                    break
+
+                if arm_device.has_new_data():
+                    target_position, reached_home = return_home.get_target_position()
+                    arm_device.motor_command(CommandType.POSITION, target_position.tolist())
+
+                    current_time = time.time()
+                    elapsed = current_time - return_home.start_time
+                    if int(elapsed * 10) % 5 == 0:  # Print every 0.5 seconds
+                        progress = min(100, (elapsed / RETURN_HOME_DURATION) * 100)
+                        print(f"Return progress: {progress:.1f}% - Position: {[f'{x:.3f}' for x in target_position]}")
+
+                time.sleep(0.002)
+
+            if reached_home:
+                print("Successfully reached home position!")
+        elif not move_arm:
+            print("Arm motion was disabled (--move hands); skip return home.")
+        else:
+            print("Arm device not connected; skip return home.")
+
         api.close()
     finally:
         pass

@@ -199,8 +199,6 @@ def main():
             else:
                 for device in api.device_list:
                     if isinstance(device, Arm):
-                        if not move_arm:
-                            continue
                         arm_device = device  # Store reference
                         if device.has_new_data():
                             if first_time:
@@ -233,6 +231,9 @@ def main():
                                 }
                                 if not device.reload_arm_config_from_dict(config_dict):
                                     exit(1)
+
+                            if not move_arm:
+                                continue
 
                             if not trajectory_initialized:
                                 if trajectory_planner.start_trajectory():

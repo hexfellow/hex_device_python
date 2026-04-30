@@ -164,11 +164,17 @@ class HexDeviceApi:
 
         self.__shutdown_event = None  # the handle event for shutdown api
         self.__loop = None  ## async loop thread
+        self.__loop_ready = threading.Event()
         self.__loop_thread = threading.Thread(target=self.__loop_start,
                                               daemon=True)
         self.__is_closing = threading.Event()
         # init api
         self.__loop_thread.start()
+        ## wait for loop thread to start
+        if not self.__loop_ready.wait(timeout=5.0):
+            self._logger.error("Event loop thread failed to start within 5 seconds!")
+        else:
+            self._logger.debug("Event loop thread is ready.")
         if not self._stream_mode and self.local_port:
             self._logger.info(f"HexDeviceApi initialized (local port: {self.local_port}).")
         else:
@@ -449,6 +455,8 @@ class HexDeviceApi:
             )
             self._device_tasks[device_id] = future
             self._logger.info(f"Begin periodic task for {device.name}")
+        # Warning: If loop thread is not ready, the task will be skipped and never try to start again!
+        # Must ensure the loop thread is ready before starting any periodic task!
         else:
             self._logger.error(f"Event loop not available, cannot start periodic task for {device.name}")
 
@@ -919,6 +927,7 @@ class HexDeviceApi:
         """
         self.__loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.__loop)
+        self.__loop_ready.set()
         self.__loop.run_until_complete(self.__main_loop())
 
     def _process_kcp_data(self, data: bytes):

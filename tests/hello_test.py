@@ -109,13 +109,15 @@ def main():
                                 first_time = False
                                 # Must start device before using it.
                                 device.start()
-                               
-                            if check_arm:
-                                print(f"arm position: {device.get_motor_positions(False).tolist()}")
-                            # print(f"arm simple motor status: {device.get_simple_motor_status(False)}")
                             
                             if check_visuable:
-                                Plotjuggle_data['Arm'] = transform_plotjuggle_data(device)
+                                Plotjuggle_data['Arm'] = transform_plotjuggle_data(device)   
+                            
+                            if check_arm:
+                                print(f"arm position: {device.get_motor_positions(pop=True).tolist()}")
+                            # print(f"arm simple motor status: {device.get_simple_motor_status(False)}")
+                            
+                            
 
                 optional_devices = api.find_optional_device_by_robot_type(public_api_types_pb2.SecondaryDeviceType.SdtHello1J1T4BV1)
                 if optional_devices is not None:
@@ -136,13 +138,15 @@ def main():
                             # set rgb stripe command
                             device.set_rgb_stripe_command(r_list, g_list, b_list)
                             
-                        if check_sdt_hello:
-                            print(f"sdt hello position: {device.get_simple_motor_status()['pos']}")
-                            
                         if check_visuable:
                             pos = device.get_simple_motor_status()
                             if pos:
-                                Plotjuggle_data['Hello']["motor_position"] = pos["pos"]
+                                Plotjuggle_data['Hello']["motor_position"] = pos["pos"]    
+                        
+                        if check_sdt_hello:
+                            print(f"sdt hello position: {device.get_simple_motor_status(pop=True)['pos']}")
+                            
+
             if check_visuable:
                 Plotjuggle_current_send_time = time.time()
                 if Plotjuggle_current_send_time - Plotjuggle_last_send_time >= 0.01:  # 10ms

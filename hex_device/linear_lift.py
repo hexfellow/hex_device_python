@@ -27,6 +27,7 @@ class LinearLift(DeviceBase):
     SUPPORTED_ROBOT_TYPES = [
         public_api_types_pb2.RobotType.RtIotaP1,
         public_api_types_pb2.RobotType.RtIotaVc1,
+        public_api_types_pb2.RobotType.RtTheta2,
     ]
 
     def __init__(self, motor_count: int, robot_type: int, name: str = "Lift", control_hz: int = 500, send_message_callback=None, logger=None):

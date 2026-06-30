@@ -34,6 +34,7 @@ class Chassis(DeviceBase, MotorBase):
     SUPPORTED_ROBOT_TYPES = [
         public_api_types_pb2.RobotType.RtTriggerA3Lr1,
         public_api_types_pb2.RobotType.RtMaverX4D,
+        public_api_types_pb2.RobotType.RtMaverX4H1,
         public_api_types_pb2.RobotType.RtMaverL4D,
         public_api_types_pb2.RobotType.RtArk2Lr1,
     ]
@@ -287,9 +288,9 @@ class Chassis(DeviceBase, MotorBase):
                                 True, True)
                             await self._send_message(msg)
                         else:
-                            msg = self._construct_zero_resistance_message(
-                                False, True)
-                            await self._send_message(msg)
+                            # msg = self._construct_zero_resistance_message(
+                            #     False, True)
+                            # await self._send_message(msg)
 
                             if start_time - self._last_command_time > self._command_timeout:
                                 self._is_timeout = True

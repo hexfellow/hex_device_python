@@ -366,6 +366,10 @@ class Hands(OptionalDeviceBase, MotorBase):
         """Get hands joint limits"""
         return deepcopy(self._hands_limit)
 
+    def set_joint_limits(self, max_limit: float, min_limit: float):
+        """Set hands joint limits"""
+        self._hands_limit = [min_limit, max_limit, -np.inf, np.inf, -np.inf, np.inf]
+
     def get_hands_summary(self) -> dict:
         """
         Get hands device summary including motor data

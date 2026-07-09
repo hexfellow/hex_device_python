@@ -14,12 +14,68 @@ A Python library for controlling HexDevice robots and devices.
 import logging
 import sys
 import os
+import signal
+import atexit
+import faulthandler
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TextIO
 
 # Global variables to store IP address and port for logging
 _log_ip_address: Optional[str] = None
 _log_port: Optional[int] = None
+_fault_log_file: Optional[TextIO] = None
+
+
+def enable_crash_diagnostics(fault_log_path: Optional[str] = None) -> None:
+    """
+    Enable faulthandler dumps for segfault / fatal signals.
+
+    Dumps all Python thread stacks on fatal signals (SIGSEGV, SIGFPE, ...).
+    Destination:
+      - fault_log_path or env HEX_DEVICE_FAULT_LOG, if set
+      - otherwise sys.stderr (HexLaunch already captures child stderr)
+
+    Also registers SIGUSR1 for on-demand all-thread traceback:
+      kill -USR1 <pid>
+
+    Safe to call multiple times (rebinds dump destination).
+    """
+    global _fault_log_file
+
+    path = fault_log_path or os.environ.get("HEX_DEVICE_FAULT_LOG")
+    dump_file: TextIO = sys.stderr
+
+    if path:
+        try:
+            parent = Path(path).expanduser().resolve().parent
+            parent.mkdir(parents=True, exist_ok=True)
+            # line buffering: more of a partial dump is likely to hit disk
+            new_file = open(path, "a", buffering=1, encoding="utf-8")
+            if _fault_log_file is not None and _fault_log_file is not new_file:
+                try:
+                    _fault_log_file.close()
+                except Exception:
+                    pass
+            _fault_log_file = new_file
+            dump_file = new_file
+            atexit.register(lambda f=new_file: f.close() if not f.closed else None)
+        except OSError as e:
+            sys.stderr.write(
+                f"[hex_device] Failed to open HEX_DEVICE_FAULT_LOG={path!r}: {e}\n"
+            )
+
+    faulthandler.enable(file=dump_file, all_threads=True)
+
+    # On-demand dump: kill -USR1 <pid>
+    try:
+        faulthandler.register(signal.SIGUSR1, file=dump_file, all_threads=True, chain=False)
+    except (RuntimeError, ValueError, OSError):
+        # Not available on all platforms / when not main thread
+        pass
+
+
+# Enable by default (stderr). Set HEX_DEVICE_FAULT_LOG to dump to a file instead.
+enable_crash_diagnostics()
 
 # Custom filter for separating error logs from other logs
 class NonErrorFilter(logging.Filter):
@@ -321,6 +377,7 @@ __all__ = [
     'set_log_level',
     'get_logger',
     'set_log_address',
+    'enable_crash_diagnostics',
 
     # Version information
     '__version__',

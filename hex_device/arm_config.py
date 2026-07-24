@@ -252,17 +252,17 @@ class ArmConfigManager:
             motor_model=[0x87, 0x87, 0x85, 0x85, 0x84, 0x84, 0x84],
             robot_config=JointParams(joints=[
                 JointParam(joint_name="joint_1",
-                           joint_limit=[-2.7, 2.8, -3.77, 3.77, -0.0, 0.0]),
+                           joint_limit=[-2.8, 2.8, -3.77, 3.77, -0.0, 0.0]),
                 JointParam(joint_name="joint_2",
-                           joint_limit=[-2.0, 1.4, -3.77, 3.77, -0.0, 0.0]),
+                           joint_limit=[-1.2, 2.0, -3.77, 3.77, -0.0, 0.0]),
                 JointParam(joint_name="joint_3",
-                           joint_limit=[-2.7, 2.8, -3.77, 3.77, -0.0, 0.0]),
+                           joint_limit=[-2.8, 2.8, -3.77, 3.77, -0.0, 0.0]),
                 JointParam(joint_name="joint_4",
-                           joint_limit=[-2.1, 1.0, -3.77, 3.77, -0.0, 0.0]),
+                           joint_limit=[-1.0, 2.2, -3.77, 3.77, -0.0, 0.0]),
                 JointParam(joint_name="joint_5",
                            joint_limit=[-2.7, 2.7, -12.56, 12.56, -0.0, 0.0]),
                 JointParam(joint_name="joint_6",
-                           joint_limit=[-0.85, 0.89, -12.56, 12.56, -0.0, 0.0]),
+                           joint_limit=[-0.85, 0.85, -12.56, 12.56, -0.0, 0.0]),
                 JointParam(joint_name="joint_7",
                            joint_limit=[-0.78, 0.78, -12.56, 12.56, -0.0, 0.0])
             ]))

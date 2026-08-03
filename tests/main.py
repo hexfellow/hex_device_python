@@ -204,12 +204,12 @@ def main():
 
                             # device.motor_command(
                             #     CommandType.MIT,[
-                            #     MitMotorCommand(position=-0.3, speed=0.0, torque=0.0, kp=150.0, kd=12.0),
-                            #     MitMotorCommand(position=-1.48, speed=0.0, torque=0.0, kp=150.0, kd=12.0),
-                            #     MitMotorCommand(position=2.86, speed=0.0, torque=0.0, kp=150.0, kd=12.0),
-                            #     MitMotorCommand(position=0.0, speed=0.0, torque=0.0, kp=150.0, kd=12.0),
-                            #     MitMotorCommand(position=0.0, speed=0.0, torque=0.0, kp=39.0, kd=0.8),
-                            #     MitMotorCommand(position=0.0, speed=0.0, torque=0.0, kp=39.0, kd=0.8),
+                            #     MitMotorCommand(position=-0.3, speed=0.0, torque=0.0, kp=200.0, kd=5.0),
+                            #     MitMotorCommand(position=-1.48, speed=0.0, torque=0.0, kp=200.0, kd=5.0),
+                            #     MitMotorCommand(position=2.86, speed=0.0, torque=0.0, kp=200.0, kd=5.0),
+                            #     MitMotorCommand(position=0.0, speed=0.0, torque=0.0, kp=200.0, kd=5.0),
+                            #     MitMotorCommand(position=0.0, speed=0.0, torque=0.0, kp=100.0, kd=3.0),
+                            #     MitMotorCommand(position=0.0, speed=0.0, torque=0.0, kp=100.0, kd=3.0),
                             #     ])
 
                             # mit_commands = device.construct_mit_command(
@@ -223,8 +223,8 @@ def main():
                             #     [0.3, -1.48, 2.86, 0.0, 0.0, 0.0], 
                             #     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 
                             #     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 
-                            #     [150.0, 150.0, 150.0, 150.0, 39.0, 39.0], 
-                            #     [12.0, 12.0, 12.0, 12.0, 0.8, 0.8]
+                            #     [200.0, 200.0, 200.0, 200.0, 100.0, 100.0], 
+                            #     [5.0, 5.0, 5.0, 5.0, 3.0, 3.0]
                             # )
                             # device.motor_command(
                             #     CommandType.MIT,

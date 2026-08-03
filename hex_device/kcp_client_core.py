@@ -89,6 +89,11 @@ class KCPClient:
         # Message callback
         self._message_callback: Optional[Callable[[bytes], None]] = None
 
+        # Serialize all access to the underlying IKCPCB*. The kcp C extension is
+        # not thread-safe; send / receive / update may run on different threads.
+        # RLock: ikcp_flush/update may re-enter Python via the outbound handler.
+        self._kcp_lock = threading.RLock()
+
         # Control flags
         self._running = False
         self._update_thread: Optional[threading.Thread] = None
@@ -296,12 +301,13 @@ class KCPClient:
         Args:
             raw_data: Raw bytes received from socket
         """
-        # Feed data to KCP
-        self._kcp.receive(raw_data)
+        # Hold the KCP lock only around ikcp_* calls. Run the user callback
+        # outside so protobuf parsing / device update does not block send/update.
+        with self._kcp_lock:
+            self._kcp.receive(raw_data)
+            packets = list(self._kcp.get_all_received())
 
-        # Get all processed packets from KCP
-        for data in self._kcp.get_all_received():
-            # Call user callback if set
+        for data in packets:
             if self._message_callback:
                 try:
                     self._message_callback(data)
@@ -319,11 +325,10 @@ class KCPClient:
             True if successfully enqueued, False otherwise
         """
         try:
-            # Enqueue to KCP
-            self._kcp.enqueue(data)
-
-            # Flush to trigger immediate send
-            self._kcp.flush()
+            with self._kcp_lock:
+                self._kcp.enqueue(data)
+                # Flush to trigger immediate send (may call outbound handler)
+                self._kcp.flush()
 
             return True
         except Exception as e:
@@ -339,11 +344,9 @@ class KCPClient:
 
         while self._running:
             try:
-                # Update KCP state
-                self._kcp.update()
-
-                # Calculate next update time
-                sleep_time = self._kcp.update_check() / 1000.0
+                with self._kcp_lock:
+                    self._kcp.update()
+                    sleep_time = self._kcp.update_check() / 1000.0
 
                 if sleep_time > 0:
                     time.sleep(sleep_time)

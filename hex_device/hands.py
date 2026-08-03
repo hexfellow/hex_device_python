@@ -105,7 +105,7 @@ class Hands(OptionalDeviceBase, MotorBase):
             self._max_torque = 3.0
             self._positon_step = 0.02
         elif self._device_type == public_api_types_pb2.SecondaryDeviceType.SdtHandGr100:
-            self._hands_limit = [0.0, 0.57, -np.inf, np.inf, -np.inf, np.inf]
+            self._hands_limit = [0.0, 0.69, -np.inf, np.inf, -np.inf, np.inf]
             self._max_torque = 3.0
             self._positon_step = 0.02
         else:
@@ -132,7 +132,7 @@ class Hands(OptionalDeviceBase, MotorBase):
             bool: Whether initialization was successful
         """
         try:
-            self.motor_command(CommandType.POSITION, [0.0] * self.motor_count)
+            # self.motor_command(CommandType.POSITION, [0.0] * self.motor_count)
             return True
         except Exception as e:
             self._log_err(f"Hands initialization failed: {e}")

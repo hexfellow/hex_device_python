@@ -68,33 +68,6 @@ def main():
                                 first_time = False
                                 # Must start device before using it.
                                 device.start()
-                                # 6-axis config
-                                config_dict = {
-                                    'name':'Archer_d6y',
-                                    'dof_num': 'six_axis',
-                                    'motor_model': [0x80] * 6,
-                                    'joints': [{
-                                        'joint_name': 'joint_1',
-                                        'joint_limit': [-2.7, 3.1, -0.3, 0.3, -0.0, 0.0]
-                                    }, {
-                                        'joint_name': 'joint_2',
-                                        'joint_limit': [-1.57, 2.094, -0.3, 0.3, -0.0, 0.0]
-                                    }, {
-                                        'joint_name': 'joint_3',
-                                        'joint_limit': [0.0, 3.14159265359, -0.3, 0.3, -0.0, 0.0]
-                                    }, {
-                                        'joint_name': 'joint_4',
-                                        'joint_limit': [-1.56, 1.56, -0.3, 0.3, -0.0, 0.0]
-                                    }, {
-                                        'joint_name': 'joint_5',
-                                        'joint_limit': [-1.56, 1.56, -0.3, 0.3, -0.0, 0.0]
-                                    }, {
-                                        'joint_name': 'joint_6',
-                                        'joint_limit': [-1.57, 1.57, -0.3, 0.3, -0.0, 0.0]
-                                    }]
-                                }
-                                if not device.reload_arm_config_from_dict(config_dict):
-                                    exit(1)
 
                             if show_arm:
                                 print(f"arm position: {device.get_motor_positions(False).tolist()}")
@@ -127,16 +100,17 @@ def main():
                             [0.0] * device.motor_count
                         )
 
-                # optional_devices = api.find_optional_device_by_robot_type(public_api_types_pb2.SecondaryDeviceType.SdtHandGr100)
-                # if optional_devices is not None:
-                #     device: Hands = optional_devices[0]
-                #     if device.has_new_data():
-                #         print(f"hands position: {device.get_motor_positions()}")
+                optional_devices = api.find_optional_device_by_robot_type(public_api_types_pb2.SecondaryDeviceType.SdtHandGr100)
+                if optional_devices is not None:
+                    device: Hands = optional_devices[0]
+                    if device.has_new_data():
+                        if show_hands:
+                            print(f"hands position: {device.get_motor_positions()}")
 
-                #         device.motor_command(
-                #             CommandType.TORQUE,
-                #             [0.0] * device.motor_count
-                #         )
+                        device.motor_command(
+                            CommandType.TORQUE,
+                            [0.0] * device.motor_count
+                        )
 
             time.sleep(0.0001)
 

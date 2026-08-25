@@ -36,7 +36,9 @@ class Chassis(DeviceBase, MotorBase):
         public_api_types_pb2.RobotType.RtMaverX4D,
         public_api_types_pb2.RobotType.RtMaverX4H1,
         public_api_types_pb2.RobotType.RtMaverL4D,
+        public_api_types_pb2.RobotType.RtMaverL4H1,
         public_api_types_pb2.RobotType.RtArk2Lr1,
+        public_api_types_pb2.RobotType.RtMaverOgH1,
     ]
 
     def __init__(self,

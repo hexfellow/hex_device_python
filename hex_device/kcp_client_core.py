@@ -11,9 +11,12 @@ Minimal implementation focusing on KCP protocol communication only
 """
 
 import socket
+import queue
+import select
 import time
 import threading
 import ipaddress
+import errno
 from typing import Optional, Callable
 from dataclasses import dataclass
 import logging as _logging
@@ -44,8 +47,8 @@ class KCPClient:
     
     Features:
     - Direct UDP socket management
-    - KCP protocol handling
-    - Separate threads for update and receive loops
+    - A single owner thread for every KCP operation
+    - Thread-safe outbound queue for application messages
     - Configurable KCP parameters
     """
 
@@ -78,8 +81,7 @@ class KCPClient:
             # If dual-stack is not supported, continue with IPv6-only
             self._logger.debug(
                 "[KCP Client] Dual-stack mode not supported, using IPv6-only")
-
-        self._sock.settimeout(0.5)
+        self._sock.setblocking(False)
         # Bind to IPv6 wildcard address (::) which also accepts IPv4 in dual-stack mode
         self._sock.bind(('::', 0))
 
@@ -89,15 +91,18 @@ class KCPClient:
         # Message callback
         self._message_callback: Optional[Callable[[bytes], None]] = None
 
-        # Serialize all access to the underlying IKCPCB*. The kcp C extension is
-        # not thread-safe; send / receive / update may run on different threads.
-        # RLock: ikcp_flush/update may re-enter Python via the outbound handler.
-        self._kcp_lock = threading.RLock()
+        # The C extension is not thread-safe. The IO thread exclusively owns
+        # every KCP call; callers only append to this queue and wake the owner.
+        self._send_queue = queue.SimpleQueue()
+        self._message_queue = queue.SimpleQueue()
+        self._wakeup_reader, self._wakeup_writer = socket.socketpair()
+        self._wakeup_reader.setblocking(False)
+        self._wakeup_writer.setblocking(False)
 
         # Control flags
         self._running = False
-        self._update_thread: Optional[threading.Thread] = None
-        self._receive_thread: Optional[threading.Thread] = None
+        self._io_thread: Optional[threading.Thread] = None
+        self._callback_thread: Optional[threading.Thread] = None
 
     def config_kcp(self, address: str, port: int, conv_id: int) -> None:
         """
@@ -234,12 +239,13 @@ class KCPClient:
         """
         self._send_raw_data(data)
 
-    def _receive_from_socket(self) -> Optional[bytes]:
+    def _receive_from_socket(self):
         """
-        Receive raw data from UDP socket
-        
+        Receive one UDP datagram.
+
         Returns:
-            Received bytes or None if error
+            bytes for an accepted datagram, False for a filtered datagram,
+            None when the socket has nothing left to read.
         """
         try:
             data, addr = self._sock.recvfrom(self._config.max_message_length)
@@ -251,28 +257,36 @@ class KCPClient:
                 recv_addr = addr[0]
                 recv_port = addr[1]
                 filter_addr, filter_port = self.filter_address
-                
+
                 # Fast path: direct comparison (most common case - exact match)
-                if recv_addr == filter_addr:
-                    if recv_port == filter_port:
-                        return data
-                    return None
-                
+                if recv_addr == filter_addr and recv_port == filter_port:
+                    return data
+
                 # Fallback: handle IPv4-mapped IPv6 addresses (::ffff:x.x.x.x)
-                # Only check if port matches and recv_addr is IPv4-mapped format
                 if recv_port == filter_port and recv_addr.startswith('::ffff:'):
-                    # Compare IPv4 part (skip '::ffff:' prefix, 7 chars)
                     if recv_addr[7:] == filter_addr:
                         return data
-                
-                return None
+
+                return False
             return data
-        except socket.timeout:
+        except (BlockingIOError, socket.timeout):
             return None
         except Exception as e:
             if self._running:  # Only log if we're still running
                 self._logger.error(f"[KCP Client] Socket receive error: {e}")
             return None
+
+    def _drain_socket(self) -> list[bytes]:
+        """Read every currently queued datagram without blocking."""
+        messages = []
+        while True:
+            raw_data = self._receive_from_socket()
+            if raw_data is None:
+                return messages
+            if raw_data is False:
+                continue
+            messages.extend(self._process_received_data(raw_data))
+
 
     def _set_filter(self, address: str, port: int) -> None:
         """
@@ -294,98 +308,145 @@ class KCPClient:
         # The receive logic handles both cases efficiently
         self.filter_address = (filter_addr, port)
 
-    def _process_received_data(self, raw_data: bytes) -> None:
-        """
-        Process received raw data through KCP protocol
-        
-        Args:
-            raw_data: Raw bytes received from socket
-        """
-        # Hold the KCP lock only around ikcp_* calls. Run the user callback
-        # outside so protobuf parsing / device update does not block send/update.
-        with self._kcp_lock:
-            self._kcp.receive(raw_data)
-            packets = list(self._kcp.get_all_received())
-
-        for data in packets:
-            if self._message_callback:
-                try:
-                    self._message_callback(data)
-                except Exception as e:
-                    self._logger.error(f"[KCP Client] Message callback error: {e}")
+    def _process_received_data(self, raw_data: bytes) -> list[bytes]:
+        """Feed one UDP datagram to KCP and return complete messages."""
+        self._kcp.receive(raw_data)
+        return list(self._kcp.get_all_received())
 
     def send(self, data: bytes) -> bool:
         """
-        Send data through KCP
-        
+        Queue data for the KCP owner thread.
+
         Args:
             data: Data to send
-            
-        Returns:
-            True if successfully enqueued, False otherwise
-        """
-        try:
-            with self._kcp_lock:
-                self._kcp.enqueue(data)
-                # Flush to trigger immediate send (may call outbound handler)
-                self._kcp.flush()
 
-            return True
-        except Exception as e:
-            self._logger.error(f"[KCP Client] Send error: {e}")
+        Returns:
+            True if accepted by the outbound queue, False otherwise.
+            Acceptance is not delivery: KCP enqueue and UDP errors are
+            handled by the owner thread.
+        """
+        if not data:
+            self._logger.error("[KCP Client] Cannot send empty data")
+            return False
+        if len(data) > self._config.max_message_length:
+            self._logger.error(
+                f"[KCP Client] Message length exceeds {self._config.max_message_length} bytes: {len(data)}, skip"
+            )
+            return False
+        if not self._running:
+            self._logger.warning("[KCP Client] Client is not running, skip sending")
             return False
 
-    def _update_loop(self) -> None:
-        """
-        KCP update loop - runs in separate thread
-        Handles KCP protocol state updates and retransmissions
-        """
-        self._logger.debug("[KCP Client] Update loop started")
+        self._send_queue.put(data)
+        self._wake()
+        return True
 
-        while self._running:
+    def _wake(self) -> None:
+        """Wake the owner thread. A full buffer already has a pending wake."""
+        try:
+            self._wakeup_writer.send(b"\0")
+        except BlockingIOError:
+            pass
+        except OSError as e:
+            if e.errno not in (errno.EBADF, errno.ECONNRESET, errno.EPIPE, errno.ENOTCONN):
+                raise
+
+    def _callback_loop(self) -> None:
+        """Run application callbacks without delaying KCP protocol service."""
+        self._logger.debug("[KCP Client] Callback loop started")
+        while True:
+            data = self._message_queue.get()
+            if data is None:
+                break
             try:
-                with self._kcp_lock:
-                    self._kcp.update()
-                    sleep_time = self._kcp.update_check() / 1000.0
+                self._message_callback(data)
+            except Exception as e:
+                self._logger.error(f"[KCP Client] Message callback error: {e}")
+        self._logger.debug("[KCP Client] Callback loop stopped")
 
-                if sleep_time > 0:
-                    time.sleep(sleep_time)
-                else:
-                    # Minimum sleep to prevent CPU spinning
-                    time.sleep(0.0001)
+    def _drain_send_queue(self) -> None:
+        """Move every pending application message into KCP."""
+        while True:
+            try:
+                data = self._send_queue.get_nowait()
+            except queue.Empty:
+                return
+            try:
+                self._kcp.enqueue(data)
+            except Exception as e:
+                self._logger.error(f"[KCP Client] Send error: {e}")
 
+    def _drain_wakeup(self) -> None:
+        """Clear queued wake bytes after select reports the socket readable."""
+        while True:
+            try:
+                if not self._wakeup_reader.recv(4096):
+                    return
+            except BlockingIOError:
+                return
+            except OSError:
+                return
+
+    def _next_update_timeout(self, update_interval: float) -> float:
+        """Seconds until KCP next needs ikcp_update, capped by its interval."""
+        try:
+            delay_ms = self._kcp.update_check()
+        except Exception:
+            delay_ms = 0
+        if not isinstance(delay_ms, (int, float)) or delay_ms < 0:
+            delay_ms = 0
+        return min(delay_ms / 1000.0, update_interval)
+
+    def _service_kcp(self, messages: list) -> None:
+        """Enqueue, update, and flush on the owner thread.
+
+        update() only calls ikcp_flush on its interval. An explicit flush is
+        required so newly queued data leaves immediately, including the final
+        service pass after stop().
+        """
+        self._drain_send_queue()
+        self._kcp.update()
+        self._kcp.flush()
+        messages.extend(self._kcp.get_all_received())
+
+    def _io_loop(self) -> None:
+        """Own the KCP control block and service RX, TX, and timers."""
+        self._logger.debug("[KCP Client] IO loop started")
+
+        update_interval = max(self._config.update_interval / 1000.0, 0.001)
+        while self._running:
+            messages = []
+            try:
+                readable, _, _ = select.select(
+                    [self._sock, self._wakeup_reader], [], [],
+                    self._next_update_timeout(update_interval))
+                if self._wakeup_reader in readable:
+                    self._drain_wakeup()
+                if self._sock in readable:
+                    messages.extend(self._drain_socket())
+
+                self._service_kcp(messages)
             except Exception as e:
                 if self._running:
-                    self._logger.error(f"[KCP Client] Update loop error: {e}")
+                    self._logger.error(f"[KCP Client] IO loop error: {e}")
 
-        self._logger.debug("[KCP Client] Update loop stopped")
+            for data in messages:
+                self._message_queue.put(data)
 
-    def _receive_loop(self) -> None:
-        """
-        Socket receive loop - runs in separate thread
-        Continuously receives data from socket and processes through KCP
-        """
-        self._logger.debug("[KCP Client] Receive loop started")
+        try:
+            messages = []
+            self._service_kcp(messages)
+            for data in messages:
+                self._message_queue.put(data)
+        except Exception as e:
+            self._logger.error(f"[KCP Client] Final flush error: {e}")
 
-        while self._running:
-            try:
-                # Receive raw data from socket, timeout after 0.5 seconds
-                raw_data = self._receive_from_socket()
+        self._logger.debug("[KCP Client] IO loop stopped")
 
-                if raw_data:
-                    # Process through KCP
-                    self._process_received_data(raw_data)
-
-            except Exception as e:
-                if self._running:
-                    self._logger.error(f"[KCP Client] Receive loop error: {e}")
-
-        self._logger.debug("[KCP Client] Receive loop stopped")
 
     def start(self) -> None:
         """
-        Start KCP client
-        Launches update and receive threads
+        Start the single KCP owner thread.
         """
         if self._kcp is None or self._message_callback is None:
             self._logger.error("[KCP Client] KCP not configured, can not start")
@@ -397,42 +458,49 @@ class KCPClient:
         self._logger.debug(f"[KCP Client] Starting, local port: {self.local_port}")
         self._running = True
 
-        # Start update thread
-        self._update_thread = threading.Thread(target=self._update_loop,
-                                               daemon=True,
-                                               name="KCP-Update")
-        self._update_thread.start()
-
-        # Start receive thread
-        self._receive_thread = threading.Thread(target=self._receive_loop,
-                                                daemon=True,
-                                                name="KCP-Receive")
-        self._receive_thread.start()
+        self._io_thread = threading.Thread(target=self._io_loop,
+                                           daemon=True,
+                                           name="KCP-IO")
+        self._io_thread.start()
+        self._callback_thread = threading.Thread(target=self._callback_loop,
+                                                 daemon=True,
+                                                 name="KCP-Callback")
+        self._callback_thread.start()
 
         self._logger.debug("[KCP Client] Started")
 
     def stop(self) -> None:
         """
-        Stop KCP client
-        Stops all threads and closes socket
+        Stop the owner thread and close the socket.
+
+        Data already accepted by send() is enqueued and flushed before the
+        socket is closed. In-flight KCP segments are not retransmitted after
+        stop returns.
         """
         if not self._running:
             return
 
         self._logger.debug("[KCP Client] Stopping...")
         self._running = False
+        self._wake()
 
-        # Wait for threads to finish
-        if self._update_thread:
-            self._update_thread.join(timeout=1.0)
-        if self._receive_thread:
-            self._receive_thread.join(timeout=1.0)
+        if self._io_thread and self._io_thread.is_alive():
+            self._io_thread.join(timeout=1.0)
+            if self._io_thread.is_alive():
+                self._logger.error("[KCP Client] IO thread did not stop")
+                return
 
-        # Close socket
-        try:
-            self._sock.close()
-        except:
-            pass
+        self._message_queue.put(None)
+        if self._callback_thread and self._callback_thread.is_alive():
+            self._callback_thread.join(timeout=1.0)
+            if self._callback_thread.is_alive():
+                self._logger.error("[KCP Client] Callback thread did not stop")
+
+        for sock in (self._sock, self._wakeup_reader, self._wakeup_writer):
+            try:
+                sock.close()
+            except OSError:
+                pass
 
         self._logger.debug("[KCP Client] Stopped")
 

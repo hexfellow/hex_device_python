@@ -39,6 +39,7 @@ class Chassis(DeviceBase, MotorBase):
         public_api_types_pb2.RobotType.RtMaverL4H1,
         public_api_types_pb2.RobotType.RtArk2Lr1,
         public_api_types_pb2.RobotType.RtMaverOgH1,
+        public_api_types_pb2.RobotType.RtMaverL4H2,
     ]
 
     def __init__(self,
@@ -584,35 +585,6 @@ class Chassis(DeviceBase, MotorBase):
         msg = public_api_down_pb2.APIDown()
         base_command = public_api_types_pb2.BaseCommand()
         base_command.clear_parking_stop = True
-        msg.base_command.CopyFrom(base_command)
-        return msg
-
-    def _construct_set_parking_stop_message(
-            self, reason: str, category: int,
-            is_remotely_clearable: bool) -> public_api_down_pb2.APIDown:
-        """
-        @brief: For constructing a set_parking_stop message.
-        @params:
-            reason: what caused the parking stop
-            category: parking stop category, values can be :
-                0: EmergencyStopButton,
-                1: MotorHasError,
-                2: BatteryFail
-                3: GamepadTriggered,
-                4: UnknownParkingStopCategory,
-                5: APICommunicationTimeout
-            is_remotely_clearable: whether the parking stop can be cleared remotely
-        """
-        msg = public_api_down_pb2.APIDown()
-        base_command = public_api_types_pb2.BaseCommand()
-        parking_stop_detail = public_api_types_pb2.ParkingStopDetail()
-        parking_stop_category = category
-
-        parking_stop_detail.reason = reason
-        parking_stop_detail.category = parking_stop_category
-        parking_stop_detail.is_remotely_clearable = is_remotely_clearable
-
-        base_command.trigger_parking_stop.CopyFrom(parking_stop_detail)
         msg.base_command.CopyFrom(base_command)
         return msg
 

@@ -267,6 +267,28 @@ class ArmConfigManager:
                            joint_limit=[-0.78, 0.78, -12.56, 12.56, -0.0, 0.0])
             ]))
 
+        # 0x27 - firefly_y6_40 (6-axis)
+        self._configs[0x27] = ArmConfig(
+            name="firefly_y6_40",
+            dof_num=DofType.SIX_AXIS,
+            arm_series=39,
+            motor_model=[0x85, 0x85, 0x85, 0x85, 0x84, 0x84],
+            robot_config=JointParams(joints=[
+                JointParam(joint_name="joint_1",
+                           joint_limit=[-2.85, 2.85, -3.77, 3.77, -0.0, 0.0]),
+                JointParam(joint_name="joint_2",
+                           joint_limit=[-1.57, 2.094, -3.77, 3.77, -0.0, 0.0]),
+                JointParam(
+                    joint_name="joint_3",
+                    joint_limit=[0.0, 3.14159265359, -3.77, 3.77, -0.0, 0.0]),
+                JointParam(joint_name="joint_4",
+                           joint_limit=[-1.56, 1.56, -12.56, 12.56, -0.0, 0.0]),
+                JointParam(joint_name="joint_5",
+                           joint_limit=[-1.56, 1.56, -12.56, 12.56, -0.0, 0.0]),
+                JointParam(joint_name="joint_6",
+                           joint_limit=[-2.96, 2.96, -12.56, 12.56, -0.0, 0.0])
+            ]))
+
     def get_config(self, arm_series: int) -> Optional[ArmConfig]:
         """Get robotic arm configuration for specified series"""
         return self._configs.get(arm_series)

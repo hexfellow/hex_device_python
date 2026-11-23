@@ -32,6 +32,7 @@ class Chassis(DeviceBase, MotorBase):
     """
 
     SUPPORTED_ROBOT_TYPES = [
+        public_api_types_pb2.RobotType.RtTriggerA3H1,
         public_api_types_pb2.RobotType.RtTriggerA3Lr1,
         public_api_types_pb2.RobotType.RtMaverX4D,
         public_api_types_pb2.RobotType.RtMaverX4H1,
